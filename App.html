@@ -1,0 +1,1062 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AI 交互汇报 App Pro</title>
+
+  <!-- Tailwind Play CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+
+  <!-- Vue / Marked / Prism -->
+  <script defer src="https://cdn.jsdelivr.net/npm/vue@3.5.13/dist/vue.global.prod.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/marked@12.0.2/marked.min.js"></script>
+
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/themes/prism-okaidia.min.css">
+  <script defer src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/prism.min.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/plugins/autoloader/prism-autoloader.min.js"></script>
+
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap');
+    html, body { height: 100%; }
+    body { font-family: 'Inter', sans-serif; transition: all .25s ease; }
+    [v-cloak] { display: none; }
+
+    .fade-enter-active, .fade-leave-active { transition: opacity .25s ease; }
+    .fade-enter-from, .fade-leave-to { opacity: 0; }
+
+    /* Markdown */
+    .md-light h1,.md-light h2,.md-light h3,.md-light h4{margin-top:1em;margin-bottom:.5em;font-weight:700}
+    .md-light h1{font-size:1.5em;color:#111827}
+    .md-light h2{font-size:1.3em;color:#1f2937}
+    .md-light h3{font-size:1.1em;color:#374151}
+    .md-light p{color:#4b5563;line-height:1.7;margin:.5em 0}
+    .md-light li{color:#4b5563;margin:.2em 0}
+    .md-light ul,.md-light ol{padding-left:1.5em;margin:.5em 0}
+    .md-light blockquote{border-left:4px solid #d1d5db;padding-left:1em;margin:1em 0;color:#6b7280;font-style:italic}
+    .md-light table{border-collapse:collapse;width:100%;margin:1em 0}
+    .md-light th,.md-light td{border:1px solid #d1d5db;padding:.5em}
+    .md-light th{background:#f9fafb;color:#111827;font-weight:600}
+    .md-light a{color:#2563eb;text-decoration:underline}
+    .md-light code{background:#f3f4f6;color:#dc2626;padding:.15em .35em;border-radius:.35em}
+
+    .md-dark h1,.md-dark h2,.md-dark h3,.md-dark h4{margin-top:1em;margin-bottom:.5em;font-weight:700;color:#fff}
+    .md-dark p{color:#d1d5db;line-height:1.7;margin:.5em 0}
+    .md-dark li{color:#d1d5db;margin:.2em 0}
+    .md-dark ul,.md-dark ol{padding-left:1.5em;margin:.5em 0}
+    .md-dark blockquote{border-left:4px solid #475569;padding-left:1em;margin:1em 0;color:#cbd5e1;font-style:italic}
+    .md-dark table{border-collapse:collapse;width:100%;margin:1em 0}
+    .md-dark th,.md-dark td{border:1px solid #334155;padding:.5em}
+    .md-dark th{background:rgba(255,255,255,.05);color:#e2e8f0;font-weight:600}
+    .md-dark a{color:#93c5fd;text-decoration:underline}
+    .md-dark code{background:rgba(255,255,255,.08);color:#fca5a5;padding:.15em .35em;border-radius:.35em}
+
+    /* 苹果代码块（只用于 fenced code block） */
+    .code-card{
+      border-radius:14px;
+      overflow:hidden;
+      border:1px solid rgba(0,0,0,.08);
+      box-shadow:0 18px 35px rgba(15,23,42,.10);
+      margin:1em 0;
+      background:#fff;
+    }
+    .code-card-header{
+      display:flex;align-items:center;justify-content:space-between;
+      padding:10px 12px;
+      background:#f9fafb;
+      border-bottom:1px solid rgba(0,0,0,.06);
+    }
+    .dark-ui .code-card{border-color:rgba(148,163,184,.18)}
+    .dark-ui .code-card-header{background:rgba(30,41,59,.65);border-bottom-color:rgba(148,163,184,.12)}
+    .dots{display:flex;align-items:center;gap:6px}
+    .dot{width:10px;height:10px;border-radius:999px;display:inline-block}
+    .dot.red{background:#ff5f56}.dot.yellow{background:#ffbd2e}.dot.green{background:#27c93f}
+    .code-meta{
+      margin-left:10px;font-size:11px;color:#6b7280;
+      font-family:ui-monospace,Menlo,Monaco,Consolas,"Courier New",monospace;
+      font-style:italic;user-select:none;white-space:nowrap
+    }
+    .dark-ui .code-meta{color:#94a3b8}
+    .code-copy{
+      font-size:12px;color:#6b7280;padding:6px 10px;border-radius:10px;
+      background:#f3f4f6;transition:all .15s ease;user-select:none
+    }
+    .code-copy:hover{background:#e5e7eb;color:#111827}
+    .dark-ui .code-copy{background:rgba(148,163,184,.10);color:#cbd5e1}
+    .dark-ui .code-copy:hover{background:rgba(148,163,184,.18);color:#fff}
+    .code-card-body{background:#0b1020;padding:14px 16px;overflow-x:auto}
+    .code-card-body pre{margin:0;background:transparent!important}
+    .code-card-body code{
+      display:block;background:transparent!important;color:#e5e7eb!important;
+      font-size:13px;line-height:1.55;
+      font-family:ui-monospace,Menlo,Monaco,Consolas,"Courier New",monospace;
+      white-space:pre
+    }
+
+    .toast{
+      position:fixed;right:18px;bottom:18px;
+      padding:10px 12px;border-radius:14px;
+      background:rgba(15,23,42,.92);color:#fff;
+      box-shadow:0 18px 35px rgba(15,23,42,.18);
+      font-size:13px;
+      z-index: 70;
+    }
+
+    /* Terminal drawer */
+    .term-overlay{
+      position:fixed; inset:0;
+      background:rgba(2,6,23,.45);
+      z-index:60;
+      display:flex;
+      align-items:flex-end;
+      justify-content:center;
+      padding:18px;
+    }
+    .term-panel{
+      width:min(980px, 100%);
+      height:min(72vh, 720px);
+      border-radius:18px;
+      overflow:hidden;
+      box-shadow:0 22px 60px rgba(15,23,42,.35);
+      border:1px solid rgba(148,163,184,.18);
+      background:rgba(255,255,255,.92);
+      backdrop-filter: blur(10px);
+      display:flex;
+      flex-direction:column;
+    }
+    .dark-ui .term-panel{
+      background:rgba(2,6,23,.85);
+      border-color:rgba(148,163,184,.18);
+    }
+    .term-log{
+      white-space:pre-wrap;
+      font-family: ui-monospace, Menlo, Monaco, Consolas, "Courier New", monospace;
+      font-size:12px;
+      line-height:1.5;
+    }
+  </style>
+</head>
+
+<body>
+  <div id="app"
+       v-cloak
+       class="flex h-screen min-h-0 overflow-hidden bg-[#fcfcfc] text-slate-900"
+       :class="{ 'dark-ui': isDark }">
+
+    <!-- Sidebar -->
+    <aside class="flex flex-col flex-shrink-0 border-r min-h-0"
+           :style="{ width: sidebarWidth + 'px' }"
+           :class="isDark ? 'border-slate-800 bg-slate-950' : 'border-gray-200 bg-[#fafafa]'">
+
+      <div class="p-8">
+        <div class="flex items-center gap-3 mb-2">
+          <div class="w-8 h-8 bg-orange-500 rounded-lg flex items-center justify-center text-white font-bold">G</div>
+          <h1 class="font-bold text-lg tracking-tight"
+              :class="isDark ? 'text-slate-100' : 'text-gray-800'">Gemini Doc</h1>
+        </div>
+        <p class="text-xs" :class="isDark ? 'text-slate-500' : 'text-gray-400'">交互式汇报系统 Pro</p>
+      </div>
+
+      <nav class="flex-1 min-h-0 overflow-y-auto">
+        <div v-for="(step, index) in steps" :key="step.id"
+             @click="currentId = step.id"
+             :draggable="mode === 'edit'"
+             @dragstart="onDragStart($event, index)"
+             @dragover="onDragOver($event)"
+             @drop="onDrop($event, index)"
+             class="px-6 py-4 flex items-start gap-4 cursor-pointer transition-all border-l-4"
+             :class="[
+               currentId === step.id
+                 ? (isDark ? 'bg-orange-500/10 border-orange-400' : 'bg-orange-50/60 border-orange-500')
+                 : (isDark ? 'border-transparent hover:bg-slate-900/60' : 'border-transparent hover:bg-gray-100')
+             ]">
+
+          <div class="mt-1 w-6 h-6 rounded flex items-center justify-center text-xs font-bold transition-all"
+               :class="[
+                 mode === 'edit'
+                   ? (isDark ? 'bg-slate-800 text-slate-400' : 'bg-gray-200 text-gray-400')
+                   : (index < currentStepIndex
+                      ? 'bg-orange-500 text-white'
+                      : (currentId === step.id ? 'bg-orange-500 text-white'
+                                               : (isDark ? 'bg-slate-800 text-slate-400' : 'bg-gray-200 text-gray-400')))
+               ]">
+            {{ mode === 'edit' ? index + 1 : (index < currentStepIndex ? '✓' : index + 1) }}
+          </div>
+
+          <div class="flex-1 min-w-0">
+            <div v-if="mode === 'edit'" class="space-y-1">
+              <input type="text" v-model="step.title" @click.stop
+                     class="w-full text-sm font-medium bg-transparent border-b border-transparent hover:border-gray-300 focus:border-orange-500 focus:outline-none px-1 py-0.5"
+                     :class="isDark ? 'text-slate-100 hover:border-slate-700' : 'text-gray-800'"
+                     placeholder="标题" />
+              <input type="text" v-model="step.subtitle" @click.stop
+                     class="w-full text-[11px] bg-transparent border-b border-transparent hover:border-gray-300 focus:border-orange-500 focus:outline-none px-1 py-0.5"
+                     :class="isDark ? 'text-slate-400 hover:border-slate-700' : 'text-gray-500'"
+                     placeholder="副标题（可选）" />
+            </div>
+
+            <div v-else class="flex flex-col" :class="{'justify-center': !step.subtitle, 'min-h-[2.5rem]': !step.subtitle}">
+              <h3 class="text-sm font-medium"
+                  :class="currentId === step.id ? 'text-orange-600 font-bold' : (isDark ? 'text-slate-300' : 'text-gray-600')">
+                {{ step.title }}
+              </h3>
+              <p v-if="step.subtitle" class="text-[11px] mt-1" :class="isDark ? 'text-slate-500' : 'text-gray-400'">
+                {{ step.subtitle }}
+              </p>
+            </div>
+          </div>
+        </div>
+      </nav>
+
+      <!-- edit actions -->
+      <div v-if="mode === 'edit'" class="border-t p-4 space-y-3"
+           :class="isDark ? 'border-slate-800' : 'border-gray-200'">
+        <div class="text-xs mb-2 px-2" :class="isDark ? 'text-slate-400' : 'text-gray-500'">编辑模式操作</div>
+        <button @click="addStep"
+                class="w-full flex items-center justify-center gap-2 px-4 py-2 text-sm bg-green-500 text-white rounded-lg hover:bg-green-600 transition-all">
+          ＋ 添加新步骤
+        </button>
+        <button @click="removeStep"
+                class="w-full flex items-center justify-center gap-2 px-4 py-2 text-sm bg-red-500 text-white rounded-lg hover:bg-red-600 transition-all">
+          🗑 删除当前步骤
+        </button>
+      </div>
+    </aside>
+
+    <!-- Sidebar Resizer（仅编辑模式显示） -->
+    <div v-if="mode === 'edit'"
+         class="w-2 cursor-col-resize flex-shrink-0"
+         :class="isDark ? 'bg-slate-950 hover:bg-orange-500/10' : 'bg-white hover:bg-orange-200/40'"
+         @mousedown="startSidebarResize">
+      <div class="w-px h-full mx-auto"
+           :class="isDark ? 'bg-slate-800' : 'bg-gray-200'"></div>
+    </div>
+
+    <!-- Main -->
+    <main class="flex-1 min-w-0 min-h-0 flex flex-col"
+          :class="isDark ? 'bg-slate-950' : 'bg-white'">
+
+      <header class="sticky top-0 z-30 px-10 py-5 border-b flex justify-between items-center backdrop-blur"
+              :class="isDark ? 'border-slate-800 bg-slate-950/80' : 'border-gray-100 bg-white/80'">
+
+        <div class="text-sm"
+             :class="isDark ? 'text-slate-400' : 'text-gray-400'">
+          {{ activeStep.title }}
+          <span class="mx-2">/</span>
+          <span :class="isDark ? 'text-slate-500' : 'text-gray-300'">{{ activeStep.subtitle }}</span>
+        </div>
+
+        <div class="flex items-center gap-3">
+          <button @click="toggleDark"
+                  class="px-3 py-2 text-sm rounded-lg transition-all flex items-center gap-2"
+                  :class="isDark ? 'bg-slate-800 text-slate-100 hover:bg-slate-700' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'">
+            🌙 <span class="hidden md:inline">主题</span>
+          </button>
+
+          <!-- ✅ 终端/命令行按钮 -->
+          <button @click="toggleTerminal"
+                  class="px-3 py-2 text-sm rounded-lg transition-all flex items-center gap-2"
+                  :class="terminalOpen
+                    ? 'bg-orange-500 text-white hover:bg-orange-600'
+                    : (isDark ? 'bg-slate-800 text-slate-100 hover:bg-slate-700' : 'bg-gray-100 text-gray-700 hover:bg-gray-200')">
+            ⌘ <span class="hidden md:inline">终端</span>
+          </button>
+
+          <!-- ✅ 只保留 view ↔ edit -->
+          <button @click="toggleMode"
+                  class="px-4 py-2 text-sm rounded-lg transition-all flex items-center gap-2"
+                  :class="mode === 'edit'
+                    ? 'bg-orange-500 text-white hover:bg-orange-600'
+                    : (isDark ? 'bg-slate-800 text-slate-100 hover:bg-slate-700' : 'bg-gray-100 text-gray-700 hover:bg-gray-200')">
+            <span v-if="mode === 'view'">✎ <span class="hidden md:inline">编辑</span></span>
+            <span v-else>👁 <span class="hidden md:inline">展示</span></span>
+          </button>
+
+          <span class="text-xs font-mono ml-2"
+                :class="isDark ? 'text-slate-500' : 'text-gray-400'">
+            {{ currentStepIndex + 1 }} / {{ steps.length }}
+          </span>
+        </div>
+      </header>
+
+      <section class="flex-1 min-h-0 overflow-y-auto"
+               :class="isDark ? 'bg-slate-950' : 'bg-white'">
+
+        <div class="mx-auto relative w-full px-10 py-10"
+             :class="mode === 'edit' ? 'max-w-6xl' : 'max-w-none'">
+
+          <transition name="fade" mode="out-in">
+            <div :key="currentId" class="flex flex-col">
+
+              <!-- title -->
+              <div class="mb-8"
+                   :class="mode === 'view' ? 'mx-auto' : ''"
+                   :style="mode === 'view' ? displayStyle : null">
+                <div class="flex items-center justify-between mb-4">
+                  <div class="flex-1">
+                    <div v-if="mode === 'edit'" class="space-y-3">
+                      <div>
+                        <label class="block text-sm font-medium mb-1" :class="isDark ? 'text-slate-200' : 'text-gray-700'">步骤标题</label>
+                        <input type="text" v-model="activeStep.title"
+                               class="w-full px-4 py-2 text-2xl font-bold border rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500"
+                               :class="isDark ? 'bg-slate-900 text-slate-100 border-slate-700' : 'bg-white text-gray-800 border-gray-300'" />
+                      </div>
+                      <div>
+                        <label class="block text-sm font-medium mb-1" :class="isDark ? 'text-slate-200' : 'text-gray-700'">步骤副标题</label>
+                        <input type="text" v-model="activeStep.subtitle"
+                               class="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500"
+                               :class="isDark ? 'bg-slate-900 text-slate-200 border-slate-700' : 'bg-white text-gray-600 border-gray-300'" />
+                      </div>
+                    </div>
+
+                    <div v-else class="flex flex-col">
+                      <h2 class="text-2xl font-bold" :class="isDark ? 'text-slate-100' : 'text-gray-800'">{{ activeStep.title }}</h2>
+                      <p v-if="activeStep.subtitle" class="mt-2" :class="isDark ? 'text-slate-400' : 'text-gray-500'">
+                        {{ activeStep.subtitle }}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- view -->
+              <div v-if="mode === 'view'" class="mb-10 mx-auto" :style="displayStyle">
+                <div data-preview="1" :class="isDark ? 'md-dark' : 'md-light'" v-html="renderedMarkdown"></div>
+              </div>
+
+              <!-- edit -->
+              <div v-else ref="editSplitRef"
+                   class="flex border rounded-xl overflow-hidden shadow-sm min-h-[520px]"
+                   :class="isDark ? 'border-slate-800 bg-slate-950' : 'border-gray-200 bg-white'">
+
+                <!-- left editor pane -->
+                <div class="min-w-0 border-r flex flex-col"
+                     :style="{ width: editorPaneWidth + 'px' }"
+                     :class="isDark ? 'border-slate-800' : 'border-gray-200'">
+                  <div class="px-4 py-3 border-b"
+                       :class="isDark ? 'bg-slate-900 border-slate-800' : 'bg-gray-50 border-gray-200'">
+                    <span class="text-sm font-medium" :class="isDark ? 'text-slate-100' : 'text-gray-700'">Markdown 编辑</span>
+                  </div>
+                  <textarea v-model="activeStep.content"
+                            class="flex-1 w-full p-6 font-mono text-sm leading-relaxed bg-transparent resize-none focus:outline-none"
+                            :class="isDark ? 'text-slate-100' : 'text-gray-800'"
+                            spellcheck="false"></textarea>
+                </div>
+
+                <!-- editor resizer -->
+                <div class="w-2 cursor-col-resize flex-shrink-0"
+                     :class="isDark ? 'bg-slate-950 hover:bg-orange-500/10' : 'bg-white hover:bg-orange-200/40'"
+                     @mousedown="startEditorResize">
+                  <div class="w-px h-full mx-auto"
+                       :class="isDark ? 'bg-slate-800' : 'bg-gray-200'"></div>
+                </div>
+
+                <!-- right preview pane -->
+                <div class="flex-1 min-w-0 flex flex-col">
+                  <div class="px-4 py-3 border-b flex items-center justify-between"
+                       :class="isDark ? 'bg-slate-900 border-slate-800' : 'bg-gray-50 border-gray-200'">
+                    <span class="text-sm font-medium" :class="isDark ? 'text-slate-100' : 'text-gray-700'">实时预览（最终展示宽度）</span>
+                    <div class="flex items-center gap-2 text-xs font-mono"
+                         :class="isDark ? 'text-slate-400' : 'text-gray-500'">
+                      <span>宽度</span>
+                      <span class="px-2 py-1 rounded-lg"
+                            :class="isDark ? 'bg-slate-800 text-slate-200' : 'bg-gray-200 text-gray-700'">
+                        {{ displayWidth }}px
+                      </span>
+                      <button @click="resetDisplayWidth"
+                              class="px-2 py-1 rounded-lg transition-all"
+                              :class="isDark ? 'bg-slate-800 hover:bg-slate-700 text-slate-200' : 'bg-white hover:bg-gray-100 text-gray-700 border border-gray-200'">
+                        重置
+                      </button>
+                    </div>
+                  </div>
+
+                  <div class="flex-1 p-6 overflow-y-auto relative">
+                    <div class="mx-auto relative" :style="displayStyle">
+                      <div data-preview="1" :class="isDark ? 'md-dark' : 'md-light'" v-html="renderedMarkdown"></div>
+
+                      <!-- ✅ 拖动把手，调整最终展示宽度 displayWidth -->
+                      <div class="absolute top-0 -right-3 bottom-0 w-3 cursor-ew-resize"
+                           @mousedown="startDisplayResize">
+                        <div class="w-px h-full mx-auto"
+                             :class="isDark ? 'bg-orange-400/40' : 'bg-orange-500/40'"></div>
+                      </div>
+                    </div>
+
+                    <div class="mt-3 text-xs"
+                         :class="isDark ? 'text-slate-500' : 'text-gray-400'">
+                      提示：拖动预览右侧竖线把手，可调整“最终展示宽度”（展示模式会同步）
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+            </div>
+          </transition>
+
+        </div>
+      </section>
+
+      <footer class="p-6 border-t flex justify-center gap-4"
+              :class="isDark ? 'border-slate-800 bg-slate-950' : 'border-gray-100 bg-white'">
+        <button @click="prev" :disabled="isFirstStep"
+                class="px-8 py-2 border rounded-full text-sm disabled:opacity-30 transition-all"
+                :class="isDark ? 'border-slate-800 hover:bg-slate-900 text-slate-100' : 'border-gray-200 hover:bg-gray-50 text-gray-800'">
+          ← 上一步
+        </button>
+        <button @click="next" :disabled="isLastStep"
+                class="px-8 py-2 bg-orange-500 text-white rounded-full text-sm font-medium shadow-lg shadow-orange-200 hover:bg-orange-600 disabled:opacity-30 transition-all">
+          {{ isLastStep ? '已完成' : '下一步 →' }}
+        </button>
+      </footer>
+
+    </main>
+
+    <!-- ✅ Terminal Drawer -->
+    <div v-if="terminalOpen" class="term-overlay" @click.self="terminalOpen=false">
+      <div class="term-panel">
+        <div class="px-4 py-3 border-b flex items-center justify-between"
+             :class="isDark ? 'border-slate-800' : 'border-gray-200'">
+          <div class="flex items-center gap-3">
+            <div class="font-semibold" :class="isDark ? 'text-slate-100' : 'text-slate-800'">命令行 / 代码运行</div>
+            <div class="flex items-center gap-2 text-xs"
+                 :class="isDark ? 'text-slate-400' : 'text-slate-500'">
+              <span class="inline-block w-2 h-2 rounded-full"
+                    :class="bridgeOk ? 'bg-green-500' : 'bg-gray-400'"></span>
+              <span>{{ bridgeOk ? 'Local Runner 已连接' : 'Local Runner 未连接' }}</span>
+            </div>
+          </div>
+          <button @click="terminalOpen=false"
+                  class="px-2 py-1 rounded-lg text-sm"
+                  :class="isDark ? 'bg-slate-800 text-slate-100 hover:bg-slate-700' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'">关闭</button>
+        </div>
+
+        <div class="flex-1 min-h-0 overflow-hidden flex flex-col">
+          <!-- top controls -->
+          <div class="px-4 py-3 border-b space-y-3"
+               :class="isDark ? 'border-slate-800' : 'border-gray-200'">
+            <div class="flex flex-wrap items-center gap-2">
+              <label class="text-xs" :class="isDark ? 'text-slate-400' : 'text-slate-600'">执行器</label>
+              <select v-model="executor"
+                      class="text-sm px-3 py-2 rounded-lg border"
+                      :class="isDark ? 'bg-slate-900 text-slate-100 border-slate-700' : 'bg-white text-slate-800 border-gray-200'">
+                <option value="local-pwsh">本地 PowerShell（需 Local Runner）</option>
+                <option value="local-bash">本地 Bash（需 Local Runner）</option>
+                <option value="browser-js">浏览器 JS（安全，无本机权限）</option>
+              </select>
+
+              <button @click="pingBridge"
+                      class="px-3 py-2 text-sm rounded-lg"
+                      :class="isDark ? 'bg-slate-800 text-slate-100 hover:bg-slate-700' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'">
+                检查连接
+              </button>
+
+              <button @click="clearLog"
+                      class="px-3 py-2 text-sm rounded-lg"
+                      :class="isDark ? 'bg-slate-800 text-slate-100 hover:bg-slate-700' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'">
+                清空输出
+              </button>
+            </div>
+
+            <div v-if="executor.startsWith('local')" class="grid grid-cols-1 md:grid-cols-2 gap-2">
+              <div>
+                <div class="text-xs mb-1" :class="isDark ? 'text-slate-400' : 'text-slate-600'">Token（与 Local Runner 一致）</div>
+                <input v-model="runnerToken" placeholder="例如: my-secret-token"
+                       class="w-full px-3 py-2 rounded-lg border text-sm"
+                       :class="isDark ? 'bg-slate-900 text-slate-100 border-slate-700' : 'bg-white text-slate-800 border-gray-200'"/>
+              </div>
+              <div>
+                <div class="text-xs mb-1" :class="isDark ? 'text-slate-400' : 'text-slate-600'">工作目录 cwd（可选，建议填 VSCode workspace）</div>
+                <input v-model="runnerCwd" placeholder="例如: C:\Users\you\project"
+                       class="w-full px-3 py-2 rounded-lg border text-sm"
+                       :class="isDark ? 'bg-slate-900 text-slate-100 border-slate-700' : 'bg-white text-slate-800 border-gray-200'"/>
+              </div>
+            </div>
+          </div>
+
+          <!-- main body: left blocks / right runner -->
+          <div class="flex-1 min-h-0 overflow-hidden grid grid-cols-1 lg:grid-cols-2">
+            <!-- code blocks list -->
+            <div class="min-h-0 overflow-y-auto p-4 border-r"
+                 :class="isDark ? 'border-slate-800' : 'border-gray-200'">
+              <div class="flex items-center justify-between mb-3">
+                <div class="text-sm font-semibold" :class="isDark ? 'text-slate-100' : 'text-slate-800'">当前步骤代码块</div>
+                <div class="text-xs" :class="isDark ? 'text-slate-400' : 'text-slate-500'">{{ codeBlocks.length }} 个</div>
+              </div>
+
+              <div v-if="!codeBlocks.length" class="text-sm"
+                   :class="isDark ? 'text-slate-400' : 'text-slate-500'">
+                当前步骤没有 fenced code block（```）。
+              </div>
+
+              <div v-for="(b, i) in codeBlocks" :key="i"
+                   class="mb-3 p-3 rounded-xl border"
+                   :class="isDark ? 'border-slate-800 bg-slate-950' : 'border-gray-200 bg-white'">
+                <div class="flex items-center justify-between gap-2">
+                  <div class="text-xs font-mono"
+                       :class="isDark ? 'text-slate-300' : 'text-slate-700'">
+                    {{ b.lang || 'code' }} · {{ b.preview }}
+                  </div>
+                  <div class="flex items-center gap-2">
+                    <button @click="copyText(b.code)"
+                            class="px-2 py-1 text-xs rounded-lg"
+                            :class="isDark ? 'bg-slate-800 text-slate-100 hover:bg-slate-700' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'">
+                      复制
+                    </button>
+                    <button @click="runCodeBlock(b)"
+                            class="px-2 py-1 text-xs rounded-lg bg-orange-500 text-white hover:bg-orange-600">
+                      运行
+                    </button>
+                  </div>
+                </div>
+                <pre class="mt-2 text-xs overflow-x-auto"
+                     :class="isDark ? 'text-slate-200' : 'text-slate-700'"><code>{{ b.code }}</code></pre>
+              </div>
+            </div>
+
+            <!-- runner + log -->
+            <div class="min-h-0 overflow-hidden flex flex-col">
+              <div class="p-4 border-b"
+                   :class="isDark ? 'border-slate-800' : 'border-gray-200'">
+                <div class="text-sm font-semibold mb-2" :class="isDark ? 'text-slate-100' : 'text-slate-800'">运行命令</div>
+                <textarea v-model="cmdInput" rows="4"
+                          placeholder="输入命令或代码（JS / PowerShell / Bash）"
+                          class="w-full px-3 py-2 rounded-xl border text-sm font-mono resize-none"
+                          :class="isDark ? 'bg-slate-900 text-slate-100 border-slate-700' : 'bg-white text-slate-800 border-gray-200'"></textarea>
+
+                <div class="mt-2 flex items-center justify-between">
+                  <div class="text-xs"
+                       :class="isDark ? 'text-slate-400' : 'text-slate-500'">
+                    本地执行需要 Local Runner；否则会提示“未连接/仅复制”。
+                  </div>
+                  <div class="flex items-center gap-2">
+                    <button @click="copyText(cmdInput)"
+                            class="px-3 py-2 text-sm rounded-lg"
+                            :class="isDark ? 'bg-slate-800 text-slate-100 hover:bg-slate-700' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'">
+                      复制
+                    </button>
+                    <button @click="runInput"
+                            class="px-3 py-2 text-sm rounded-lg bg-orange-500 text-white hover:bg-orange-600">
+                      ▶ 运行
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              <div class="flex-1 min-h-0 overflow-y-auto p-4"
+                   :class="isDark ? 'bg-slate-950' : 'bg-white'">
+                <div class="text-sm font-semibold mb-2" :class="isDark ? 'text-slate-100' : 'text-slate-800'">输出</div>
+                <div class="term-log p-3 rounded-xl border"
+                     :class="isDark ? 'border-slate-800 bg-slate-900 text-slate-100' : 'border-gray-200 bg-gray-50 text-slate-900'">
+                  <div v-if="!termLog.length" :class="isDark ? 'text-slate-400' : 'text-slate-500'">
+                    暂无输出。
+                  </div>
+                  <div v-for="(line, idx) in termLog" :key="idx">{{ line }}</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <div v-if="toast.show" class="toast">{{ toast.text }}</div>
+  </div>
+
+  <script>
+    // v-html 内代码块复制按钮（保留）
+    window.__copyCode = async (codeId, btnEl) => {
+      try {
+        const el = document.getElementById(codeId);
+        if (!el) return;
+        const text = el.innerText || el.textContent || "";
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          await navigator.clipboard.writeText(text);
+        } else {
+          const ta = document.createElement('textarea');
+          ta.value = text;
+          document.body.appendChild(ta);
+          ta.select();
+          document.execCommand('copy');
+          document.body.removeChild(ta);
+        }
+        if (btnEl) {
+          const old = btnEl.innerText;
+          btnEl.innerText = "已复制";
+          setTimeout(() => (btnEl.innerText = old), 900);
+        }
+        window.dispatchEvent(new CustomEvent("app-toast", { detail: "代码已复制" }));
+      } catch (e) {
+        alert("复制失败（可能是 file:// 权限限制），请手动复制");
+      }
+    };
+
+    window.addEventListener("load", () => {
+      if (!window.Vue || !window.marked) return;
+
+      if (window.Prism && Prism.plugins && Prism.plugins.autoloader) {
+        Prism.plugins.autoloader.languages_path = "https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/";
+      }
+
+      const { createApp, ref, computed, watch, nextTick } = Vue;
+
+      createApp({
+        setup() {
+          const mode = ref("view"); // view | edit
+          const isDark = ref(false);
+
+          const currentId = ref(1);
+          const draggedIndex = ref(null);
+
+          // resizable
+          const sidebarWidth = ref(320);
+          const editorPaneWidth = ref(560);
+          const editSplitRef = ref(null);
+
+          // ✅ 最终展示宽度（编辑模式可拖动控制；view 渲染会跟随）
+          const displayWidth = ref(980);
+          const DEFAULT_DISPLAY_W = 980;
+          const displayStyle = computed(() => ({
+            width: "100%",
+            maxWidth: displayWidth.value + "px",
+          }));
+
+          const toast = ref({ show: false, text: "" });
+          const showToast = (text) => {
+            toast.value = { show: true, text };
+            setTimeout(() => (toast.value.show = false), 900);
+          };
+          window.addEventListener("app-toast", (e) => showToast(e.detail || "完成"));
+
+          const steps = ref([
+            { id: 1, title: '文献综述背景', subtitle: '了解研究现状', content: "# 研究背景\n当前大规模语言模型（LLM）在多代理协作领域展现出极高潜力...\n\n- 关键点 A: 提高推理效率\n- 关键点 B: 降低 Token 消耗\n\n```python\ndef hello():\n    print('hello world')\n```\n\n```powershell\nGet-ChildItem\n```" },
+            { id: 2, title: '模型架构分析', subtitle: '核心算法逻辑', content: "## 核心代码逻辑块\n\n```python\nclass ResearchAgent:\n    def __init__(self, role):\n        self.role = role\n        self.context = []\n```\n\n```javascript\nconsole.log('hello from browser js')\n```" },
+            { id: 3, title: '实验数据展示', subtitle: '性能指标对比', content: "| 指标 | 本文方法 | Baseline |\n| :--- | :--- | :--- |\n| 准确率 | 98.2% | 91.5% |\n| 延迟 | 120ms | 450ms |\n\n```bash\necho \"ok\"\n```" },
+            { id: 4, title: '创建第一个团队', subtitle: '动手实践', content: "创建 Agent 团队：\n- UX 负责人\n- 技术架构师\n- 挑刺官 (Devil's Advocate)\n\n```json\n{\n  \"team\": [\"UX\", \"Architect\", \"Devil\"],\n  \"goal\": \"fast + safe\"\n}\n```" },
+            { id: 5, title: '安全性审查', subtitle: '风险评估', content: "### 安全协议清单\n1. 数据脱敏处理\n2. 注入攻击防御\n3. 权限分级管理" }
+          ]);
+
+          const activeStep = computed(() => steps.value.find(s => s.id === currentId.value) || steps.value[0]);
+          const currentStepIndex = computed(() => Math.max(0, steps.value.findIndex(s => s.id === currentId.value)));
+          const isFirstStep = computed(() => currentStepIndex.value === 0);
+          const isLastStep = computed(() => currentStepIndex.value === steps.value.length - 1);
+
+          // marked renderer
+          const renderer = new marked.Renderer();
+          const escapeHtml = (html) =>
+            html.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+                .replace(/"/g,'&quot;').replace(/'/g,'&#039;');
+
+          renderer.code = function(code, infostring) {
+            const lang = ((infostring || '').match(/\S*/)?.[0] || '').trim();
+            const safe = escapeHtml(code);
+            const id = 'code_' + Math.random().toString(36).slice(2, 10);
+
+            return `
+              <div class="code-card">
+                <div class="code-card-header">
+                  <div class="flex items-center min-w-0">
+                    <div class="dots">
+                      <span class="dot red"></span>
+                      <span class="dot yellow"></span>
+                      <span class="dot green"></span>
+                    </div>
+                    <span class="code-meta">${lang || 'code'}</span>
+                  </div>
+                  <button class="code-copy" onclick="window.__copyCode('${id}', this)">复制</button>
+                </div>
+                <div class="code-card-body">
+                  <pre><code id="${id}" class="language-${lang || 'none'}">${safe}</code></pre>
+                </div>
+              </div>
+            `;
+          };
+
+          marked.setOptions({ breaks: true, gfm: true, renderer, sanitize: false });
+          const renderedMarkdown = computed(() => marked.parse(activeStep.value?.content || ''));
+
+          const postRender = async () => {
+            await nextTick();
+            const roots = Array.from(document.querySelectorAll('[data-preview="1"]'));
+            if (window.Prism) roots.forEach(r => Prism.highlightAllUnder(r));
+          };
+          watch([renderedMarkdown, isDark, mode, currentId], postRender, { immediate: true });
+
+          // drag sort (edit only)
+          const onDragStart = (event, index) => {
+            if (mode.value !== 'edit') return;
+            draggedIndex.value = index;
+            event.dataTransfer.effectAllowed = 'move';
+          };
+          const onDragOver = (event) => {
+            if (mode.value !== 'edit') return;
+            event.preventDefault();
+            event.dataTransfer.dropEffect = 'move';
+          };
+          const onDrop = (event, targetIndex) => {
+            if (mode.value !== 'edit') return;
+            event.preventDefault();
+            if (draggedIndex.value === null || draggedIndex.value === targetIndex) return;
+            const arr = steps.value;
+            const dragged = arr[draggedIndex.value];
+            arr.splice(draggedIndex.value, 1);
+            arr.splice(targetIndex, 0, dragged);
+            draggedIndex.value = null;
+          };
+
+          const next = () => {
+            const idx = steps.value.findIndex(s => s.id === currentId.value);
+            if (idx < steps.value.length - 1) currentId.value = steps.value[idx + 1].id;
+          };
+          const prev = () => {
+            const idx = steps.value.findIndex(s => s.id === currentId.value);
+            if (idx > 0) currentId.value = steps.value[idx - 1].id;
+          };
+
+          const toggleDark = () => { isDark.value = !isDark.value; };
+
+          const toggleMode = () => {
+            mode.value = (mode.value === 'view') ? 'edit' : 'view';
+          };
+
+          const clamp = (v, min, max) => Math.min(max, Math.max(min, v));
+
+          // sidebar resize
+          const startSidebarResize = (e) => {
+            if (mode.value !== 'edit') return;
+            e.preventDefault();
+            const startX = e.clientX;
+            const startW = sidebarWidth.value;
+
+            document.body.style.userSelect = 'none';
+            const onMove = (ev) => {
+              const dx = ev.clientX - startX;
+              sidebarWidth.value = clamp(startW + dx, 240, 560);
+            };
+            const onUp = () => {
+              document.body.style.userSelect = '';
+              window.removeEventListener('mousemove', onMove);
+              window.removeEventListener('mouseup', onUp);
+            };
+            window.addEventListener('mousemove', onMove);
+            window.addEventListener('mouseup', onUp);
+          };
+
+          // editor split resize
+          const startEditorResize = (e) => {
+            if (mode.value !== 'edit') return;
+            e.preventDefault();
+            const box = editSplitRef.value?.getBoundingClientRect();
+            if (!box) return;
+
+            const startX = e.clientX;
+            const startW = editorPaneWidth.value;
+            const total = box.width;
+
+            document.body.style.userSelect = 'none';
+            const onMove = (ev) => {
+              const dx = ev.clientX - startX;
+              const minW = 320;
+              const maxW = Math.max(minW, total - 320);
+              editorPaneWidth.value = clamp(startW + dx, minW, maxW);
+            };
+            const onUp = () => {
+              document.body.style.userSelect = '';
+              window.removeEventListener('mousemove', onMove);
+              window.removeEventListener('mouseup', onUp);
+            };
+            window.addEventListener('mousemove', onMove);
+            window.addEventListener('mouseup', onUp);
+          };
+
+          // display width resize（拖动预览右侧把手）
+          const startDisplayResize = (e) => {
+            if (mode.value !== 'edit') return;
+            e.preventDefault();
+            const startX = e.clientX;
+            const startW = displayWidth.value;
+
+            document.body.style.userSelect = 'none';
+            const onMove = (ev) => {
+              const dx = ev.clientX - startX;
+              let newW = startW + dx * 2; // 居中布局，用 2*dx 更符合“右边缘跟随”
+              const maxW = Math.min(2200, window.innerWidth - 80);
+              displayWidth.value = clamp(Math.round(newW), 520, Math.max(520, maxW));
+            };
+            const onUp = () => {
+              document.body.style.userSelect = '';
+              window.removeEventListener('mousemove', onMove);
+              window.removeEventListener('mouseup', onUp);
+            };
+            window.addEventListener('mousemove', onMove);
+            window.addEventListener('mouseup', onUp);
+          };
+
+          const resetDisplayWidth = () => { displayWidth.value = DEFAULT_DISPLAY_W; };
+
+          const addStep = () => {
+            const newId = steps.value.length ? Math.max(...steps.value.map(s => s.id)) + 1 : 1;
+            steps.value.push({
+              id: newId,
+              title: `新步骤 ${newId}`,
+              subtitle: '编辑描述',
+              content: '# 新内容\n\n```python\nprint("hello")\n```'
+            });
+            currentId.value = newId;
+          };
+
+          const removeStep = () => {
+            if (steps.value.length <= 1) return showToast("至少保留一个步骤");
+            const idx = steps.value.findIndex(s => s.id === currentId.value);
+            if (idx === -1) return;
+            steps.value.splice(idx, 1);
+            currentId.value = steps.value[Math.max(0, idx - 1)].id;
+          };
+
+          // -------- Terminal / Runner --------
+          const terminalOpen = ref(false);
+          const executor = ref("local-pwsh"); // local-pwsh | local-bash | browser-js
+          const cmdInput = ref("");
+
+          const runnerUrl = ref("http://127.0.0.1:8787");
+          const runnerToken = ref(localStorage.getItem("runnerToken") || "");
+          const runnerCwd = ref(localStorage.getItem("runnerCwd") || "");
+          watch(runnerToken, v => localStorage.setItem("runnerToken", v || ""));
+          watch(runnerCwd, v => localStorage.setItem("runnerCwd", v || ""));
+
+          const bridgeOk = ref(false);
+          const termLog = ref([]);
+
+          const log = (s) => {
+            const line = String(s ?? "");
+            termLog.value.push(line);
+          };
+          const clearLog = () => { termLog.value = []; };
+
+          const copyText = async (text) => {
+            const t = String(text || "");
+            try {
+              if (navigator.clipboard && navigator.clipboard.writeText) {
+                await navigator.clipboard.writeText(t);
+              } else {
+                const ta = document.createElement('textarea');
+                ta.value = t;
+                document.body.appendChild(ta);
+                ta.select();
+                document.execCommand('copy');
+                document.body.removeChild(ta);
+              }
+              showToast("已复制");
+            } catch {
+              alert("复制失败，请手动复制");
+            }
+          };
+
+          const pingBridge = async () => {
+            try {
+              const r = await fetch(`${runnerUrl.value}/health`, { method: "GET" });
+              bridgeOk.value = r.ok;
+              showToast(bridgeOk.value ? "Local Runner OK" : "Local Runner 未连接");
+            } catch {
+              bridgeOk.value = false;
+              showToast("Local Runner 未连接");
+            }
+          };
+
+          const toggleTerminal = async () => {
+            terminalOpen.value = !terminalOpen.value;
+            if (terminalOpen.value) {
+              await pingBridge();
+              // 默认把当前步骤第一个代码块放到输入框（如果有）
+              if (!cmdInput.value && codeBlocks.value.length) {
+                cmdInput.value = codeBlocks.value[0].code;
+              }
+            }
+          };
+
+          // 从 markdown 提取 fenced code blocks
+          const codeBlocks = computed(() => {
+            const md = activeStep.value?.content || "";
+            const re = /```([a-zA-Z0-9_-]+)?\n([\s\S]*?)```/g;
+            const arr = [];
+            let m;
+            while ((m = re.exec(md)) !== null) {
+              const lang = (m[1] || "").trim().toLowerCase();
+              const code = (m[2] || "").replace(/\s+$/g, "");
+              const first = code.split("\n").find(x => x.trim().length) || "";
+              arr.push({
+                lang,
+                code,
+                preview: first.length > 42 ? (first.slice(0, 42) + "...") : first
+              });
+            }
+            return arr;
+          });
+
+          const runBrowserJS = async (js) => {
+            // 简单、安全：在 Worker 里执行，截取 console.log
+            return new Promise((resolve) => {
+              const workerCode = `
+                self.console = {
+                  log: (...args) => self.postMessage({ type: 'log', data: args.map(String).join(' ') }),
+                  error: (...args) => self.postMessage({ type: 'err', data: args.map(String).join(' ') }),
+                };
+                self.onmessage = async (e) => {
+                  try {
+                    const code = e.data || "";
+                    const fn = new Function(code);
+                    const r = fn();
+                    if (r && typeof r.then === 'function') await r;
+                    self.postMessage({ type: 'done' });
+                  } catch (err) {
+                    self.postMessage({ type: 'err', data: (err && err.stack) ? err.stack : String(err) });
+                    self.postMessage({ type: 'done' });
+                  }
+                };
+              `;
+              const blob = new Blob([workerCode], { type: "text/javascript" });
+              const worker = new Worker(URL.createObjectURL(blob));
+
+              worker.onmessage = (ev) => {
+                const msg = ev.data || {};
+                if (msg.type === "log") log(`[js] ${msg.data}`);
+                if (msg.type === "err") log(`[js:err] ${msg.data}`);
+                if (msg.type === "done") {
+                  worker.terminate();
+                  resolve();
+                }
+              };
+              worker.postMessage(js || "");
+            });
+          };
+
+          const runLocal = async (cmd, shell) => {
+            if (!bridgeOk.value) {
+              log(`[local] 未连接 Local Runner，已为你复制命令（你可在 PowerShell/VSCode 终端粘贴运行）。`);
+              await copyText(cmd);
+              return;
+            }
+            if (!runnerToken.value) {
+              log(`[local] 缺少 Token：请填写 Token（需与 Local Runner 启动参数一致）。`);
+              return;
+            }
+
+            log(`\n$ (${shell}) ${cmd}`);
+            try {
+              const resp = await fetch(`${runnerUrl.value}/run`, {
+                method: "POST",
+                headers: {
+                  "Content-Type": "application/json",
+                  "Authorization": `Bearer ${runnerToken.value}`
+                },
+                body: JSON.stringify({ cmd, shell, cwd: runnerCwd.value || "" })
+              });
+              const data = await resp.json().catch(() => ({}));
+              if (!resp.ok) {
+                log(`[local:err] HTTP ${resp.status} ${JSON.stringify(data)}`);
+                return;
+              }
+              if (data.stdout) log(data.stdout.trimEnd());
+              if (data.stderr) log(data.stderr.trimEnd());
+              log(`[exit] code=${data.code}`);
+            } catch (e) {
+              log(`[local:err] ${String(e)}`);
+              bridgeOk.value = false;
+            }
+          };
+
+          const runText = async (text, langHint = "") => {
+            const code = String(text || "").trim();
+            if (!code) return;
+
+            // 选择执行器：优先看 langHint，否则用 dropdown
+            const lang = (langHint || "").toLowerCase();
+            const isShell = ["bash","sh","zsh"].includes(lang);
+            const isPwsh = ["powershell","ps1","pwsh"].includes(lang);
+
+            if (lang && (lang === "js" || lang === "javascript")) {
+              await runBrowserJS(code);
+              return;
+            }
+            if (lang && isShell) {
+              await runLocal(code, "bash");
+              return;
+            }
+            if (lang && isPwsh) {
+              await runLocal(code, "pwsh");
+              return;
+            }
+
+            // 没有明确语言 => 用 executor
+            if (executor.value === "browser-js") {
+              await runBrowserJS(code);
+              return;
+            }
+            if (executor.value === "local-bash") {
+              await runLocal(code, "bash");
+              return;
+            }
+            await runLocal(code, "pwsh");
+          };
+
+          const runInput = async () => {
+            await pingBridge();
+            await runText(cmdInput.value, "");
+          };
+
+          const runCodeBlock = async (b) => {
+            await pingBridge();
+            await runText(b.code, b.lang);
+          };
+
+          // keyboard shortcuts
+          const onKeydown = (e) => {
+            const tag = (document.activeElement && document.activeElement.tagName) ? document.activeElement.tagName.toLowerCase() : '';
+            const typing = (tag === 'input' || tag === 'textarea' || document.activeElement?.isContentEditable);
+
+            if (e.key === 'Escape' && terminalOpen.value) {
+              terminalOpen.value = false;
+              return;
+            }
+            if (!typing && (e.key === 'ArrowRight' || e.key === 'PageDown')) next();
+            if (!typing && (e.key === 'ArrowLeft'  || e.key === 'PageUp')) prev();
+          };
+          window.addEventListener('keydown', onKeydown);
+
+          return {
+            mode, isDark,
+            currentId, steps, activeStep,
+            currentStepIndex, isFirstStep, isLastStep,
+            renderedMarkdown,
+
+            // widths
+            sidebarWidth, editorPaneWidth,
+            displayWidth, displayStyle,
+            editSplitRef,
+
+            // actions
+            next, prev,
+            toggleDark, toggleMode,
+            startSidebarResize, startEditorResize,
+            startDisplayResize, resetDisplayWidth,
+            addStep, removeStep,
+            onDragStart, onDragOver, onDrop,
+
+            // terminal
+            terminalOpen, toggleTerminal,
+            executor, cmdInput,
+            runnerToken, runnerCwd,
+            bridgeOk, pingBridge,
+            termLog, clearLog,
+            codeBlocks, runCodeBlock, runInput,
+            copyText,
+
+            toast
+          };
+        }
+      }).mount('#app');
+    });
+  </script>
+</body>
+</html>
