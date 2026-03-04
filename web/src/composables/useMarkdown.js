@@ -1,15 +1,16 @@
-﻿import { computed, nextTick, onBeforeUnmount, onMounted, watch } from "vue";
+import { computed, nextTick, onBeforeUnmount, onMounted, watch } from "vue";
 import { marked } from "marked";
 import { copyText } from "../utils/clipboard";
-import { escapeHtml } from "../utils/escapeHtml";
-import { highlightAllUnder } from "../utils/prism";
+import { highlightAllUnder, highlightCode } from "../utils/prism";
 
 export const useMarkdown = (activeStep, deps, showToast) => {
   const renderer = new marked.Renderer();
+  let highlightRetryTimer = null;
+  let highlightRetryTimerLate = null;
 
   renderer.code = (code, infostring) => {
     const lang = ((infostring || "").match(/\S*/)?.[0] || "").trim();
-    const safe = escapeHtml(code);
+    const highlighted = highlightCode(code, lang);
     const id = `code_${Math.random().toString(36).slice(2, 10)}`;
 
     return `
@@ -21,12 +22,12 @@ export const useMarkdown = (activeStep, deps, showToast) => {
               <span class="dot yellow"></span>
               <span class="dot green"></span>
             </div>
-            <span class="code-meta">${lang || "code"}</span>
+            <span class="code-meta">${highlighted.language || lang || "code"}</span>
           </div>
-          <button class="code-copy" onclick="window.__copyCode('${id}', this)">复制</button>
+          <button class="code-copy" onclick="window.__copyCode('${id}', this)">Copy</button>
         </div>
         <div class="code-card-body">
-          <pre><code id="${id}" class="language-${lang || "none"}">${safe}</code></pre>
+          <pre><code id="${id}" class="language-${highlighted.language || "none"}">${highlighted.html}</code></pre>
         </div>
       </div>
     `;
@@ -34,17 +35,49 @@ export const useMarkdown = (activeStep, deps, showToast) => {
 
   marked.setOptions({ breaks: true, gfm: true, renderer, sanitize: false });
 
-  const renderedMarkdown = computed(() =>
-    marked.parse(activeStep.value?.content || "")
-  );
+  const renderedMarkdown = computed(() => marked.parse(activeStep.value?.content || ""));
 
-  const postRender = async () => {
-    await nextTick();
+  const runHighlight = () => {
     const roots = Array.from(document.querySelectorAll('[data-preview="1"]'));
     roots.forEach((root) => highlightAllUnder(root));
   };
 
-  watch([renderedMarkdown, ...(deps || [])], postRender, { immediate: true });
+  const clearHighlightTimers = () => {
+    if (highlightRetryTimer) {
+      clearTimeout(highlightRetryTimer);
+      highlightRetryTimer = null;
+    }
+    if (highlightRetryTimerLate) {
+      clearTimeout(highlightRetryTimerLate);
+      highlightRetryTimerLate = null;
+    }
+  };
+
+  const postRender = async () => {
+    await nextTick();
+    runHighlight();
+    if (typeof requestAnimationFrame === "function") {
+      requestAnimationFrame(() => {
+        runHighlight();
+        requestAnimationFrame(() => {
+          runHighlight();
+        });
+      });
+    }
+    clearHighlightTimers();
+    highlightRetryTimer = setTimeout(() => {
+      runHighlight();
+      highlightRetryTimer = null;
+    }, 90);
+    highlightRetryTimerLate = setTimeout(() => {
+      runHighlight();
+      highlightRetryTimerLate = null;
+    }, 260);
+  };
+
+  watch([renderedMarkdown, ...(deps || [])], () => {
+    void postRender();
+  }, { immediate: true, flush: "post" });
 
   const copyHandler = async (id, button) => {
     const node = document.getElementById(id);
@@ -55,13 +88,13 @@ export const useMarkdown = (activeStep, deps, showToast) => {
     const ok = await copyText(node.innerText || "");
     if (button) {
       const prev = button.innerText;
-      button.innerText = ok ? "已复制" : "复制失败";
+      button.innerText = ok ? "Copied" : "Copy failed";
       setTimeout(() => {
         button.innerText = prev;
       }, 700);
     }
     if (ok && showToast) {
-      showToast("已复制");
+      showToast("Copied");
     }
   };
 
@@ -70,6 +103,7 @@ export const useMarkdown = (activeStep, deps, showToast) => {
   });
 
   onBeforeUnmount(() => {
+    clearHighlightTimers();
     if (window.__copyCode === copyHandler) {
       delete window.__copyCode;
     }

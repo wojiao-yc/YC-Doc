@@ -6,18 +6,42 @@
     :class="{ 'dark-ui': isDark }"
   >
     <aside
-      class="flex flex-col flex-shrink-0 border-r min-h-0"
-      :style="{ width: `${sidebarWidth}px` }"
-      :class="isDark ? 'border-slate-800 bg-slate-950' : 'border-gray-200 bg-[#fafafa]'"
+      class="sidebar-panel flex flex-col flex-shrink-0 border-r min-h-0"
+      :style="{ width: `${sidebarPanelWidth}px` }"
+      :class="[
+        isSidebarCollapsed ? 'is-collapsed' : '',
+        isSidebarDragging ? 'is-dragging' : '',
+        isSidebarHidden
+          ? 'is-hidden border-transparent bg-transparent'
+          : (isDark ? 'border-slate-800 bg-slate-950' : 'border-gray-200 bg-[#fafafa]')
+      ]"
     >
-      <div class="p-8">
-        <div class="flex items-center gap-3 mb-2">
-          <div class="w-8 h-8 bg-orange-500 rounded-lg flex items-center justify-center text-white font-bold">G</div>
-          <h1 class="font-bold text-lg tracking-tight" :class="isDark ? 'text-slate-100' : 'text-gray-800'">
-            Gemini Doc
-          </h1>
+      <div :class="isSidebarCollapsed ? 'px-2 py-3' : 'p-5 pb-4'">
+        <div :class="isSidebarCollapsed ? 'flex flex-col items-center gap-2' : 'flex items-start justify-between gap-2'">
+          <div :class="isSidebarCollapsed ? 'flex items-center justify-center w-full' : 'flex items-center gap-3 min-w-0'">
+            <div class="w-8 h-8 bg-orange-500 rounded-lg flex items-center justify-center text-white font-bold">G</div>
+            <div v-if="!isSidebarCollapsed" class="min-w-0">
+              <h1 class="font-bold text-lg tracking-tight truncate" :class="isDark ? 'text-slate-100' : 'text-gray-800'">
+                Gemini Doc
+              </h1>
+              <p class="text-xs mt-0.5" :class="isDark ? 'text-slate-500' : 'text-gray-400'">交互式汇报系统 Pro</p>
+            </div>
+          </div>
+          <div v-if="isEditMode" :class="isSidebarCollapsed ? 'flex items-center justify-center w-full' : 'flex items-center gap-1 shrink-0'">
+            <button
+              type="button"
+              class="sidebar-collapse-btn sidebar-tip-btn"
+              :data-tip="isSidebarCollapsed ? '展开侧栏' : '折叠侧栏'"
+              @click="toggleSidebarCollapse"
+            >
+              <span v-if="isSidebarCollapsed">›</span>
+              <span v-else>‹</span>
+            </button>
+          </div>
         </div>
-        <p class="text-xs" :class="isDark ? 'text-slate-500' : 'text-gray-400'">交互式汇报系统 Pro</p>
+        <div v-if="!isSidebarCollapsed" class="sidebar-overall-progress" :class="isDark ? 'is-dark' : ''">
+          <span class="sidebar-overall-progress-fill" :style="{ width: `${Math.round(sidebarChapterProgress * 100)}%` }"></span>
+        </div>
       </div>
 
       <nav class="flex-1 min-h-0 overflow-y-auto">
@@ -25,33 +49,39 @@
           v-for="(step, index) in steps"
           :key="step.id"
           @click="currentId = step.id"
+          :title="isSidebarCollapsed ? step.title : ''"
           :draggable="isEditMode"
           @dragstart="onDragStart($event, index, isEditMode)"
           @dragover="onDragOver($event, isEditMode)"
           @drop="onDrop($event, index, isEditMode)"
-          class="px-6 py-4 flex items-start gap-4 cursor-pointer transition-all border-l-4"
+          class="nav-step-item px-4 py-3.5 flex items-start gap-3 cursor-pointer transition-all border-l-4"
           :class="[
             currentId === step.id
               ? (isDark ? 'bg-orange-500/10 border-orange-400' : 'bg-orange-50/60 border-orange-500')
               : (isDark ? 'border-transparent hover:bg-slate-900/60' : 'border-transparent hover:bg-gray-100')
           ]"
         >
-          <div
-            class="mt-1 w-6 h-6 rounded flex items-center justify-center text-xs font-bold transition-all"
-            :class="[
-              isEditMode
-                ? (isDark ? 'bg-slate-800 text-slate-400' : 'bg-gray-200 text-gray-400')
-                : (index < currentStepIndex
-                  ? 'bg-orange-500 text-white'
-                  : (currentId === step.id
+          <div class="nav-step-side">
+            <div
+              class="mt-1 w-6 h-6 rounded flex items-center justify-center text-xs font-bold transition-all"
+              :class="[
+                isEditMode
+                  ? (isDark ? 'bg-slate-800 text-slate-400' : 'bg-gray-200 text-gray-400')
+                  : (index < currentStepIndex
                     ? 'bg-orange-500 text-white'
-                    : (isDark ? 'bg-slate-800 text-slate-400' : 'bg-gray-200 text-gray-400')))
-            ]"
-          >
-            {{ isEditMode ? index + 1 : (index < currentStepIndex ? '✓' : index + 1) }}
+                    : (currentId === step.id
+                      ? 'bg-orange-500 text-white'
+                      : (isDark ? 'bg-slate-800 text-slate-400' : 'bg-gray-200 text-gray-400')))
+              ]"
+            >
+              {{ isEditMode ? index + 1 : (index < currentStepIndex ? '✓' : index + 1) }}
+            </div>
+            <span class="nav-step-track" :class="isDark ? 'is-dark' : ''">
+              <span class="nav-step-track-fill" :style="{ transform: `scaleY(${stepProgressForIndex(index)})` }"></span>
+            </span>
           </div>
 
-          <div class="flex-1 min-w-0">
+          <div v-if="!isSidebarCollapsed" class="flex-1 min-w-0">
             <div v-if="isEditMode" class="space-y-1">
               <input
                 v-model="step.title"
@@ -86,7 +116,11 @@
         </div>
       </nav>
 
-      <div v-if="isEditMode" class="border-t p-4 space-y-3" :class="isDark ? 'border-slate-800' : 'border-gray-200'">
+      <div
+        v-if="isEditMode && !isSidebarCollapsed && !isSidebarHidden"
+        class="border-t p-4 space-y-3"
+        :class="isDark ? 'border-slate-800' : 'border-gray-200'"
+      >
         <div class="text-xs mb-2 px-2" :class="isDark ? 'text-slate-400' : 'text-gray-500'">编辑模式操作</div>
         <button
           @click="addStep"
@@ -105,11 +139,14 @@
 
     <div
       v-if="isEditMode"
-      class="w-2 cursor-col-resize flex-shrink-0"
-      :class="isDark ? 'bg-slate-950 hover:bg-orange-500/10' : 'bg-white hover:bg-orange-200/40'"
-      @mousedown="startSidebarResize"
+      class="sidebar-resize-handle flex-shrink-0"
+      :class="[
+        isSidebarHidden ? 'is-hidden' : '',
+        isDark ? 'is-dark' : ''
+      ]"
+      @mousedown="startSidebarResizeDrag"
     >
-      <div class="w-px h-full mx-auto" :class="isDark ? 'bg-slate-800' : 'bg-gray-200'"></div>
+      <div class="sidebar-resize-line"></div>
     </div>
 
     <main ref="mainRef" class="relative flex-1 min-w-0 min-h-0 flex flex-col" :class="isDark ? 'bg-slate-950' : 'bg-white'">
@@ -117,78 +154,64 @@
         class="sticky top-0 z-30 px-10 py-5 border-b flex justify-between items-center backdrop-blur"
         :class="isDark ? 'border-slate-800 bg-slate-950/80' : 'border-gray-100 bg-white/80'"
       >
-        <div>
-          <div class="header-meta">
-            <div class="header-meta-title-row">
-              <span class="header-meta-title">{{ activeStep.title }}</span>
-              <span class="header-meta-page">第 {{ currentStepIndex + 1 }} / {{ steps.length }} 页</span>
-            </div>
-            <span class="header-meta-sub">{{ activeStep.subtitle || "未设置副标题" }}</span>
-          </div>
+        <div class="header-meta header-meta-inline">
+          <template v-if="isEditMode">
+            <input
+              v-model="activeStep.title"
+              type="text"
+              class="header-meta-input header-meta-input-title"
+              :class="isDark ? 'is-dark' : ''"
+              placeholder="步骤标题"
+            />
+            <input
+              v-model="activeStep.subtitle"
+              type="text"
+              class="header-meta-input header-meta-input-sub"
+              :class="isDark ? 'is-dark' : ''"
+              placeholder="步骤副标题（可选）"
+            />
+          </template>
+          <template v-else>
+            <span class="header-meta-title">{{ activeStep.title }}</span>
+            <span class="header-meta-dot">·</span>
+            <span class="header-meta-sub header-meta-sub-inline">{{ activeStep.subtitle || "未设置副标题" }}</span>
+          </template>
         </div>
 
         <div class="flex items-center gap-3">
-          <button
-            @click="toggleDark"
-            class="px-3 py-2 text-sm rounded-lg transition-all flex items-center gap-2"
-            :class="isDark ? 'bg-slate-800 text-slate-100 hover:bg-slate-700' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'"
-          >
-            🌙 <span class="hidden md:inline">主题</span>
-          </button>
+          <template v-if="isEditMode">
+            <button
+              @click="toggleDark"
+              class="px-3 py-2 text-sm rounded-lg transition-all flex items-center gap-2"
+              :class="isDark ? 'bg-slate-800 text-slate-100 hover:bg-slate-700' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'"
+            >
+              🌙 <span class="hidden md:inline">主题</span>
+            </button>
 
-          <button
-            @click="toggleMode"
-            class="px-4 py-2 text-sm rounded-lg transition-all flex items-center gap-2"
-            :class="isEditMode
-              ? 'bg-orange-500 text-white hover:bg-orange-600'
-              : (isDark ? 'bg-slate-800 text-slate-100 hover:bg-slate-700' : 'bg-gray-100 text-gray-700 hover:bg-gray-200')"
-          >
-            <span v-if="!isEditMode">✎ <span class="hidden md:inline">编辑</span></span>
-            <span v-else>👁 <span class="hidden md:inline">展示</span></span>
-          </button>
+            <button
+              @click="toggleMode"
+              class="px-4 py-2 text-sm rounded-lg transition-all flex items-center gap-2"
+              :class="'bg-orange-500 text-white hover:bg-orange-600'"
+            >
+              <span>👁 <span class="hidden md:inline">展示</span></span>
+            </button>
+          </template>
+          <template v-else>
+            <span class="header-meta-page">第 {{ currentStepIndex + 1 }} / {{ steps.length }} 页</span>
+          </template>
         </div>
       </header>
 
-      <section v-show="!terminalMaximized" class="flex-1 min-h-0 overflow-y-auto" :class="isDark ? 'bg-slate-950' : 'bg-white'">
+      <section
+        v-show="!terminalMaximized"
+        ref="contentScrollRef"
+        class="flex-1 min-h-0 overflow-y-auto"
+        :class="isDark ? 'bg-slate-950' : 'bg-white'"
+        @scroll.passive="onContentScroll"
+      >
         <div class="mx-auto relative w-full px-10 py-10" :class="isEditMode ? 'max-w-6xl' : 'max-w-none'">
           <transition name="fade" mode="out-in">
             <div :key="currentId" class="flex flex-col">
-              <div class="mb-8" :class="!isEditMode ? 'mx-auto' : ''" :style="!isEditMode ? displayStyle : null">
-                <div class="flex items-center justify-between mb-4">
-                  <div class="flex-1">
-                    <div v-if="isEditMode" class="space-y-3">
-                      <div>
-                        <label class="block text-sm font-medium mb-1" :class="isDark ? 'text-slate-200' : 'text-gray-700'">步骤标题</label>
-                        <input
-                          v-model="activeStep.title"
-                          type="text"
-                          class="w-full px-4 py-2 text-2xl font-bold border rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500"
-                          :class="isDark ? 'bg-slate-900 text-slate-100 border-slate-700' : 'bg-white text-gray-800 border-gray-300'"
-                        />
-                      </div>
-                      <div>
-                        <label class="block text-sm font-medium mb-1" :class="isDark ? 'text-slate-200' : 'text-gray-700'">步骤副标题</label>
-                        <input
-                          v-model="activeStep.subtitle"
-                          type="text"
-                          class="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500"
-                          :class="isDark ? 'bg-slate-900 text-slate-200 border-slate-700' : 'bg-white text-gray-600 border-gray-300'"
-                        />
-                      </div>
-                    </div>
-
-                    <div v-else class="flex flex-col">
-                      <h2 class="text-2xl font-bold" :class="isDark ? 'text-slate-100' : 'text-gray-800'">
-                        {{ activeStep.title }}
-                      </h2>
-                      <p v-if="activeStep.subtitle" class="mt-2" :class="isDark ? 'text-slate-400' : 'text-gray-500'">
-                        {{ activeStep.subtitle }}
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
               <div v-if="!isEditMode" class="mb-10 mx-auto" :style="displayStyle">
                 <div data-preview="1" :class="isDark ? 'md-dark' : 'md-light'" v-html="renderedMarkdown"></div>
               </div>
@@ -560,8 +583,18 @@ const terminalPanelHeight = ref(320);
 const terminalMaximized = ref(false);
 const terminalTab = ref("terminal");
 const mainRef = ref(null);
+const contentScrollRef = ref(null);
 const terminalViewportRef = ref(null);
 const terminalSplitWrapRef = ref(null);
+const isSidebarCollapsed = ref(false);
+const isSidebarHidden = ref(false);
+const isSidebarDragging = ref(false);
+const currentContentReadProgress = ref(0);
+const SIDEBAR_COLLAPSED_WIDTH = 72;
+const SIDEBAR_MIN_WIDTH = 240;
+const SIDEBAR_MAX_WIDTH = 560;
+const SIDEBAR_HIDE_SNAP = 44;
+const SIDEBAR_COLLAPSE_SNAP = SIDEBAR_COLLAPSED_WIDTH + 34;
 const desktopPrimaryTerminalRef = ref(null);
 const desktopSecondaryTerminalRef = ref(null);
 const desktopSessions = ref([]);
@@ -607,6 +640,12 @@ const pasteGuard = {
   text: "",
   ts: 0
 };
+let terminalResizeSyncTimer = null;
+let terminalDragSizing = false;
+let sidebarDragRaf = 0;
+let sidebarDragPendingWidth = null;
+let sidebarDragMoveHandler = null;
+let sidebarDragUpHandler = null;
 
 const clamp = (value, min, max) => Math.min(max, Math.max(min, value));
 const TERMINAL_MIN_HEIGHT = 120;
@@ -637,11 +676,164 @@ const {
   displayWidth,
   displayStyle,
   editSplitRef,
-  startSidebarResize,
   startEditorResize,
   startDisplayResize,
   resetDisplayWidth
 } = useResizable();
+
+const sidebarPanelWidth = computed(() => {
+  if (isSidebarHidden.value) {
+    return 0;
+  }
+  if (isSidebarCollapsed.value) {
+    return SIDEBAR_COLLAPSED_WIDTH;
+  }
+  return sidebarWidth.value;
+});
+
+const measureContentReadProgress = () => {
+  const el = contentScrollRef.value;
+  if (!el || isEditMode.value) {
+    return 0;
+  }
+  const scrollable = el.scrollHeight - el.clientHeight;
+  if (scrollable <= 2) {
+    return 1;
+  }
+  return clamp(el.scrollTop / scrollable, 0, 1);
+};
+
+const refreshContentProgress = () => {
+  currentContentReadProgress.value = measureContentReadProgress();
+};
+
+const onContentScroll = () => {
+  currentContentReadProgress.value = measureContentReadProgress();
+};
+
+const sidebarChapterProgress = computed(() => {
+  const total = steps.value.length;
+  if (!total || currentStepIndex.value < 0) {
+    return 0;
+  }
+  const completed = clamp(currentStepIndex.value, 0, total - 1);
+  const current = clamp(currentContentReadProgress.value, 0, 1);
+  return clamp((completed + current) / total, 0, 1);
+});
+
+const stepProgressForIndex = (index) => {
+  if (index < currentStepIndex.value) {
+    return 1;
+  }
+  if (index > currentStepIndex.value) {
+    return 0;
+  }
+  return clamp(currentContentReadProgress.value, 0, 1);
+};
+
+const toggleSidebarCollapse = () => {
+  isSidebarHidden.value = false;
+  if (isSidebarCollapsed.value) {
+    isSidebarCollapsed.value = false;
+    sidebarWidth.value = clamp(sidebarWidth.value, SIDEBAR_MIN_WIDTH, SIDEBAR_MAX_WIDTH);
+  } else {
+    isSidebarCollapsed.value = true;
+  }
+  nextTick(() => {
+    refreshContentProgress();
+  });
+};
+
+const applySidebarDragWidth = (rawWidth) => {
+  const width = Number(rawWidth) || 0;
+  if (width <= SIDEBAR_HIDE_SNAP) {
+    isSidebarHidden.value = true;
+    isSidebarCollapsed.value = false;
+    return;
+  }
+
+  isSidebarHidden.value = false;
+  if (width <= SIDEBAR_COLLAPSE_SNAP) {
+    isSidebarCollapsed.value = true;
+    return;
+  }
+
+  isSidebarCollapsed.value = false;
+  sidebarWidth.value = clamp(Math.round(width), SIDEBAR_MIN_WIDTH, SIDEBAR_MAX_WIDTH);
+};
+
+const queueSidebarDragWidth = (rawWidth) => {
+  sidebarDragPendingWidth = rawWidth;
+  if (sidebarDragRaf) {
+    return;
+  }
+  sidebarDragRaf = window.requestAnimationFrame(() => {
+    sidebarDragRaf = 0;
+    if (sidebarDragPendingWidth == null) {
+      return;
+    }
+    const pending = sidebarDragPendingWidth;
+    sidebarDragPendingWidth = null;
+    applySidebarDragWidth(pending);
+  });
+};
+
+const finishSidebarDrag = () => {
+  if (sidebarDragRaf) {
+    window.cancelAnimationFrame(sidebarDragRaf);
+    sidebarDragRaf = 0;
+  }
+  if (sidebarDragPendingWidth != null) {
+    applySidebarDragWidth(sidebarDragPendingWidth);
+    sidebarDragPendingWidth = null;
+  }
+  if (!isSidebarHidden.value && !isSidebarCollapsed.value) {
+    sidebarWidth.value = clamp(sidebarWidth.value, SIDEBAR_MIN_WIDTH, SIDEBAR_MAX_WIDTH);
+  }
+};
+
+const startSidebarResizeDrag = (event) => {
+  event.preventDefault();
+  isSidebarDragging.value = true;
+  const startX = event.clientX;
+  const startW = isSidebarHidden.value
+    ? 0
+    : (isSidebarCollapsed.value ? SIDEBAR_COLLAPSED_WIDTH : sidebarWidth.value);
+
+  document.body.style.userSelect = "none";
+
+  if (sidebarDragMoveHandler) {
+    window.removeEventListener("mousemove", sidebarDragMoveHandler);
+    sidebarDragMoveHandler = null;
+  }
+  if (sidebarDragUpHandler) {
+    window.removeEventListener("mouseup", sidebarDragUpHandler);
+    sidebarDragUpHandler = null;
+  }
+
+  const onMove = (ev) => {
+    const dx = ev.clientX - startX;
+    queueSidebarDragWidth(startW + dx);
+  };
+
+  const onUp = () => {
+    isSidebarDragging.value = false;
+    document.body.style.userSelect = "";
+    window.removeEventListener("mousemove", onMove);
+    window.removeEventListener("mouseup", onUp);
+    sidebarDragMoveHandler = null;
+    sidebarDragUpHandler = null;
+    finishSidebarDrag();
+    nextTick(() => {
+      refreshContentProgress();
+    });
+  };
+
+  sidebarDragMoveHandler = onMove;
+  sidebarDragUpHandler = onUp;
+  window.addEventListener("mousemove", onMove);
+  window.addEventListener("mouseup", onUp);
+};
 
 const { renderedMarkdown } = useMarkdown(activeStep, [isDark, mode, currentId], showToast);
 
@@ -1404,6 +1596,22 @@ const syncDesktopTerminalSize = async () => {
   }
 };
 
+const requestDesktopTerminalSizeSync = (delay = 0) => {
+  if (!isDesktopPty.value || !terminalOpen.value || terminalTab.value !== "terminal") {
+    return;
+  }
+  if (terminalResizeSyncTimer) {
+    clearTimeout(terminalResizeSyncTimer);
+    terminalResizeSyncTimer = null;
+  }
+  terminalResizeSyncTimer = setTimeout(() => {
+    terminalResizeSyncTimer = null;
+    void nextTick(() => {
+      void syncDesktopTerminalSize();
+    });
+  }, Math.max(0, Number(delay || 0)));
+};
+
 const initDesktopTerminal = async () => {
   if (!isDesktopPty.value || !terminalOpen.value || terminalTab.value !== "terminal") {
     return;
@@ -1460,6 +1668,18 @@ watch(isDark, () => {
   applyXtermTheme();
 });
 
+watch([currentId, mode, terminalMaximized, terminalOpen, terminalPanelHeight], () => {
+  nextTick(() => {
+    refreshContentProgress();
+  });
+});
+
+watch(renderedMarkdown, () => {
+  nextTick(() => {
+    refreshContentProgress();
+  });
+});
+
 watch([terminalOpen, terminalTab], async ([open, tab]) => {
   if (!isDesktopPty.value) {
     return;
@@ -1478,9 +1698,7 @@ watch([terminalPanelHeight, terminalMaximized], () => {
   if (!isDesktopPty.value || !terminalOpen.value || terminalTab.value !== "terminal") {
     return;
   }
-  nextTick(() => {
-    void syncDesktopTerminalSize();
-  });
+  requestDesktopTerminalSizeSync(terminalDragSizing ? 180 : 30);
 });
 
 watch([desktopSplit, primaryPaneSessionId, secondaryPaneSessionId], async () => {
@@ -1568,6 +1786,7 @@ const applyTerminalDragHeight = (rawHeight) => {
 };
 
 const resizeTerminalFrom = (startY, startH) => {
+  terminalDragSizing = true;
   document.body.style.userSelect = "none";
 
   const onMove = (ev) => {
@@ -1576,10 +1795,12 @@ const resizeTerminalFrom = (startY, startH) => {
   };
 
   const onUp = () => {
+    terminalDragSizing = false;
     document.body.style.userSelect = "";
     window.removeEventListener("mousemove", onMove);
     window.removeEventListener("mouseup", onUp);
     if (terminalOpen.value) {
+      requestDesktopTerminalSizeSync(0);
       nextTick(scrollTerminalToBottom);
     }
   };
@@ -1625,6 +1846,11 @@ const onKeydown = (event) => {
   const tag = document.activeElement?.tagName?.toLowerCase() || "";
   const typing = tag === "input" || tag === "textarea" || document.activeElement?.isContentEditable;
 
+  if (event.key === "Escape" && !isEditMode.value) {
+    event.preventDefault();
+    toggleMode();
+    return;
+  }
   if (event.key === "Escape" && desktopFullscreen.value) {
     event.preventDefault();
     if (desktopWindowBridge?.setFullscreen) {
@@ -1670,6 +1896,7 @@ onMounted(() => {
   window.addEventListener("mousedown", onGlobalPointerDown, true);
   window.addEventListener("blur", closeDesktopTabContextMenu);
   window.addEventListener("blur", releasePasteShortcutLocks);
+  window.addEventListener("resize", refreshContentProgress);
   if (isDesktopPty.value) {
     terminalTab.value = "terminal";
     void syncDesktopFullscreenState();
@@ -1679,16 +1906,36 @@ onMounted(() => {
       });
     }
   }
+  nextTick(() => {
+    refreshContentProgress();
+  });
 });
 
 onBeforeUnmount(() => {
+  isSidebarDragging.value = false;
   cancelDesktopRenameDialog();
   disposeDesktopTerminal();
   disposeTerminal();
+  if (sidebarDragMoveHandler) {
+    window.removeEventListener("mousemove", sidebarDragMoveHandler);
+    sidebarDragMoveHandler = null;
+  }
+  if (sidebarDragUpHandler) {
+    window.removeEventListener("mouseup", sidebarDragUpHandler);
+    sidebarDragUpHandler = null;
+  }
+  finishSidebarDrag();
+  document.body.style.userSelect = "";
+  if (terminalResizeSyncTimer) {
+    clearTimeout(terminalResizeSyncTimer);
+    terminalResizeSyncTimer = null;
+  }
+  terminalDragSizing = false;
   window.removeEventListener("keydown", onKeydown);
   window.removeEventListener("keyup", onGlobalKeyup, true);
   window.removeEventListener("mousedown", onGlobalPointerDown, true);
   window.removeEventListener("blur", closeDesktopTabContextMenu);
   window.removeEventListener("blur", releasePasteShortcutLocks);
+  window.removeEventListener("resize", refreshContentProgress);
 });
 </script>
