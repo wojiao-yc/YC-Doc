@@ -594,6 +594,8 @@ const paneInputs = { primary: null, secondary: null };
 const paneContextHandlers = { primary: null, secondary: null };
 const panePasteHandlers = { primary: null, secondary: null };
 const paneFocusHandlers = { primary: null, secondary: null };
+const panePasteShortcutLock = { primary: false, secondary: false };
+const panePasteHotkeyAt = { primary: 0, secondary: 0 };
 const paneBuildQueues = {
   primary: Promise.resolve(),
   secondary: Promise.resolve()
@@ -1110,6 +1112,13 @@ const applyXtermTheme = () => {
   }
 };
 
+const releasePasteShortcutLocks = () => {
+  panePasteShortcutLock.primary = false;
+  panePasteShortcutLock.secondary = false;
+  panePasteHotkeyAt.primary = 0;
+  panePasteHotkeyAt.secondary = 0;
+};
+
 const disposeDesktopPaneTerminal = (pane) => {
   const host = paneHostOf(pane);
   if (host && paneContextHandlers[pane]) {
@@ -1117,13 +1126,15 @@ const disposeDesktopPaneTerminal = (pane) => {
     paneContextHandlers[pane] = null;
   }
   if (host && panePasteHandlers[pane]) {
-    host.removeEventListener("paste", panePasteHandlers[pane]);
+    host.removeEventListener("paste", panePasteHandlers[pane], true);
     panePasteHandlers[pane] = null;
   }
   if (host && paneFocusHandlers[pane]) {
     host.removeEventListener("mousedown", paneFocusHandlers[pane], true);
     paneFocusHandlers[pane] = null;
   }
+  panePasteShortcutLock[pane] = false;
+  panePasteHotkeyAt[pane] = 0;
   if (paneInputs[pane]) {
     paneInputs[pane].dispose();
     paneInputs[pane] = null;
@@ -1152,7 +1163,7 @@ const shouldSkipDuplicatePaste = (sid, text) => {
   if (
     pasteGuard.sessionId === sid &&
     pasteGuard.text === text &&
-    now - pasteGuard.ts < 140
+    now - pasteGuard.ts < 280
   ) {
     return true;
   }
@@ -1173,6 +1184,11 @@ const pasteClipboardToPane = async (pane) => {
       return;
     }
     if (shouldSkipDuplicatePaste(sid, text)) {
+      return;
+    }
+    const term = termOf(pane);
+    if (term && typeof term.paste === "function") {
+      term.paste(text);
       return;
     }
     await writeTerminalRaw(text, sid);
@@ -1286,8 +1302,21 @@ const buildPaneTerminal = async (pane) => {
           const key = String(ev.key || "").toLowerCase();
           const ctrlOrCmd = ev.ctrlKey || ev.metaKey;
 
+          if (ev.type === "keyup" && ["control", "meta", "shift"].includes(key)) {
+            panePasteShortcutLock[pane] = false;
+          }
+
           if ((ctrlOrCmd && key === "v") || (ev.shiftKey && key === "insert")) {
             if (ev.type === "keydown") {
+              const now = Date.now();
+              if (ev.repeat || panePasteShortcutLock[pane]) {
+                return false;
+              }
+              if (now - panePasteHotkeyAt[pane] < 260) {
+                return false;
+              }
+              panePasteHotkeyAt[pane] = now;
+              panePasteShortcutLock[pane] = true;
               void pasteClipboardToPane(pane);
             }
             return false;
@@ -1319,9 +1348,18 @@ const buildPaneTerminal = async (pane) => {
         panePasteHandlers[pane] = (event) => {
           event.preventDefault();
           event.stopPropagation();
-          void pasteClipboardToPane(pane);
+          if (panePasteShortcutLock[pane]) {
+            return;
+          }
+          panePasteShortcutLock[pane] = true;
+          void pasteClipboardToPane(pane).finally(() => {
+            // native paste path has no modifier key-up; release lock in micro-delay
+            setTimeout(() => {
+              panePasteShortcutLock[pane] = false;
+            }, 60);
+          });
         };
-        host.addEventListener("paste", panePasteHandlers[pane]);
+        host.addEventListener("paste", panePasteHandlers[pane], true);
 
         paneInputs[pane] = term.onData((data) => {
           const sid = paneSessionIdOf(pane);
@@ -1340,13 +1378,6 @@ const buildPaneTerminal = async (pane) => {
         paneTerminals[pane] = term;
         paneFits[pane] = fit;
         renderPaneFromBuffer(pane);
-        const sid = paneSessionIdOf(pane);
-        if (sid) {
-          const snapshot = desktopSessionBuffers.get(sid) || "";
-          if (!snapshot) {
-            void writeTerminalRaw("\r", sid);
-          }
-        }
       } catch (err) {
         const detail = String(err);
         showToast(`终端初始化失败: ${detail}`);
@@ -1626,10 +1657,19 @@ const onGlobalPointerDown = (event) => {
   closeDesktopTabContextMenu();
 };
 
+const onGlobalKeyup = (event) => {
+  const key = String(event.key || "").toLowerCase();
+  if (["control", "meta", "shift"].includes(key)) {
+    releasePasteShortcutLocks();
+  }
+};
+
 onMounted(() => {
   window.addEventListener("keydown", onKeydown);
+  window.addEventListener("keyup", onGlobalKeyup, true);
   window.addEventListener("mousedown", onGlobalPointerDown, true);
   window.addEventListener("blur", closeDesktopTabContextMenu);
+  window.addEventListener("blur", releasePasteShortcutLocks);
   if (isDesktopPty.value) {
     terminalTab.value = "terminal";
     void syncDesktopFullscreenState();
@@ -1646,7 +1686,9 @@ onBeforeUnmount(() => {
   disposeDesktopTerminal();
   disposeTerminal();
   window.removeEventListener("keydown", onKeydown);
+  window.removeEventListener("keyup", onGlobalKeyup, true);
   window.removeEventListener("mousedown", onGlobalPointerDown, true);
   window.removeEventListener("blur", closeDesktopTabContextMenu);
+  window.removeEventListener("blur", releasePasteShortcutLocks);
 });
 </script>
