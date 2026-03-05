@@ -1,10 +1,67 @@
-﻿import { computed, ref } from "vue";
+import { computed, ref, watch } from "vue";
 import { initialSteps } from "../data/steps";
 
+const STEPS_STORAGE_KEY = "yc-doc.steps.v1";
+const STEP_ID_STORAGE_KEY = "yc-doc.current-id.v1";
+const DESKTOP_SAVE_DELAY_MS = 260;
+
+const cloneSteps = (source) =>
+  (Array.isArray(source) ? source : [])
+    .filter((item) => item && typeof item === "object")
+    .map((item, index) => ({
+      id: Number(item.id) || index + 1,
+      title: String(item.title || `步骤 ${index + 1}`),
+      subtitle: String(item.subtitle || ""),
+      content: String(item.content || "")
+    }));
+
+const getDesktopDataBridge = () => {
+  if (typeof window === "undefined") {
+    return null;
+  }
+  return window.desktopData || null;
+};
+
+const readStoredSteps = () => {
+  if (typeof window === "undefined") {
+    return null;
+  }
+  try {
+    const raw = localStorage.getItem(STEPS_STORAGE_KEY);
+    if (!raw) {
+      return null;
+    }
+    const parsed = JSON.parse(raw);
+    const normalized = cloneSteps(parsed);
+    return normalized.length > 0 ? normalized : null;
+  } catch {
+    return null;
+  }
+};
+
+const readStoredCurrentId = (items) => {
+  if (typeof window === "undefined") {
+    return items[0]?.id ?? 1;
+  }
+  const raw = localStorage.getItem(STEP_ID_STORAGE_KEY);
+  const candidate = Number(raw);
+  if (Number.isFinite(candidate) && items.some((step) => step.id === candidate)) {
+    return candidate;
+  }
+  return items[0]?.id ?? 1;
+};
+
 export const useSteps = (showToast) => {
-  const steps = ref(initialSteps.map((step) => ({ ...step })));
-  const currentId = ref(steps.value[0]?.id ?? 1);
+  const fallbackSteps = cloneSteps(initialSteps);
+  const steps = ref(readStoredSteps() || fallbackSteps);
+  const currentId = ref(readStoredCurrentId(steps.value));
   const draggedIndex = ref(null);
+  const desktopDataBridge = getDesktopDataBridge();
+
+  let desktopHydrated = !desktopDataBridge?.loadSteps;
+  let desktopSaveTimer = null;
+  let desktopSaveQueued = false;
+  let desktopLoadWarned = false;
 
   const activeStep = computed(
     () => steps.value.find((step) => step.id === currentId.value) || steps.value[0]
@@ -14,6 +71,95 @@ export const useSteps = (showToast) => {
   );
   const isFirstStep = computed(() => currentStepIndex.value === 0);
   const isLastStep = computed(() => currentStepIndex.value === steps.value.length - 1);
+
+  const persistLocalSteps = (list) => {
+    if (typeof window === "undefined") {
+      return;
+    }
+    try {
+      localStorage.setItem(STEPS_STORAGE_KEY, JSON.stringify(list));
+    } catch {
+      // ignore quota/storage errors
+    }
+  };
+
+  const persistLocalCurrentId = (value) => {
+    if (typeof window === "undefined") {
+      return;
+    }
+    try {
+      localStorage.setItem(STEP_ID_STORAGE_KEY, String(value));
+    } catch {
+      // ignore quota/storage errors
+    }
+  };
+
+  const saveDesktopStepsNow = async () => {
+    if (!desktopDataBridge?.saveSteps || !desktopHydrated) {
+      desktopSaveQueued = true;
+      return;
+    }
+    desktopSaveQueued = false;
+    try {
+      await desktopDataBridge.saveSteps({
+        steps: steps.value,
+        currentId: currentId.value
+      });
+    } catch {
+      // fallback remains localStorage
+    }
+  };
+
+  const scheduleDesktopSave = () => {
+    if (!desktopDataBridge?.saveSteps) {
+      return;
+    }
+    desktopSaveQueued = true;
+    if (desktopSaveTimer) {
+      clearTimeout(desktopSaveTimer);
+      desktopSaveTimer = null;
+    }
+    desktopSaveTimer = setTimeout(() => {
+      desktopSaveTimer = null;
+      void saveDesktopStepsNow();
+    }, DESKTOP_SAVE_DELAY_MS);
+  };
+
+  const hydrateDesktopSteps = async () => {
+    if (!desktopDataBridge?.loadSteps) {
+      desktopHydrated = true;
+      return;
+    }
+    try {
+      const loaded = await desktopDataBridge.loadSteps();
+      if (loaded?.ok && Array.isArray(loaded.steps) && loaded.steps.length > 0) {
+        const normalized = cloneSteps(loaded.steps);
+        if (normalized.length > 0) {
+          steps.value = normalized;
+          const remoteCurrent = Number(loaded.currentId);
+          if (Number.isFinite(remoteCurrent) && normalized.some((step) => step.id === remoteCurrent)) {
+            currentId.value = remoteCurrent;
+          } else {
+            currentId.value = readStoredCurrentId(normalized);
+          }
+          persistLocalSteps(steps.value);
+          persistLocalCurrentId(currentId.value);
+        }
+      }
+    } catch {
+      if (!desktopLoadWarned && typeof showToast === "function") {
+        showToast("读取桌面数据失败，已回退到本地缓存");
+      }
+      desktopLoadWarned = true;
+    } finally {
+      desktopHydrated = true;
+      if (desktopSaveQueued) {
+        scheduleDesktopSave();
+      }
+    }
+  };
+
+  void hydrateDesktopSteps();
 
   const next = () => {
     const idx = steps.value.findIndex((step) => step.id === currentId.value);
@@ -91,6 +237,19 @@ export const useSteps = (showToast) => {
     arr.splice(targetIndex, 0, dragged);
     draggedIndex.value = null;
   };
+
+  watch(steps, (list) => {
+    persistLocalSteps(list);
+    if (!list.some((step) => step.id === currentId.value)) {
+      currentId.value = list[0]?.id ?? 1;
+    }
+    scheduleDesktopSave();
+  }, { deep: true });
+
+  watch(currentId, (value) => {
+    persistLocalCurrentId(value);
+    scheduleDesktopSave();
+  });
 
   return {
     steps,

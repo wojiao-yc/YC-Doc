@@ -1,7 +1,7 @@
-const { app, BrowserWindow, ipcMain, shell } = require("electron");
+const { app, BrowserWindow, dialog, ipcMain, protocol, shell } = require("electron");
 const path = require("node:path");
 const fs = require("node:fs");
-const os = require("node:os");
+const { pathToFileURL } = require("node:url");
 const { randomUUID } = require("node:crypto");
 const pty = require("node-pty");
 
@@ -46,6 +46,32 @@ const resolveShell = (requested) => {
   return { file: process.env.SHELL || "bash", args: ["-i"], resolved: process.env.SHELL || "bash" };
 };
 
+const ensureDesktopImageDir = () => {
+  const dir = path.join(app.getPath("userData"), "images");
+  fs.mkdirSync(dir, { recursive: true });
+  return dir;
+};
+
+const ensureDesktopDataDir = () => {
+  const dir = path.join(app.getPath("userData"), "data");
+  fs.mkdirSync(dir, { recursive: true });
+  return dir;
+};
+
+const getStepsDataPath = () => path.join(ensureDesktopDataDir(), "steps.json");
+
+const toFileUrl = (targetPath) => pathToFileURL(String(targetPath || "")).href;
+
+const normalizeSavedSteps = (input) =>
+  (Array.isArray(input) ? input : [])
+    .filter((item) => item && typeof item === "object")
+    .map((item, index) => ({
+      id: Number(item.id) || index + 1,
+      title: String(item.title || `Step ${index + 1}`),
+      subtitle: String(item.subtitle || ""),
+      content: String(item.content || "")
+    }));
+
 const killAllSessions = () => {
   for (const [sessionId, item] of sessions) {
     try {
@@ -76,8 +102,15 @@ const createWindow = async () => {
   if (devUrl) {
     await mainWindow.loadURL(devUrl);
   } else {
-    const built = path.join(__dirname, "..", "web", "dist", "index.html");
-    await mainWindow.loadFile(built);
+    const bundledRenderer = path.join(__dirname, "renderer-dist", "index.html");
+    const legacyRenderer = path.join(__dirname, "..", "web", "dist", "index.html");
+    const built = fs.existsSync(bundledRenderer) ? bundledRenderer : legacyRenderer;
+    if (fs.existsSync(built)) {
+      await mainWindow.loadFile(built);
+    } else {
+      const message = "Renderer build not found. Run `npm run build:renderer` in desktop/ first.";
+      await mainWindow.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(message)}`);
+    }
   }
 
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
@@ -209,7 +242,143 @@ ipcMain.handle("desktop:window:is-fullscreen", async () => {
   return mainWindow.isFullScreen();
 });
 
+ipcMain.handle("desktop:data:get-steps-path", async () => ({
+  ok: true,
+  path: getStepsDataPath()
+}));
+
+ipcMain.handle("desktop:data:load-steps", async () => {
+  const filePath = getStepsDataPath();
+  if (!fs.existsSync(filePath)) {
+    return { ok: true, exists: false, steps: [], currentId: null, path: filePath };
+  }
+
+  try {
+    const raw = fs.readFileSync(filePath, "utf8");
+    const parsed = JSON.parse(raw);
+    const steps = normalizeSavedSteps(Array.isArray(parsed) ? parsed : parsed?.steps);
+    const currentId = Number(Array.isArray(parsed) ? null : parsed?.currentId);
+    return {
+      ok: true,
+      exists: true,
+      steps,
+      currentId: Number.isFinite(currentId) ? currentId : null,
+      path: filePath
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      error: String(error?.message || error || "read_failed"),
+      path: filePath
+    };
+  }
+});
+
+ipcMain.handle("desktop:data:save-steps", async (_event, payload = {}) => {
+  const filePath = getStepsDataPath();
+  try {
+    const steps = normalizeSavedSteps(payload?.steps);
+    const requestedCurrentId = Number(payload?.currentId);
+    const fallbackCurrentId = steps[0]?.id ?? 1;
+    const currentId = Number.isFinite(requestedCurrentId) ? requestedCurrentId : fallbackCurrentId;
+    const record = {
+      version: 1,
+      updatedAt: new Date().toISOString(),
+      currentId,
+      steps
+    };
+    const tempPath = `${filePath}.tmp`;
+    fs.writeFileSync(tempPath, JSON.stringify(record, null, 2), "utf8");
+    fs.renameSync(tempPath, filePath);
+    return { ok: true, path: filePath };
+  } catch (error) {
+    return {
+      ok: false,
+      error: String(error?.message || error || "write_failed"),
+      path: filePath
+    };
+  }
+});
+
+ipcMain.handle("desktop:assets:get-image-dir", async () => {
+  const dir = ensureDesktopImageDir();
+  return { ok: true, dir };
+});
+
+ipcMain.handle("desktop:assets:open-image-dir", async () => {
+  const dir = ensureDesktopImageDir();
+  const error = await shell.openPath(dir);
+  return {
+    ok: !error,
+    dir,
+    error: String(error || "")
+  };
+});
+
+ipcMain.handle("desktop:assets:pick-image", async () => {
+  if (!mainWindow || mainWindow.isDestroyed()) {
+    return { ok: false, error: "window_unavailable" };
+  }
+
+  const picked = await dialog.showOpenDialog(mainWindow, {
+    title: "Select image to insert",
+    properties: ["openFile"],
+    filters: [
+      {
+        name: "Images",
+        extensions: ["png", "jpg", "jpeg", "gif", "webp", "svg", "bmp"]
+      }
+    ]
+  });
+
+  if (picked.canceled || !picked.filePaths || picked.filePaths.length === 0) {
+    return { canceled: true };
+  }
+
+  try {
+    const source = String(picked.filePaths[0] || "");
+    const imageDir = ensureDesktopImageDir();
+    const ext = path.extname(source) || ".png";
+    const stem = path.basename(source, ext).replace(/[^\w.-]+/g, "_").slice(0, 60) || "image";
+    const copied = path.join(imageDir, `${Date.now()}-${stem}${ext}`);
+    fs.copyFileSync(source, copied);
+    return {
+      ok: true,
+      filePath: copied,
+      markdownUrl: toFileUrl(copied)
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      error: String(error?.message || error || "copy_failed")
+    };
+  }
+});
+
 app.whenReady().then(async () => {
+  protocol.registerFileProtocol("ycdoc-file", (request, callback) => {
+    try {
+      const parsed = new URL(request.url);
+      if (parsed.hostname !== "local") {
+        callback({ error: -10 });
+        return;
+      }
+
+      const encoded = String(parsed.pathname || "").replace(/^\/+/, "");
+      const decoded = decodeURIComponent(encoded);
+      const target = path.normalize(decoded);
+
+      if (!path.isAbsolute(target) || !fs.existsSync(target)) {
+        callback({ error: -6 });
+        return;
+      }
+
+      callback(target);
+    } catch {
+      callback({ error: -324 });
+    }
+  });
+
   await createWindow();
 
   app.on("activate", async () => {
@@ -228,3 +397,4 @@ app.on("window-all-closed", () => {
 app.on("before-quit", () => {
   killAllSessions();
 });
+

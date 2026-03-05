@@ -34,5 +34,14 @@ contextBridge.exposeInMainWorld("desktopPty", {
 
 contextBridge.exposeInMainWorld("desktopWindow", {
   setFullscreen: (enabled) => ipcRenderer.invoke("desktop:window:set-fullscreen", { enabled: Boolean(enabled) }),
-  isFullscreen: () => ipcRenderer.invoke("desktop:window:is-fullscreen")
+  isFullscreen: () => ipcRenderer.invoke("desktop:window:is-fullscreen"),
+  getImageDir: () => ipcRenderer.invoke("desktop:assets:get-image-dir"),
+  openImageDir: () => ipcRenderer.invoke("desktop:assets:open-image-dir"),
+  pickImage: () => ipcRenderer.invoke("desktop:assets:pick-image")
+});
+
+contextBridge.exposeInMainWorld("desktopData", {
+  getStepsPath: () => ipcRenderer.invoke("desktop:data:get-steps-path"),
+  loadSteps: () => ipcRenderer.invoke("desktop:data:load-steps"),
+  saveSteps: (payload = {}) => ipcRenderer.invoke("desktop:data:save-steps", payload)
 });

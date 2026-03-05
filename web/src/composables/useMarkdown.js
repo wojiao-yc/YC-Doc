@@ -1,7 +1,63 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, watch } from "vue";
 import { marked } from "marked";
 import { copyText } from "../utils/clipboard";
+import { escapeHtml } from "../utils/escapeHtml";
 import { highlightAllUnder, highlightCode } from "../utils/prism";
+
+const normalizeImageHref = (value) => {
+  const raw = String(value || "").trim();
+  if (!raw) {
+    return "";
+  }
+  const isDesktop = typeof window !== "undefined" && Boolean(window.desktopPty?.isDesktop);
+
+  const toDesktopImageUrl = (absolutePath) => {
+    const full = String(absolutePath || "").trim();
+    if (!full) {
+      return "";
+    }
+    if (!isDesktop) {
+      const unixPath = full.replace(/\\/g, "/");
+      return `file:///${encodeURI(unixPath)}`;
+    }
+    return `ycdoc-file://local/${encodeURIComponent(full)}`;
+  };
+
+  if (/^[a-zA-Z]:[\\/]/.test(raw)) {
+    return toDesktopImageUrl(raw);
+  }
+
+  if (/^\\\\/.test(raw)) {
+    return `file:${encodeURI(raw.replace(/\\/g, "/"))}`;
+  }
+
+  if (/^(https?:|data:|blob:|file:|app:)/i.test(raw)) {
+    if (/^file:/i.test(raw)) {
+      try {
+        const decodedRaw = decodeURI(raw);
+        if (isDesktop) {
+          const parsed = new URL(decodedRaw);
+          let localPath = decodeURIComponent(parsed.pathname || "");
+          if (/^\/[a-zA-Z]:\//.test(localPath)) {
+            localPath = localPath.slice(1);
+          }
+          localPath = localPath.replace(/\//g, "\\");
+          return toDesktopImageUrl(localPath);
+        }
+        return encodeURI(decodedRaw);
+      } catch {
+        return encodeURI(raw);
+      }
+    }
+    return raw;
+  }
+
+  if (raw.includes("\\") && !raw.includes("://")) {
+    return raw.replace(/\\/g, "/");
+  }
+
+  return raw;
+};
 
 export const useMarkdown = (activeStep, deps, showToast) => {
   const renderer = new marked.Renderer();
@@ -31,6 +87,28 @@ export const useMarkdown = (activeStep, deps, showToast) => {
         </div>
       </div>
     `;
+  };
+
+  renderer.image = (href, title, text) => {
+    let src = href;
+    let imgTitle = title;
+    let alt = text;
+
+    if (href && typeof href === "object") {
+      src = href.href;
+      imgTitle = href.title;
+      alt = href.text;
+    }
+
+    const normalized = normalizeImageHref(src);
+    if (!normalized) {
+      return "";
+    }
+
+    const safeSrc = escapeHtml(normalized);
+    const safeAlt = escapeHtml(String(alt || ""));
+    const safeTitle = imgTitle ? ` title="${escapeHtml(String(imgTitle))}"` : "";
+    return `<img src="${safeSrc}" alt="${safeAlt}" loading="lazy"${safeTitle} />`;
   };
 
   marked.setOptions({ breaks: true, gfm: true, renderer, sanitize: false });

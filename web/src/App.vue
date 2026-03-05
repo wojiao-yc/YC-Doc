@@ -227,8 +227,30 @@
                   :style="{ width: `${editorPaneWidth}px` }"
                   :class="isDark ? 'border-slate-800' : 'border-gray-200'"
                 >
-                  <div class="px-4 py-3 border-b" :class="isDark ? 'bg-slate-900 border-slate-800' : 'bg-gray-50 border-gray-200'">
+                  <div
+                    class="px-4 py-3 border-b flex items-center justify-between gap-2"
+                    :class="isDark ? 'bg-slate-900 border-slate-800' : 'bg-gray-50 border-gray-200'"
+                  >
                     <span class="text-sm font-medium" :class="isDark ? 'text-slate-100' : 'text-gray-700'">Markdown 编辑</span>
+                    <div class="flex items-center gap-2">
+                      <button
+                        type="button"
+                        class="px-2 py-1 text-xs rounded-lg transition-all"
+                        :class="isDark ? 'bg-slate-800 hover:bg-slate-700 text-slate-200' : 'bg-white hover:bg-gray-100 text-gray-700 border border-gray-200'"
+                        @click="insertImageToMarkdown"
+                      >
+                        插入图片
+                      </button>
+                      <button
+                        v-if="isDesktopPty"
+                        type="button"
+                        class="px-2 py-1 text-xs rounded-lg transition-all"
+                        :class="isDark ? 'bg-slate-800 hover:bg-slate-700 text-slate-200' : 'bg-white hover:bg-gray-100 text-gray-700 border border-gray-200'"
+                        @click="openDesktopImageFolder"
+                      >
+                        图片目录
+                      </button>
+                    </div>
                   </div>
                   <textarea
                     v-model="activeStep.content"
@@ -1732,6 +1754,56 @@ const toggleMode = () => {
         void syncDesktopTerminalSize();
       });
     });
+  }
+};
+
+const appendMarkdownImage = (url) => {
+  const safeUrl = String(url || "").trim();
+  if (!safeUrl) {
+    return;
+  }
+  const current = String(activeStep.value?.content || "");
+  const suffix = current.endsWith("\n") ? "\n" : "\n\n";
+  activeStep.value.content = `${current}${suffix}![image](${safeUrl})\n`;
+};
+
+const insertImageToMarkdown = async () => {
+  if (isDesktopPty.value && desktopWindowBridge?.pickImage) {
+    try {
+      const picked = await desktopWindowBridge.pickImage();
+      if (!picked || picked.canceled) {
+        return;
+      }
+      if (picked.ok && picked.markdownUrl) {
+        appendMarkdownImage(picked.markdownUrl);
+        showToast("已插入图片");
+        return;
+      }
+      showToast(`插入失败: ${picked?.error || "unknown_error"}`);
+      return;
+    } catch (error) {
+      showToast(`插入失败: ${error?.message || "unknown_error"}`);
+      return;
+    }
+  }
+
+  showToast("Web 版请将图片放在 web/public/images，并使用 /images/xxx.png");
+};
+
+const openDesktopImageFolder = async () => {
+  if (!(isDesktopPty.value && desktopWindowBridge?.openImageDir)) {
+    showToast("仅桌面版支持打开图片目录");
+    return;
+  }
+  try {
+    const result = await desktopWindowBridge.openImageDir();
+    if (result?.ok) {
+      showToast("已打开图片目录");
+    } else {
+      showToast(`打开失败: ${result?.error || "unknown_error"}`);
+    }
+  } catch (error) {
+    showToast(`打开失败: ${error?.message || "unknown_error"}`);
   }
 };
 
