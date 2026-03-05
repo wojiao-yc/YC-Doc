@@ -121,16 +121,21 @@
         class="border-t p-4 space-y-3"
         :class="isDark ? 'border-slate-800' : 'border-gray-200'"
       >
-        <div class="text-xs mb-2 px-2" :class="isDark ? 'text-slate-400' : 'text-gray-500'">编辑模式操作</div>
         <button
           @click="addStep"
-          class="w-full flex items-center justify-center gap-2 px-4 py-2 text-sm bg-green-500 text-white rounded-lg hover:bg-green-600 transition-all"
+          class="w-full flex items-center justify-center gap-2 px-4 py-2 text-sm rounded-lg border transition-all"
+          :class="isDark
+            ? 'border-orange-300/30 bg-orange-500/15 text-orange-100 hover:bg-orange-500/25'
+            : 'border-orange-200 bg-orange-50 text-orange-700 hover:bg-orange-100'"
         >
           ＋ 添加新步骤
         </button>
         <button
           @click="removeStep"
-          class="w-full flex items-center justify-center gap-2 px-4 py-2 text-sm bg-red-500 text-white rounded-lg hover:bg-red-600 transition-all"
+          class="w-full flex items-center justify-center gap-2 px-4 py-2 text-sm rounded-lg border transition-all"
+          :class="isDark
+            ? 'border-rose-300/30 bg-rose-500/15 text-rose-100 hover:bg-rose-500/25'
+            : 'border-rose-200 bg-rose-50 text-rose-700 hover:bg-rose-100'"
         >
           🗑 删除当前步骤
         </button>
@@ -154,7 +159,7 @@
         class="sticky top-0 z-30 px-10 py-5 border-b flex justify-between items-center backdrop-blur"
         :class="isDark ? 'border-slate-800 bg-slate-950/80' : 'border-gray-100 bg-white/80'"
       >
-        <div class="header-meta header-meta-inline">
+        <div class="header-meta header-meta-inline min-w-0 flex-1">
           <template v-if="isEditMode">
             <input
               v-model="activeStep.title"
@@ -178,22 +183,54 @@
           </template>
         </div>
 
-        <div class="flex items-center gap-3">
+        <div class="flex items-center gap-2 sm:gap-3 flex-nowrap shrink-0">
           <template v-if="isEditMode">
+            <div class="relative app-settings-popover">
+              <button
+                type="button"
+                class="px-3 py-2 text-sm rounded-lg transition-all flex items-center justify-center shrink-0"
+                :class="isDark ? 'bg-slate-800 text-slate-100 hover:bg-slate-700' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'"
+                @click.stop="toggleSettingsPanel"
+              >
+                ⚙
+              </button>
+              <div
+                v-if="settingsPanelOpen"
+                class="absolute right-0 top-[calc(100%+10px)] z-40 w-80 rounded-xl border p-3 shadow-xl"
+                :class="isDark ? 'border-slate-700 bg-slate-900 text-slate-100' : 'border-gray-200 bg-white text-gray-800'"
+                @click.stop
+              >
+                <div class="text-xs mb-2" :class="isDark ? 'text-slate-400' : 'text-gray-500'">设置</div>
+                <label
+                  class="flex items-start gap-3 rounded-lg p-2 cursor-pointer transition-all"
+                  :class="isDark ? 'hover:bg-slate-800/80' : 'hover:bg-gray-50'"
+                >
+                  <input
+                    v-model="gestureNavigationEnabled"
+                    type="checkbox"
+                    class="mt-0.5 h-4 w-4 accent-orange-500"
+                  />
+                  <span class="text-sm leading-6">
+                    启用点击翻页模式（隐藏底部翻页按钮）
+                  </span>
+                </label>
+              </div>
+            </div>
+
             <button
               @click="toggleDark"
-              class="px-3 py-2 text-sm rounded-lg transition-all flex items-center gap-2"
+              class="px-3 py-2 text-sm rounded-lg transition-all flex items-center gap-2 whitespace-nowrap shrink-0"
               :class="isDark ? 'bg-slate-800 text-slate-100 hover:bg-slate-700' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'"
             >
-              🌙 <span class="hidden md:inline">主题</span>
+              🌙 <span class="hidden xl:inline">主题</span>
             </button>
 
             <button
               @click="toggleMode"
-              class="px-4 py-2 text-sm rounded-lg transition-all flex items-center gap-2"
+              class="px-4 py-2 text-sm rounded-lg transition-all flex items-center gap-2 whitespace-nowrap shrink-0"
               :class="'bg-orange-500 text-white hover:bg-orange-600'"
             >
-              <span>👁 <span class="hidden md:inline">展示</span></span>
+              <span>👁 <span class="hidden xl:inline">展示</span></span>
             </button>
           </template>
           <template v-else>
@@ -212,8 +249,15 @@
         <div class="mx-auto relative w-full px-10 py-10" :class="isEditMode ? 'max-w-6xl' : 'max-w-none'">
           <transition name="fade" mode="out-in">
             <div :key="currentId" class="flex flex-col">
-              <div v-if="!isEditMode" class="mb-10 mx-auto" :style="displayStyle">
-                <div data-preview="1" :class="isDark ? 'md-dark' : 'md-light'" v-html="renderedMarkdown"></div>
+              <div
+                v-if="!isEditMode"
+                class="mb-10 w-full relative mx-auto"
+                :class="gestureNavigationEnabled ? 'px-12 md:px-20 lg:px-28' : 'px-2 md:px-4'"
+                @click="handlePreviewNavClick"
+              >
+                <div class="mx-auto" :style="displayStyle">
+                  <div data-preview="1" :class="isDark ? 'md-dark' : 'md-light'" v-html="renderedMarkdown"></div>
+                </div>
               </div>
 
               <div
@@ -302,7 +346,11 @@
             </div>
           </transition>
         </div>
-        <footer class="px-10 py-6 border-t flex items-center justify-center" :class="isDark ? 'border-slate-800 bg-slate-950' : 'border-gray-100 bg-white'">
+        <footer
+          v-if="!(gestureNavigationEnabled && !isEditMode)"
+          class="px-10 py-6 border-t flex items-center justify-center"
+          :class="isDark ? 'border-slate-800 bg-slate-950' : 'border-gray-100 bg-white'"
+        >
           <div class="flex items-center gap-6">
             <button
               @click="prev"
@@ -600,6 +648,8 @@ import { useToast } from "./composables/useToast";
 
 const mode = ref("view");
 const isDark = ref(false);
+const settingsPanelOpen = ref(false);
+const gestureNavigationEnabled = ref(false);
 const isEditMode = computed(() => mode.value === "edit");
 const terminalPanelHeight = ref(320);
 const terminalMaximized = ref(false);
@@ -673,6 +723,7 @@ const clamp = (value, min, max) => Math.min(max, Math.max(min, value));
 const TERMINAL_MIN_HEIGHT = 120;
 const TERMINAL_HIDE_THRESHOLD = 56;
 const TERMINAL_MAX_SNAP_GAP = 20;
+const GESTURE_NAV_STORAGE_KEY = "yc-doc.gesture-nav.v1";
 
 const { toast, showToast } = useToast();
 
@@ -703,6 +754,14 @@ const {
   resetDisplayWidth
 } = useResizable();
 
+if (typeof window !== "undefined") {
+  try {
+    gestureNavigationEnabled.value = localStorage.getItem(GESTURE_NAV_STORAGE_KEY) === "1";
+  } catch {
+    gestureNavigationEnabled.value = false;
+  }
+}
+
 const sidebarPanelWidth = computed(() => {
   if (isSidebarHidden.value) {
     return 0;
@@ -731,6 +790,47 @@ const refreshContentProgress = () => {
 
 const onContentScroll = () => {
   currentContentReadProgress.value = measureContentReadProgress();
+};
+
+const isPreviewInteractiveTarget = (target) => {
+  if (!(target instanceof Element)) {
+    return false;
+  }
+  return Boolean(
+    target.closest("a, button, input, textarea, select, label, summary, [role='button'], .code-copy")
+  );
+};
+
+const handlePreviewNavClick = (event) => {
+  if (!(gestureNavigationEnabled.value && !isEditMode.value)) {
+    return;
+  }
+  if (event.defaultPrevented || isPreviewInteractiveTarget(event.target)) {
+    return;
+  }
+  const selection = typeof window !== "undefined" ? window.getSelection?.() : null;
+  if (selection && String(selection).trim()) {
+    return;
+  }
+  const host = event.currentTarget;
+  if (!(host instanceof HTMLElement)) {
+    return;
+  }
+  const rect = host.getBoundingClientRect();
+  const x = event.clientX - rect.left;
+  if (x >= rect.width / 2) {
+    next();
+  } else {
+    prev();
+  }
+};
+
+const closeSettingsPanel = () => {
+  settingsPanelOpen.value = false;
+};
+
+const toggleSettingsPanel = () => {
+  settingsPanelOpen.value = !settingsPanelOpen.value;
 };
 
 const sidebarChapterProgress = computed(() => {
@@ -1716,6 +1816,17 @@ watch([terminalOpen, terminalTab], async ([open, tab]) => {
   disposeDesktopTerminal();
 });
 
+watch(gestureNavigationEnabled, (enabled) => {
+  if (typeof window === "undefined") {
+    return;
+  }
+  try {
+    localStorage.setItem(GESTURE_NAV_STORAGE_KEY, enabled ? "1" : "0");
+  } catch {
+    // ignore storage failure
+  }
+});
+
 watch([terminalPanelHeight, terminalMaximized], () => {
   if (!isDesktopPty.value || !terminalOpen.value || terminalTab.value !== "terminal") {
     return;
@@ -1744,6 +1855,7 @@ const toggleDark = () => {
 };
 
 const toggleMode = () => {
+  closeSettingsPanel();
   const nextMode = isEditMode.value ? "view" : "edit";
   mode.value = nextMode;
   if (isDesktopPty.value && desktopWindowBridge?.setFullscreen) {
@@ -1918,6 +2030,11 @@ const onKeydown = (event) => {
   const tag = document.activeElement?.tagName?.toLowerCase() || "";
   const typing = tag === "input" || tag === "textarea" || document.activeElement?.isContentEditable;
 
+  if (event.key === "Escape" && settingsPanelOpen.value) {
+    event.preventDefault();
+    closeSettingsPanel();
+    return;
+  }
   if (event.key === "Escape" && !isEditMode.value) {
     event.preventDefault();
     toggleMode();
@@ -1945,10 +2062,17 @@ const onKeydown = (event) => {
 };
 
 const onGlobalPointerDown = (event) => {
+  const target = event.target;
+  if (
+    settingsPanelOpen.value &&
+    !(target instanceof Element && target.closest(".app-settings-popover"))
+  ) {
+    closeSettingsPanel();
+  }
+
   if (!desktopTabMenu.value.open) {
     return;
   }
-  const target = event.target;
   if (target instanceof Element && target.closest(".term-context-menu")) {
     return;
   }
