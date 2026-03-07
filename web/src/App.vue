@@ -158,6 +158,7 @@
       <header
         class="sticky top-0 z-30 px-10 py-5 border-b flex justify-between items-center backdrop-blur"
         :class="isDark ? 'border-slate-800 bg-slate-950/80' : 'border-gray-100 bg-white/80'"
+        :style="editHeaderStyle"
       >
         <div class="header-meta header-meta-inline min-w-0 flex-1">
           <template v-if="isEditMode">
@@ -208,10 +209,25 @@
                   <input
                     v-model="gestureNavigationEnabled"
                     type="checkbox"
-                    class="mt-0.5 h-4 w-4 accent-orange-500"
+                    class="mt-0.5 h-4 w-4"
+                    :class="isDark ? 'accent-cyan-400' : 'accent-blue-600'"
                   />
                   <span class="text-sm leading-6">
-                    启用点击翻页模式（隐藏底部翻页按钮）
+                    翻页模式
+                  </span>
+                </label>
+                <label
+                  class="flex items-start gap-3 rounded-lg p-2 cursor-pointer transition-all"
+                  :class="isDark ? 'hover:bg-slate-800/80' : 'hover:bg-gray-50'"
+                >
+                  <input
+                    v-model="collapseHeaderInView"
+                    type="checkbox"
+                    class="mt-0.5 h-4 w-4"
+                    :class="isDark ? 'accent-cyan-400' : 'accent-blue-600'"
+                  />
+                  <span class="text-sm leading-6">
+                    展示模式收起顶栏
                   </span>
                 </label>
               </div>
@@ -239,6 +255,18 @@
         </div>
       </header>
 
+      <div
+        v-if="isEditMode"
+        class="h-2 border-b cursor-row-resize flex items-center justify-center select-none"
+        :class="isDark ? 'border-slate-800 bg-slate-950' : 'border-gray-100 bg-white'"
+        @mousedown="startEditHeaderResize"
+      >
+        <div
+          class="h-0.5 w-14 rounded-full transition-all"
+          :class="isDark ? 'bg-slate-700' : 'bg-gray-300'"
+        ></div>
+      </div>
+
       <section
         v-show="!terminalMaximized"
         ref="contentScrollRef"
@@ -252,7 +280,10 @@
               <div
                 v-if="!isEditMode"
                 class="mb-10 w-full relative mx-auto"
-                :class="gestureNavigationEnabled ? 'px-12 md:px-20 lg:px-28' : 'px-2 md:px-4'"
+                :class="[
+                  gestureNavigationEnabled ? 'px-12 md:px-20 lg:px-28' : 'px-2 md:px-4',
+                  gestureNavigationEnabled ? 'min-h-[100vh]' : ''
+                ]"
                 @click="handlePreviewNavClick"
               >
                 <div class="mx-auto" :style="displayStyle">
@@ -646,10 +677,13 @@ import { useSteps } from "./composables/useSteps";
 import { useTerminal } from "./composables/useTerminal";
 import { useToast } from "./composables/useToast";
 
-const mode = ref("view");
+const mode = ref("edit");
 const isDark = ref(false);
 const settingsPanelOpen = ref(false);
 const gestureNavigationEnabled = ref(false);
+const collapseHeaderInView = ref(false);
+const editHeaderHeight = ref(92);
+const editHeaderHidden = ref(false);
 const isEditMode = computed(() => mode.value === "edit");
 const terminalPanelHeight = ref(320);
 const terminalMaximized = ref(false);
@@ -718,12 +752,18 @@ let sidebarDragRaf = 0;
 let sidebarDragPendingWidth = null;
 let sidebarDragMoveHandler = null;
 let sidebarDragUpHandler = null;
+let editHeaderDragMoveHandler = null;
+let editHeaderDragUpHandler = null;
 
 const clamp = (value, min, max) => Math.min(max, Math.max(min, value));
 const TERMINAL_MIN_HEIGHT = 120;
 const TERMINAL_HIDE_THRESHOLD = 56;
 const TERMINAL_MAX_SNAP_GAP = 20;
 const GESTURE_NAV_STORAGE_KEY = "yc-doc.gesture-nav.v1";
+const VIEW_HEADER_COLLAPSE_STORAGE_KEY = "yc-doc.view-header-collapse.v1";
+const EDIT_HEADER_MIN_HEIGHT = 72;
+const EDIT_HEADER_MAX_HEIGHT = 220;
+const EDIT_HEADER_HIDE_THRESHOLD = 22;
 
 const { toast, showToast } = useToast();
 
@@ -757,8 +797,10 @@ const {
 if (typeof window !== "undefined") {
   try {
     gestureNavigationEnabled.value = localStorage.getItem(GESTURE_NAV_STORAGE_KEY) === "1";
+    collapseHeaderInView.value = localStorage.getItem(VIEW_HEADER_COLLAPSE_STORAGE_KEY) === "1";
   } catch {
     gestureNavigationEnabled.value = false;
+    collapseHeaderInView.value = false;
   }
 }
 
@@ -770,6 +812,26 @@ const sidebarPanelWidth = computed(() => {
     return SIDEBAR_COLLAPSED_WIDTH;
   }
   return sidebarWidth.value;
+});
+
+const editHeaderStyle = computed(() => {
+  const collapsed = isEditMode.value ? editHeaderHidden.value : collapseHeaderInView.value;
+  if (collapsed) {
+    return {
+      height: "0px",
+      minHeight: "0px",
+      paddingTop: "0px",
+      paddingBottom: "0px",
+      borderBottomWidth: "0px",
+      overflow: "hidden"
+    };
+  }
+  const h = clamp(Math.round(editHeaderHeight.value), EDIT_HEADER_MIN_HEIGHT, EDIT_HEADER_MAX_HEIGHT);
+  return {
+    height: `${h}px`,
+    minHeight: `${h}px`,
+    overflow: "visible"
+  };
 });
 
 const measureContentReadProgress = () => {
@@ -953,6 +1015,57 @@ const startSidebarResizeDrag = (event) => {
 
   sidebarDragMoveHandler = onMove;
   sidebarDragUpHandler = onUp;
+  window.addEventListener("mousemove", onMove);
+  window.addEventListener("mouseup", onUp);
+};
+
+const applyEditHeaderHeight = (rawHeight) => {
+  const height = Number(rawHeight) || 0;
+  if (height <= EDIT_HEADER_HIDE_THRESHOLD) {
+    editHeaderHidden.value = true;
+    return;
+  }
+  editHeaderHidden.value = false;
+  editHeaderHeight.value = clamp(Math.round(height), EDIT_HEADER_MIN_HEIGHT, EDIT_HEADER_MAX_HEIGHT);
+};
+
+const startEditHeaderResize = (event) => {
+  if (!isEditMode.value) {
+    return;
+  }
+  event.preventDefault();
+
+  const startY = event.clientY;
+  const startH = editHeaderHidden.value ? 0 : editHeaderHeight.value;
+  document.body.style.userSelect = "none";
+
+  if (editHeaderDragMoveHandler) {
+    window.removeEventListener("mousemove", editHeaderDragMoveHandler);
+    editHeaderDragMoveHandler = null;
+  }
+  if (editHeaderDragUpHandler) {
+    window.removeEventListener("mouseup", editHeaderDragUpHandler);
+    editHeaderDragUpHandler = null;
+  }
+
+  const onMove = (ev) => {
+    const dy = ev.clientY - startY;
+    applyEditHeaderHeight(startH + dy);
+  };
+
+  const onUp = () => {
+    document.body.style.userSelect = "";
+    window.removeEventListener("mousemove", onMove);
+    window.removeEventListener("mouseup", onUp);
+    editHeaderDragMoveHandler = null;
+    editHeaderDragUpHandler = null;
+    nextTick(() => {
+      refreshContentProgress();
+    });
+  };
+
+  editHeaderDragMoveHandler = onMove;
+  editHeaderDragUpHandler = onUp;
   window.addEventListener("mousemove", onMove);
   window.addEventListener("mouseup", onUp);
 };
@@ -1827,6 +1940,17 @@ watch(gestureNavigationEnabled, (enabled) => {
   }
 });
 
+watch(collapseHeaderInView, (enabled) => {
+  if (typeof window === "undefined") {
+    return;
+  }
+  try {
+    localStorage.setItem(VIEW_HEADER_COLLAPSE_STORAGE_KEY, enabled ? "1" : "0");
+  } catch {
+    // ignore storage failure
+  }
+});
+
 watch([terminalPanelHeight, terminalMaximized], () => {
   if (!isDesktopPty.value || !terminalOpen.value || terminalTab.value !== "terminal") {
     return;
@@ -2119,6 +2243,14 @@ onBeforeUnmount(() => {
   if (sidebarDragUpHandler) {
     window.removeEventListener("mouseup", sidebarDragUpHandler);
     sidebarDragUpHandler = null;
+  }
+  if (editHeaderDragMoveHandler) {
+    window.removeEventListener("mousemove", editHeaderDragMoveHandler);
+    editHeaderDragMoveHandler = null;
+  }
+  if (editHeaderDragUpHandler) {
+    window.removeEventListener("mouseup", editHeaderDragUpHandler);
+    editHeaderDragUpHandler = null;
   }
   finishSidebarDrag();
   document.body.style.userSelect = "";
