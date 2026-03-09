@@ -897,6 +897,7 @@ const STORAGE_TREE_STORAGE_KEY = "yc-doc.storage-tree.v1";
 const STORAGE_EXPANDED_STORAGE_KEY = "yc-doc.storage-expanded.v1";
 const STORAGE_SELECTED_STORAGE_KEY = "yc-doc.storage-selected.v1";
 const MARKDOWN_SAVE_DELAY_MS = 320;
+const MAX_MARKDOWN_FILE_BYTES = 20 * 1024 * 1024;
 
 const { toast, showToast } = useToast();
 
@@ -970,6 +971,27 @@ const parseMarkdownToSteps = (rawMarkdown) => {
   }];
 };
 
+const formatBytes = (value) => {
+  const bytes = Math.max(0, Number(value || 0));
+  if (!bytes) {
+    return "0 B";
+  }
+  if (bytes < 1024) {
+    return `${bytes} B`;
+  }
+  if (bytes < 1024 * 1024) {
+    return `${(bytes / 1024).toFixed(1)} KB`;
+  }
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+};
+
+const isMarkdownFileName = (name) => String(name || "").toLowerCase().endsWith(".md");
+
+const isMarkdownFileTooLarge = (size) => {
+  const bytes = Number(size);
+  return Number.isFinite(bytes) && bytes > MAX_MARKDOWN_FILE_BYTES;
+};
+
 const serializeStepsToMarkdown = (sourceSteps) => {
   const chunks = (Array.isArray(sourceSteps) ? sourceSteps : []).map((step, index) => {
     const title = String(step?.title || `Section ${index + 1}`).trim() || `Section ${index + 1}`;
@@ -1025,7 +1047,17 @@ const loadStepsFromMarkdownFile = async (relPath, showSuccessToast = false) => {
       relPath: targetRelPath
     });
     if (!result?.ok) {
+      if (result?.error === "workspace_file_too_large") {
+        const actual = formatBytes(result?.size);
+        const limit = formatBytes(result?.limitBytes || MAX_MARKDOWN_FILE_BYTES);
+        showToast(`Markdown 文件过大，已跳过: ${targetRelPath} (${actual} > ${limit})`);
+        return;
+      }
       throw new Error(String(result?.error || "read_workspace_file_failed"));
+    }
+    if (isMarkdownFileTooLarge(result?.size) || String(result.content || "").length > MAX_MARKDOWN_FILE_BYTES) {
+      showToast(`Markdown 文件过大，已跳过: ${targetRelPath}`);
+      return;
     }
     const parsed = parseMarkdownToSteps(result.content || "");
     steps.value = parsed;
@@ -1150,6 +1182,7 @@ const normalizeDesktopStorageNode = (source, isRoot = false) => {
   const type = raw.type === "file" ? "file" : "folder";
   const relPath = String(raw.relPath || "");
   const absPath = String(raw.absPath || "");
+  const size = Number(raw.size || 0);
   const id = isRoot ? STORAGE_ROOT_ID : (relPath || makeStorageNodeId(type));
   const name = String(raw.name || (isRoot ? "存储根目录" : (type === "folder" ? "新建文件夹" : "未命名.md")));
   const children = Array.isArray(raw.children)
@@ -1161,6 +1194,7 @@ const normalizeDesktopStorageNode = (source, isRoot = false) => {
     name,
     relPath,
     absPath,
+    size,
     children
   };
 };
@@ -1187,10 +1221,7 @@ const loadDesktopStorageTree = async () => {
     }
     ensureSelectedStorageNodeValid();
     const selected = findStorageNodeInTree(storageTree.value, selectedStorageNodeId.value);
-    if (
-      selected?.node?.type === "file"
-      && String(selected.node.name || "").toLowerCase().endsWith(".md")
-    ) {
+    if (canAutoLoadMarkdownNode(selected?.node)) {
       void loadStepsFromMarkdownFile(String(selected.node.relPath || ""), false);
     } else {
       const firstMarkdown = findFirstMarkdownNode(storageTree.value);
@@ -1198,6 +1229,9 @@ const loadDesktopStorageTree = async () => {
         selectedStorageNodeId.value = String(firstMarkdown.id || selectedStorageNodeId.value);
         void loadStepsFromMarkdownFile(String(firstMarkdown.relPath), false);
         return;
+      }
+      if (selected?.node?.type === "file" && isMarkdownFileName(selected.node.name)) {
+        showToast(`已跳过超大 Markdown: ${selected.node.name} (${formatBytes(selected.node.size)})`);
       }
       activeMarkdownRelPath.value = "";
     }
@@ -1229,11 +1263,19 @@ const findStorageNodeInTree = (node, targetId, parentId = "") => {
   return null;
 };
 
+const canAutoLoadMarkdownNode = (node) =>
+  Boolean(
+    node
+    && node.type === "file"
+    && isMarkdownFileName(node.name)
+    && !isMarkdownFileTooLarge(node.size)
+  );
+
 const findFirstMarkdownNode = (node) => {
   if (!node) {
     return null;
   }
-  if (node.type === "file" && String(node.name || "").toLowerCase().endsWith(".md")) {
+  if (canAutoLoadMarkdownNode(node)) {
     return node;
   }
   if (node.type !== "folder" || !Array.isArray(node.children)) {
@@ -1384,10 +1426,12 @@ const selectStorageNode = (id) => {
       [targetId]: true
     };
     activeMarkdownRelPath.value = "";
-  } else if (
-    matched?.node?.type === "file"
-    && String(matched.node.name || "").toLowerCase().endsWith(".md")
-  ) {
+  } else if (matched?.node?.type === "file" && isMarkdownFileName(matched.node.name)) {
+    if (isMarkdownFileTooLarge(matched.node.size)) {
+      showToast(`Markdown 文件过大，无法载入: ${matched.node.name} (${formatBytes(matched.node.size)})`);
+      persistStorageState();
+      return;
+    }
     void loadStepsFromMarkdownFile(String(matched.node.relPath || ""), true);
   } else {
     activeMarkdownRelPath.value = "";

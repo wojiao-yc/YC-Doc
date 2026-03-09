@@ -7,6 +7,7 @@ const pty = require("node-pty");
 
 let mainWindow = null;
 const sessions = new Map();
+const MAX_WORKSPACE_MARKDOWN_BYTES = 20 * 1024 * 1024;
 
 const clamp = (value, min, max) => Math.min(max, Math.max(min, value));
 
@@ -196,6 +197,7 @@ const readWorkspaceTreeNode = (absPath, relPath = "") => {
       name,
       relPath,
       absPath,
+      size: stat.size,
       children: []
     };
   }
@@ -215,6 +217,7 @@ const readWorkspaceTreeNode = (absPath, relPath = "") => {
         name: entry.name,
         relPath: childRel,
         absPath: childAbs,
+        size: fs.statSync(childAbs).size,
         children: []
       });
     }
@@ -231,6 +234,7 @@ const readWorkspaceTreeNode = (absPath, relPath = "") => {
     name,
     relPath,
     absPath,
+    size: 0,
     children
   };
 };
@@ -335,11 +339,11 @@ const createWindow = async () => {
     minHeight: 700,
     autoHideMenuBar: true,
     frame: false,
-    titleBarStyle: "hidden",
     thickFrame: true,
     backgroundColor: "#f8fafc",
     hasShadow: true,
     roundedCorners: true,
+    ...(process.platform === "darwin" ? { titleBarStyle: "hidden" } : {}),
     webPreferences: {
       preload: path.join(__dirname, "preload.cjs"),
       contextIsolation: true,
@@ -763,8 +767,20 @@ ipcMain.handle("desktop:data:read-workspace-file", async (_event, payload = {}) 
     if (!fs.existsSync(absTarget)) {
       throw new Error("file_not_found");
     }
-    if (!fs.statSync(absTarget).isFile()) {
+    const stat = fs.statSync(absTarget);
+    if (!stat.isFile()) {
       throw new Error("target_not_file");
+    }
+    if (stat.size > MAX_WORKSPACE_MARKDOWN_BYTES) {
+      return {
+        ok: false,
+        error: "workspace_file_too_large",
+        rootPath: absRoot,
+        relPath,
+        absPath: absTarget,
+        size: stat.size,
+        limitBytes: MAX_WORKSPACE_MARKDOWN_BYTES
+      };
     }
     const content = fs.readFileSync(absTarget, "utf8");
     return {
@@ -772,6 +788,7 @@ ipcMain.handle("desktop:data:read-workspace-file", async (_event, payload = {}) 
       rootPath: absRoot,
       relPath,
       absPath: absTarget,
+      size: stat.size,
       content
     };
   } catch (error) {
