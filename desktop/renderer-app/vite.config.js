@@ -6,7 +6,7 @@ import { VitePWA } from "vite-plugin-pwa";
 export default defineConfig({
   resolve: {
     alias: {
-      "@shared": path.resolve(__dirname, "../shared")
+      "@data": path.resolve(__dirname, "../data")
     }
   },
   server: {

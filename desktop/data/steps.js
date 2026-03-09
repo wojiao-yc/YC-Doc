@@ -1,4 +1,4 @@
-export const sharedInitialSteps = [
+export const dataInitialSteps = [
   {
     id: 1,
     title: "研究背景与动机",

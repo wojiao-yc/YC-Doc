@@ -1,6 +1,6 @@
-﻿web/node_modules/
-web/dist/
-web/.vite/
 desktop/node_modules/
 desktop/dist/
 desktop/renderer-dist/
+desktop/renderer-app/node_modules/
+desktop/renderer-app/dist/
+desktop/renderer-app/.vite/

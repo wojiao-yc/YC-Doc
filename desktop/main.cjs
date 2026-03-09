@@ -353,7 +353,7 @@ const createWindow = async () => {
     await mainWindow.loadURL(devUrl);
   } else {
     const bundledRenderer = path.join(__dirname, "renderer-dist", "index.html");
-    const legacyRenderer = path.join(__dirname, "..", "web", "dist", "index.html");
+    const legacyRenderer = path.join(__dirname, "renderer-app", "dist", "index.html");
     const built = fs.existsSync(bundledRenderer) ? bundledRenderer : legacyRenderer;
     if (fs.existsSync(built)) {
       await mainWindow.loadFile(built);
