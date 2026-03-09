@@ -2,9 +2,96 @@
   <div
     id="app"
     v-cloak
-    class="flex h-screen min-h-0 overflow-hidden bg-[#fcfcfc] text-slate-900"
-    :class="{ 'dark-ui': isDark }"
+    class="flex h-screen min-h-0 overflow-hidden bg-[#fcfcfc] text-slate-900 flex-col"
+    :class="{
+      'dark-ui': isDark,
+      'desktop-frameless-windowed': isDesktopWindowControls && !windowIsMaximized
+    }"
   >
+    <div
+      v-if="isEditMode"
+      class="app-chrome-bar"
+      :class="isDark ? 'is-dark' : ''"
+    >
+      <div class="app-chrome-no-drag">
+        <button
+          type="button"
+          class="term-window-btn term-tip-btn"
+          :data-tip="isFileSidebarHidden ? '展开左边栏' : '收起左边栏'"
+          :aria-label="isFileSidebarHidden ? '展开左边栏' : '收起左边栏'"
+          @click="toggleFileSidebarCollapse"
+        >
+          <svg class="chrome-icon" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+            <rect x="1.8" y="2.2" width="12.4" height="11.6" rx="2" stroke="currentColor" stroke-width="1.2" />
+            <path
+              :d="isFileSidebarHidden ? 'M11.2 3.8v8.4' : 'M4.8 3.8v8.4'"
+              stroke="currentColor"
+              stroke-width="1.2"
+              stroke-linecap="round"
+            />
+          </svg>
+        </button>
+      </div>
+      <div class="app-chrome-drag" @mousedown="handleChromeDragMouseDown"></div>
+      <div class="app-chrome-no-drag">
+        <button
+          type="button"
+          class="term-window-btn term-tip-btn"
+          :data-tip="isSidebarHidden ? '展开右边栏' : '收起右边栏'"
+          :aria-label="isSidebarHidden ? '展开右边栏' : '收起右边栏'"
+          @click="toggleSidebarCollapse"
+        >
+          <svg class="chrome-icon" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+            <rect x="1.8" y="2.2" width="12.4" height="11.6" rx="2" stroke="currentColor" stroke-width="1.2" />
+            <path
+              :d="isSidebarHidden ? 'M4.8 3.8v8.4' : 'M11.2 3.8v8.4'"
+              stroke="currentColor"
+              stroke-width="1.2"
+              stroke-linecap="round"
+            />
+          </svg>
+        </button>
+        <button
+          type="button"
+          class="term-window-btn term-tip-btn"
+          data-tip="最小化"
+          aria-label="最小化"
+          @click="handleWindowMinimize"
+        >
+          <svg class="chrome-icon" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+            <path d="M4 8h8" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" />
+          </svg>
+        </button>
+        <button
+          type="button"
+          class="term-window-btn term-tip-btn"
+          :data-tip="windowIsMaximized ? '还原' : '最大化'"
+          :aria-label="windowIsMaximized ? '还原' : '最大化'"
+          @click="handleWindowToggleMaximize"
+        >
+          <svg v-if="windowIsMaximized" class="chrome-icon" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+            <rect x="4.7" y="3.3" width="7.1" height="7.1" rx="0.8" stroke="currentColor" stroke-width="1.2" />
+            <path d="M3.4 5.5V12h6.5" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" />
+          </svg>
+          <svg v-else class="chrome-icon" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+            <rect x="3.5" y="3.5" width="9" height="9" rx="1" stroke="currentColor" stroke-width="1.2" />
+          </svg>
+        </button>
+        <button
+          type="button"
+          class="term-window-btn term-window-btn-close term-tip-btn"
+          data-tip="关闭"
+          aria-label="关闭"
+          @click="handleWindowClose"
+        >
+          <svg class="chrome-icon" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+            <path d="M4.5 4.5l7 7m0-7-7 7" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" />
+          </svg>
+        </button>
+      </div>
+    </div>
+
+    <div class="flex flex-1 min-h-0 min-w-0">
     <aside
       v-if="isEditMode"
       class="sidebar-panel file-sidebar-panel flex flex-col flex-shrink-0 border-r min-h-0"
@@ -32,28 +119,48 @@
         <div v-if="!isFileSidebarCollapsed" class="mt-3 flex items-center gap-2">
           <button
             type="button"
-            class="flex-1 px-2.5 py-1.5 text-xs rounded-lg border transition-all"
+            class="w-9 h-9 rounded-lg border inline-flex items-center justify-center transition-all term-tip-btn"
             :class="isDark ? 'border-slate-700 text-slate-200 bg-slate-900 hover:bg-slate-800' : 'border-gray-200 text-gray-700 bg-white hover:bg-gray-100'"
             @click="createStorageFile"
+            data-tip="新建文件"
+            aria-label="新建文件"
           >
-            + 新建文件
+            <svg class="chrome-icon" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+              <path d="M3 11.8V13h1.2l6.8-6.8-1.2-1.2L3 11.8z" stroke="currentColor" stroke-width="1.1" stroke-linejoin="round"/>
+              <path d="M9.7 4.3l1.2-1.2 1.2 1.2-1.2 1.2-1.2-1.2z" stroke="currentColor" stroke-width="1.1" stroke-linejoin="round"/>
+            </svg>
           </button>
           <button
             type="button"
-            class="flex-1 px-2.5 py-1.5 text-xs rounded-lg border transition-all"
+            class="w-9 h-9 rounded-lg border inline-flex items-center justify-center transition-all term-tip-btn"
             :class="isDark ? 'border-slate-700 text-slate-200 bg-slate-900 hover:bg-slate-800' : 'border-gray-200 text-gray-700 bg-white hover:bg-gray-100'"
             @click="createStorageFolder"
+            data-tip="新建文件夹"
+            aria-label="新建文件夹"
           >
-            + 新建文件夹
+            <svg class="chrome-icon" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+              <path d="M2.8 4.5h3l1 1h6.4v6.8H2.8V4.5z" stroke="currentColor" stroke-width="1.1" stroke-linejoin="round"/>
+              <path d="M8 7.2v3.2M6.4 8.8h3.2" stroke="currentColor" stroke-width="1.1" stroke-linecap="round"/>
+            </svg>
           </button>
+        </div>
+        <div v-if="!isFileSidebarCollapsed && isDesktopStorage" class="mt-2 flex items-center gap-2">
           <button
-            v-if="isDesktopStorage"
             type="button"
             class="px-2.5 py-1.5 text-xs rounded-lg border transition-all"
             :class="isDark ? 'border-slate-700 text-slate-200 bg-slate-900 hover:bg-slate-800' : 'border-gray-200 text-gray-700 bg-white hover:bg-gray-100'"
             @click="openStorageRootDir"
           >
             打开目录
+          </button>
+          <button
+            v-if="canPickWorkspaceRoot"
+            type="button"
+            class="px-2.5 py-1.5 text-xs rounded-lg border transition-all"
+            :class="isDark ? 'border-slate-700 text-slate-200 bg-slate-900 hover:bg-slate-800' : 'border-gray-200 text-gray-700 bg-white hover:bg-gray-100'"
+            @click="pickStorageRootDir"
+          >
+            选择目录
           </button>
         </div>
         <p v-if="!isFileSidebarCollapsed" class="text-[11px] mt-2" :class="isDark ? 'text-slate-500' : 'text-gray-400'">
@@ -101,89 +208,6 @@
     </div>
 
     <main ref="mainRef" class="relative flex-1 min-w-0 min-h-0 flex flex-col" :class="isDark ? 'bg-slate-950' : 'bg-white'">
-      <div
-        v-if="isEditMode"
-        class="app-chrome-bar"
-        :class="isDark ? 'is-dark' : ''"
-      >
-        <div class="app-chrome-no-drag">
-          <button
-            type="button"
-            class="term-window-btn term-tip-btn"
-            :data-tip="isFileSidebarCollapsed || isFileSidebarHidden ? '展开左边栏' : '收起左边栏'"
-            :aria-label="isFileSidebarCollapsed || isFileSidebarHidden ? '展开左边栏' : '收起左边栏'"
-            @click="toggleFileSidebarCollapse"
-          >
-            <svg class="chrome-icon" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-              <rect x="1.8" y="2.2" width="12.4" height="11.6" rx="2" stroke="currentColor" stroke-width="1.2" />
-              <path
-                :d="isFileSidebarCollapsed || isFileSidebarHidden ? 'M11.2 3.8v8.4' : 'M4.8 3.8v8.4'"
-                stroke="currentColor"
-                stroke-width="1.2"
-                stroke-linecap="round"
-              />
-            </svg>
-          </button>
-        </div>
-        <div class="app-chrome-drag"></div>
-        <div class="app-chrome-no-drag">
-          <button
-            type="button"
-            class="term-window-btn term-tip-btn"
-            :data-tip="isSidebarCollapsed || isSidebarHidden ? '展开右边栏' : '收起右边栏'"
-            :aria-label="isSidebarCollapsed || isSidebarHidden ? '展开右边栏' : '收起右边栏'"
-            @click="toggleSidebarCollapse"
-          >
-            <svg class="chrome-icon" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-              <rect x="1.8" y="2.2" width="12.4" height="11.6" rx="2" stroke="currentColor" stroke-width="1.2" />
-              <path
-                :d="isSidebarCollapsed || isSidebarHidden ? 'M4.8 3.8v8.4' : 'M11.2 3.8v8.4'"
-                stroke="currentColor"
-                stroke-width="1.2"
-                stroke-linecap="round"
-              />
-            </svg>
-          </button>
-          <button
-            type="button"
-            class="term-window-btn term-tip-btn"
-            data-tip="最小化"
-            aria-label="最小化"
-            @click="handleWindowMinimize"
-          >
-            <svg class="chrome-icon" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-              <path d="M4 8h8" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" />
-            </svg>
-          </button>
-          <button
-            type="button"
-            class="term-window-btn term-tip-btn"
-            :data-tip="windowIsMaximized ? '还原' : '最大化'"
-            :aria-label="windowIsMaximized ? '还原' : '最大化'"
-            @click="handleWindowToggleMaximize"
-          >
-            <svg v-if="windowIsMaximized" class="chrome-icon" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-              <rect x="4.7" y="3.3" width="7.1" height="7.1" rx="0.8" stroke="currentColor" stroke-width="1.2" />
-              <path d="M3.4 5.5V12h6.5" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" />
-            </svg>
-            <svg v-else class="chrome-icon" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-              <rect x="3.5" y="3.5" width="9" height="9" rx="1" stroke="currentColor" stroke-width="1.2" />
-            </svg>
-          </button>
-          <button
-            type="button"
-            class="term-window-btn term-window-btn-close term-tip-btn"
-            data-tip="关闭"
-            aria-label="关闭"
-            @click="handleWindowClose"
-          >
-            <svg class="chrome-icon" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-              <path d="M4.5 4.5l7 7m0-7-7 7" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" />
-            </svg>
-          </button>
-        </div>
-      </div>
-
       <header
         v-if="!isEditMode"
         class="sticky top-0 z-30 px-10 py-5 border-b flex justify-between items-center backdrop-blur"
@@ -714,6 +738,7 @@
         </div>
       </div>
     </aside>
+    </div>
 
     <div v-if="desktopRenameDialog.open" class="term-rename-mask" @mousedown.self="cancelDesktopRenameDialog">
       <div class="term-rename-card" @mousedown.stop>
@@ -774,6 +799,8 @@ const storageRootPath = ref("");
 const storageLoading = ref(false);
 const storageFolderExpandedMap = ref({ [STORAGE_ROOT_ID]: true });
 const selectedStorageNodeId = ref(STORAGE_ROOT_ID);
+const activeMarkdownRelPath = ref("");
+const markdownHydrating = ref(false);
 const windowIsMaximized = ref(false);
 const SIDEBAR_COLLAPSED_WIDTH = 72;
 const SIDEBAR_MIN_WIDTH = 240;
@@ -818,6 +845,11 @@ const isDesktopStorage = Boolean(
   && desktopDataBridge?.createWorkspaceFile
   && desktopDataBridge?.createWorkspaceFolder
 );
+const canPickWorkspaceRoot = Boolean(desktopDataBridge?.pickWorkspaceRoot);
+const canWorkspaceFileIO = Boolean(
+  desktopDataBridge?.readWorkspaceFile
+  && desktopDataBridge?.writeWorkspaceFile
+);
 const isDesktopWindowControls = Boolean(
   desktopWindowBridge?.minimize
   && desktopWindowBridge?.toggleMaximize
@@ -852,6 +884,8 @@ let fileSidebarDragRaf = 0;
 let fileSidebarDragPendingWidth = null;
 let fileSidebarDragMoveHandler = null;
 let fileSidebarDragUpHandler = null;
+let desktopWindowMaximizeOff = null;
+let markdownSaveTimer = null;
 
 const clamp = (value, min, max) => Math.min(max, Math.max(min, value));
 const TERMINAL_MIN_HEIGHT = 120;
@@ -862,6 +896,7 @@ const VIEW_HEADER_COLLAPSE_STORAGE_KEY = "yc-doc.view-header-collapse.v1";
 const STORAGE_TREE_STORAGE_KEY = "yc-doc.storage-tree.v1";
 const STORAGE_EXPANDED_STORAGE_KEY = "yc-doc.storage-expanded.v1";
 const STORAGE_SELECTED_STORAGE_KEY = "yc-doc.storage-selected.v1";
+const MARKDOWN_SAVE_DELAY_MS = 320;
 
 const { toast, showToast } = useToast();
 
@@ -891,6 +926,120 @@ const {
   startDisplayResize,
   resetDisplayWidth
 } = useResizable();
+
+const parseMarkdownToSteps = (rawMarkdown) => {
+  const text = String(rawMarkdown || "").replace(/\r\n/g, "\n");
+  const matches = [...text.matchAll(/^#\s+(.+?)\s*$/gm)];
+  if (!matches.length) {
+    const single = text.trim();
+    return [
+      {
+        id: 1,
+        title: "文档",
+        subtitle: "",
+        content: single
+      }
+    ];
+  }
+
+  const parsed = [];
+  for (let index = 0; index < matches.length; index += 1) {
+    const match = matches[index];
+    const nextMatch = matches[index + 1];
+    const sectionStart = Number(match.index || 0);
+    const sectionEnd = nextMatch ? Number(nextMatch.index || text.length) : text.length;
+    const sectionRaw = text.slice(sectionStart, sectionEnd).trim();
+    const headingLine = String(match[0] || "");
+    const title = String(match[1] || `Section ${index + 1}`).trim() || `Section ${index + 1}`;
+    const body = sectionRaw.startsWith(headingLine)
+      ? sectionRaw.slice(headingLine.length).replace(/^\s*\n/, "")
+      : sectionRaw;
+    parsed.push({
+      id: index + 1,
+      title,
+      subtitle: "",
+      content: String(body || "").trim()
+    });
+  }
+
+  return parsed.length ? parsed : [{
+    id: 1,
+    title: "文档",
+    subtitle: "",
+    content: text.trim()
+  }];
+};
+
+const serializeStepsToMarkdown = (sourceSteps) => {
+  const chunks = (Array.isArray(sourceSteps) ? sourceSteps : []).map((step, index) => {
+    const title = String(step?.title || `Section ${index + 1}`).trim() || `Section ${index + 1}`;
+    const content = String(step?.content || "").trim();
+    return `# ${title}\n\n${content}`;
+  });
+  return `${chunks.join("\n\n").trim()}\n`;
+};
+
+const writeActiveMarkdownNow = async (targetRelPath = activeMarkdownRelPath.value) => {
+  const relPath = String(targetRelPath || "").trim();
+  if (!isDesktopStorage || !canWorkspaceFileIO || !relPath || markdownHydrating.value) {
+    return;
+  }
+  try {
+    const content = serializeStepsToMarkdown(steps.value);
+    const result = await desktopDataBridge.writeWorkspaceFile({
+      relPath,
+      content
+    });
+    if (!result?.ok) {
+      throw new Error(String(result?.error || "write_workspace_file_failed"));
+    }
+  } catch (error) {
+    showToast(`保存 Markdown 失败: ${String(error?.message || error || "unknown_error")}`);
+  }
+};
+
+const scheduleActiveMarkdownSave = () => {
+  if (!activeMarkdownRelPath.value || markdownHydrating.value) {
+    return;
+  }
+  if (markdownSaveTimer) {
+    clearTimeout(markdownSaveTimer);
+  }
+  markdownSaveTimer = setTimeout(() => {
+    markdownSaveTimer = null;
+    void writeActiveMarkdownNow();
+  }, MARKDOWN_SAVE_DELAY_MS);
+};
+
+const loadStepsFromMarkdownFile = async (relPath, showSuccessToast = false) => {
+  if (!isDesktopStorage || !canWorkspaceFileIO) {
+    return;
+  }
+  const targetRelPath = String(relPath || "").trim();
+  if (!targetRelPath) {
+    return;
+  }
+  markdownHydrating.value = true;
+  try {
+    const result = await desktopDataBridge.readWorkspaceFile({
+      relPath: targetRelPath
+    });
+    if (!result?.ok) {
+      throw new Error(String(result?.error || "read_workspace_file_failed"));
+    }
+    const parsed = parseMarkdownToSteps(result.content || "");
+    steps.value = parsed;
+    currentId.value = parsed[0]?.id ?? 1;
+    activeMarkdownRelPath.value = targetRelPath;
+    if (showSuccessToast) {
+      showToast(`已载入 Markdown: ${targetRelPath}`);
+    }
+  } catch (error) {
+    showToast(`载入 Markdown 失败: ${String(error?.message || error || "unknown_error")}`);
+  } finally {
+    markdownHydrating.value = false;
+  }
+};
 
 if (typeof window !== "undefined") {
   try {
@@ -1037,8 +1186,24 @@ const loadDesktopStorageTree = async () => {
       storageRootPath.value = String(treeResult.rootPath);
     }
     ensureSelectedStorageNodeValid();
+    const selected = findStorageNodeInTree(storageTree.value, selectedStorageNodeId.value);
+    if (
+      selected?.node?.type === "file"
+      && String(selected.node.name || "").toLowerCase().endsWith(".md")
+    ) {
+      void loadStepsFromMarkdownFile(String(selected.node.relPath || ""), false);
+    } else {
+      const firstMarkdown = findFirstMarkdownNode(storageTree.value);
+      if (firstMarkdown?.relPath) {
+        selectedStorageNodeId.value = String(firstMarkdown.id || selectedStorageNodeId.value);
+        void loadStepsFromMarkdownFile(String(firstMarkdown.relPath), false);
+        return;
+      }
+      activeMarkdownRelPath.value = "";
+    }
   } catch (error) {
     showToast(`读取存储目录失败: ${String(error?.message || error || "unknown_error")}`);
+    activeMarkdownRelPath.value = "";
     storageTree.value = ensureStorageTree(storageTree.value);
   } finally {
     storageLoading.value = false;
@@ -1057,6 +1222,25 @@ const findStorageNodeInTree = (node, targetId, parentId = "") => {
   }
   for (const child of node.children) {
     const found = findStorageNodeInTree(child, targetId, node.id);
+    if (found) {
+      return found;
+    }
+  }
+  return null;
+};
+
+const findFirstMarkdownNode = (node) => {
+  if (!node) {
+    return null;
+  }
+  if (node.type === "file" && String(node.name || "").toLowerCase().endsWith(".md")) {
+    return node;
+  }
+  if (node.type !== "folder" || !Array.isArray(node.children)) {
+    return null;
+  }
+  for (const child of node.children) {
+    const found = findFirstMarkdownNode(child);
     if (found) {
       return found;
     }
@@ -1199,6 +1383,14 @@ const selectStorageNode = (id) => {
       ...storageFolderExpandedMap.value,
       [targetId]: true
     };
+    activeMarkdownRelPath.value = "";
+  } else if (
+    matched?.node?.type === "file"
+    && String(matched.node.name || "").toLowerCase().endsWith(".md")
+  ) {
+    void loadStepsFromMarkdownFile(String(matched.node.relPath || ""), true);
+  } else {
+    activeMarkdownRelPath.value = "";
   }
   persistStorageState();
 };
@@ -1260,11 +1452,16 @@ const createStorageNodeAt = (folderId, node) => {
 };
 
 const createStorageFile = async () => {
-  const rawName = askStorageName("请输入文件名", "未命名.md");
-  if (!rawName) {
+  const name = isDesktopStorage ? "untitled.md" : (() => {
+    const rawName = askStorageName("请输入文件名", "未命名.md");
+    if (!rawName) {
+      return "";
+    }
+    return rawName.includes(".") ? rawName : `${rawName}.md`;
+  })();
+  if (!name) {
     return;
   }
-  const name = rawName.includes(".") ? rawName : `${rawName}.md`;
 
   if (isDesktopStorage) {
     try {
@@ -1277,6 +1474,9 @@ const createStorageFile = async () => {
       }
       await loadDesktopStorageTree();
       selectedStorageNodeId.value = String(result.relPath || selectedStorageNodeId.value);
+      if (String(result.name || "").toLowerCase().endsWith(".md")) {
+        await loadStepsFromMarkdownFile(String(result.relPath || ""), false);
+      }
       persistStorageState();
       showToast(`已创建文件: ${result.name || name}`);
       return;
@@ -1310,7 +1510,7 @@ const createStorageFile = async () => {
 };
 
 const createStorageFolder = async () => {
-  const name = askStorageName("请输入文件夹名", "新建文件夹");
+  const name = isDesktopStorage ? "new-folder" : askStorageName("请输入文件夹名", "新建文件夹");
   if (!name) {
     return;
   }
@@ -1371,6 +1571,26 @@ const openStorageRootDir = async () => {
     }
   } catch (error) {
     showToast(`打开目录失败: ${String(error?.message || error || "unknown_error")}`);
+  }
+};
+
+const pickStorageRootDir = async () => {
+  if (!isDesktopStorage || !canPickWorkspaceRoot) {
+    showToast("当前环境不支持选择真实目录");
+    return;
+  }
+  try {
+    const result = await desktopDataBridge.pickWorkspaceRoot();
+    if (result?.canceled) {
+      return;
+    }
+    if (!result?.ok) {
+      throw new Error(String(result?.error || "pick_workspace_root_failed"));
+    }
+    await loadDesktopStorageTree();
+    showToast(`已切换目录: ${String(result.rootPath || storageRootPath.value || "")}`);
+  } catch (error) {
+    showToast(`选择目录失败: ${String(error?.message || error || "unknown_error")}`);
   }
 };
 
@@ -1459,12 +1679,8 @@ const toggleSidebarCollapse = () => {
     });
     return;
   }
-  if (isSidebarCollapsed.value) {
-    isSidebarCollapsed.value = false;
-    sidebarWidth.value = clamp(sidebarWidth.value, SIDEBAR_MIN_WIDTH, SIDEBAR_MAX_WIDTH);
-  } else {
-    isSidebarCollapsed.value = true;
-  }
+  isSidebarHidden.value = true;
+  isSidebarCollapsed.value = false;
   nextTick(() => {
     refreshContentProgress();
   });
@@ -1571,12 +1787,8 @@ const toggleFileSidebarCollapse = () => {
     });
     return;
   }
-  if (isFileSidebarCollapsed.value) {
-    isFileSidebarCollapsed.value = false;
-    fileSidebarWidth.value = clamp(fileSidebarWidth.value, FILE_SIDEBAR_MIN_WIDTH, FILE_SIDEBAR_MAX_WIDTH);
-  } else {
-    isFileSidebarCollapsed.value = true;
-  }
+  isFileSidebarHidden.value = true;
+  isFileSidebarCollapsed.value = false;
   nextTick(() => {
     refreshContentProgress();
   });
@@ -2133,6 +2345,23 @@ const syncDesktopMaximizeState = async () => {
   }
 };
 
+const bindDesktopWindowMaximizeListener = () => {
+  if (!desktopWindowBridge?.onMaximizedChanged) {
+    return;
+  }
+  if (desktopWindowMaximizeOff) {
+    desktopWindowMaximizeOff();
+    desktopWindowMaximizeOff = null;
+  }
+  desktopWindowMaximizeOff = desktopWindowBridge.onMaximizedChanged((payload) => {
+    if (typeof payload?.maximized === "boolean") {
+      windowIsMaximized.value = payload.maximized;
+      return;
+    }
+    void syncDesktopMaximizeState();
+  });
+};
+
 const handleWindowMinimize = () => {
   if (isDesktopWindowControls && desktopWindowBridge?.minimize) {
     void desktopWindowBridge.minimize();
@@ -2164,6 +2393,23 @@ const handleWindowClose = () => {
     return;
   }
   closeTerminal();
+};
+
+const handleChromeDragMouseDown = (event) => {
+  if (event.button !== 0 || !windowIsMaximized.value) {
+    return;
+  }
+  if (!desktopWindowBridge?.dragFromMaximized) {
+    return;
+  }
+  void desktopWindowBridge.dragFromMaximized({
+    screenX: Number(event.screenX || 0),
+    screenY: Number(event.screenY || 0),
+    clientX: Number(event.clientX || 0),
+    viewportWidth: Number(window.innerWidth || 1)
+  }).then(() => {
+    void syncDesktopMaximizeState();
+  });
 };
 
 const xtermLightTheme = {
@@ -2613,6 +2859,34 @@ watch(selectedStorageNodeId, () => {
   persistStorageState();
 });
 
+watch(steps, () => {
+  if (!activeMarkdownRelPath.value || markdownHydrating.value) {
+    return;
+  }
+  scheduleActiveMarkdownSave();
+}, { deep: true });
+
+watch(currentId, () => {
+  if (!activeMarkdownRelPath.value || markdownHydrating.value) {
+    return;
+  }
+  scheduleActiveMarkdownSave();
+});
+
+watch(activeMarkdownRelPath, (_next, prev) => {
+  const previousRelPath = String(prev || "").trim();
+  if (markdownSaveTimer && previousRelPath && !markdownHydrating.value) {
+    void writeActiveMarkdownNow(previousRelPath);
+  }
+  if (markdownSaveTimer) {
+    clearTimeout(markdownSaveTimer);
+    markdownSaveTimer = null;
+    if (activeMarkdownRelPath.value && !markdownHydrating.value) {
+      void writeActiveMarkdownNow(activeMarkdownRelPath.value);
+    }
+  }
+});
+
 watch([terminalPanelHeight, terminalMaximized], () => {
   if (!isDesktopPty.value || !terminalOpen.value || terminalTab.value !== "terminal") {
     return;
@@ -2643,14 +2917,9 @@ const toggleDark = () => {
 const toggleMode = () => {
   const nextMode = isEditMode.value ? "view" : "edit";
   mode.value = nextMode;
-  if (desktopWindowBridge?.setFullscreen) {
-    void desktopWindowBridge.setFullscreen(true).then(() => {
-      desktopFullscreen.value = true;
-      nextTick(() => {
-        void syncDesktopTerminalSize();
-      });
-    });
-  }
+  nextTick(() => {
+    void syncDesktopTerminalSize();
+  });
 };
 
 const appendMarkdownImage = (url) => {
@@ -2871,14 +3140,17 @@ onMounted(() => {
   if (isDesktopPty.value) {
     terminalTab.value = "terminal";
   }
-  if (desktopWindowBridge?.setFullscreen) {
+  if (desktopWindowBridge?.isFullscreen) {
     void syncDesktopFullscreenState();
-    void desktopWindowBridge.setFullscreen(true).then(() => {
-      desktopFullscreen.value = true;
+  }
+  if (desktopWindowBridge?.setFullscreen) {
+    void desktopWindowBridge.setFullscreen(false).then(() => {
+      void syncDesktopFullscreenState();
     });
   }
   if (isDesktopWindowControls) {
     void syncDesktopMaximizeState();
+    bindDesktopWindowMaximizeListener();
   }
   nextTick(() => {
     refreshContentProgress();
@@ -2914,6 +3186,10 @@ onBeforeUnmount(() => {
     clearTimeout(terminalResizeSyncTimer);
     terminalResizeSyncTimer = null;
   }
+  if (markdownSaveTimer) {
+    clearTimeout(markdownSaveTimer);
+    markdownSaveTimer = null;
+  }
   terminalDragSizing = false;
   window.removeEventListener("keydown", onKeydown);
   window.removeEventListener("keyup", onGlobalKeyup, true);
@@ -2921,5 +3197,9 @@ onBeforeUnmount(() => {
   window.removeEventListener("blur", closeDesktopTabContextMenu);
   window.removeEventListener("blur", releasePasteShortcutLocks);
   window.removeEventListener("resize", refreshContentProgress);
+  if (desktopWindowMaximizeOff) {
+    desktopWindowMaximizeOff();
+    desktopWindowMaximizeOff = null;
+  }
 });
 </script>

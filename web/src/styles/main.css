@@ -8,9 +8,14 @@ html, body, #app {
   height: 100%;
 }
 
+html {
+  background: transparent;
+}
+
 body {
   font-family: 'Inter', sans-serif;
   transition: all 0.25s ease;
+  background: transparent;
 }
 
 [v-cloak] {
@@ -27,8 +32,7 @@ body {
   align-items: center;
   gap: 6px;
   padding: 0 8px;
-  position: sticky;
-  top: 0;
+  position: relative;
   z-index: 55;
 }
 
@@ -128,12 +132,26 @@ body {
 }
 
 .sidebar-resize-handle.is-hidden {
-  width: 10px;
+  width: 0;
+  opacity: 0;
+  pointer-events: none;
 }
 
 .sidebar-resize-handle.is-hidden .sidebar-resize-line {
-  width: 2px;
-  background: #cbd5e1;
+  width: 0;
+  background: transparent;
+}
+
+#app.desktop-frameless-windowed {
+  border-radius: 14px;
+  overflow: hidden;
+  border: 1px solid rgba(148, 163, 184, 0.35);
+  box-shadow: 0 18px 50px rgba(15, 23, 42, 0.24);
+}
+
+#app.desktop-frameless-windowed.dark-ui {
+  border-color: rgba(51, 65, 85, 0.9);
+  box-shadow: 0 22px 60px rgba(2, 6, 23, 0.42);
 }
 
 .sidebar-tip-btn {

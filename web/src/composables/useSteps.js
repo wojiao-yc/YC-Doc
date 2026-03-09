@@ -57,8 +57,12 @@ export const useSteps = (showToast) => {
   const currentId = ref(readStoredCurrentId(steps.value));
   const draggedIndex = ref(null);
   const desktopDataBridge = getDesktopDataBridge();
+  const useMarkdownStorage = Boolean(
+    desktopDataBridge?.readWorkspaceFile
+    && desktopDataBridge?.writeWorkspaceFile
+  );
 
-  let desktopHydrated = !desktopDataBridge?.loadSteps;
+  let desktopHydrated = useMarkdownStorage ? true : !desktopDataBridge?.loadSteps;
   let desktopSaveTimer = null;
   let desktopSaveQueued = false;
   let desktopLoadWarned = false;
@@ -95,6 +99,9 @@ export const useSteps = (showToast) => {
   };
 
   const saveDesktopStepsNow = async () => {
+    if (useMarkdownStorage) {
+      return;
+    }
     if (!desktopDataBridge?.saveSteps || !desktopHydrated) {
       desktopSaveQueued = true;
       return;
@@ -111,6 +118,9 @@ export const useSteps = (showToast) => {
   };
 
   const scheduleDesktopSave = () => {
+    if (useMarkdownStorage) {
+      return;
+    }
     if (!desktopDataBridge?.saveSteps) {
       return;
     }
@@ -126,6 +136,10 @@ export const useSteps = (showToast) => {
   };
 
   const hydrateDesktopSteps = async () => {
+    if (useMarkdownStorage) {
+      desktopHydrated = true;
+      return;
+    }
     if (!desktopDataBridge?.loadSteps) {
       desktopHydrated = true;
       return;

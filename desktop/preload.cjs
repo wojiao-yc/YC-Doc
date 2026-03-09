@@ -38,7 +38,18 @@ contextBridge.exposeInMainWorld("desktopWindow", {
   minimize: () => ipcRenderer.invoke("desktop:window:minimize"),
   toggleMaximize: () => ipcRenderer.invoke("desktop:window:toggle-maximize"),
   isMaximized: () => ipcRenderer.invoke("desktop:window:is-maximized"),
+  dragFromMaximized: (payload = {}) => ipcRenderer.invoke("desktop:window:drag-from-maximized", payload),
   close: () => ipcRenderer.invoke("desktop:window:close"),
+  onMaximizedChanged: (handler) => {
+    if (typeof handler !== "function") {
+      return () => {};
+    }
+    const listener = (_event, payload) => handler(payload);
+    ipcRenderer.on("desktop:window:maximized-changed", listener);
+    return () => {
+      ipcRenderer.removeListener("desktop:window:maximized-changed", listener);
+    };
+  },
   getImageDir: () => ipcRenderer.invoke("desktop:assets:get-image-dir"),
   openImageDir: () => ipcRenderer.invoke("desktop:assets:open-image-dir"),
   pickImage: () => ipcRenderer.invoke("desktop:assets:pick-image")
@@ -52,5 +63,8 @@ contextBridge.exposeInMainWorld("desktopData", {
   readWorkspaceTree: () => ipcRenderer.invoke("desktop:data:read-workspace-tree"),
   createWorkspaceFile: (payload = {}) => ipcRenderer.invoke("desktop:data:create-workspace-file", payload),
   createWorkspaceFolder: (payload = {}) => ipcRenderer.invoke("desktop:data:create-workspace-folder", payload),
-  openWorkspaceDir: () => ipcRenderer.invoke("desktop:data:open-workspace-dir")
+  readWorkspaceFile: (payload = {}) => ipcRenderer.invoke("desktop:data:read-workspace-file", payload),
+  writeWorkspaceFile: (payload = {}) => ipcRenderer.invoke("desktop:data:write-workspace-file", payload),
+  openWorkspaceDir: () => ipcRenderer.invoke("desktop:data:open-workspace-dir"),
+  pickWorkspaceRoot: () => ipcRenderer.invoke("desktop:data:pick-workspace-root")
 });

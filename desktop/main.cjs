@@ -1,4 +1,4 @@
-const { app, BrowserWindow, dialog, ipcMain, protocol, shell } = require("electron");
+const { app, BrowserWindow, dialog, ipcMain, protocol, screen, shell } = require("electron");
 const path = require("node:path");
 const fs = require("node:fs");
 const { pathToFileURL } = require("node:url");
@@ -58,13 +58,77 @@ const ensureDesktopDataDir = () => {
   return dir;
 };
 
-const ensureWorkspaceDir = () => {
-  const dir = path.join(app.getPath("documents"), "YC-Doc-Workspace");
-  fs.mkdirSync(dir, { recursive: true });
-  return dir;
+const getStepsDataPath = () => path.join(ensureDesktopDataDir(), "steps.json");
+const getWorkspaceConfigPath = () => path.join(ensureDesktopDataDir(), "workspace-root.json");
+
+const readWorkspaceRootConfig = () => {
+  const filePath = getWorkspaceConfigPath();
+  if (!fs.existsSync(filePath)) {
+    return "";
+  }
+  try {
+    const raw = fs.readFileSync(filePath, "utf8");
+    const parsed = JSON.parse(raw);
+    const target = String(parsed?.rootPath || "").trim();
+    return target;
+  } catch {
+    return "";
+  }
 };
 
-const getStepsDataPath = () => path.join(ensureDesktopDataDir(), "steps.json");
+const writeWorkspaceRootConfig = (rootPath) => {
+  const filePath = getWorkspaceConfigPath();
+  const record = {
+    rootPath: String(rootPath || "").trim(),
+    updatedAt: new Date().toISOString()
+  };
+  fs.writeFileSync(filePath, JSON.stringify(record, null, 2), "utf8");
+};
+
+const normalizeAbsolutePath = (rawPath = "") => {
+  const target = String(rawPath || "").trim();
+  if (!target) {
+    throw new Error("invalid_path");
+  }
+  return path.resolve(target);
+};
+
+const setWorkspaceRootDir = (rawPath) => {
+  const absPath = normalizeAbsolutePath(rawPath);
+  fs.mkdirSync(absPath, { recursive: true });
+  if (!fs.statSync(absPath).isDirectory()) {
+    throw new Error("workspace_root_not_directory");
+  }
+  writeWorkspaceRootConfig(absPath);
+  return absPath;
+};
+
+const ensureWorkspaceDir = () => {
+  const fallback = path.join(app.getPath("documents"), "YC-Doc-Workspace");
+  const stored = readWorkspaceRootConfig();
+  const candidates = stored ? [stored, fallback] : [fallback];
+
+  for (const candidate of candidates) {
+    try {
+      const absPath = path.resolve(candidate);
+      fs.mkdirSync(absPath, { recursive: true });
+      if (!fs.statSync(absPath).isDirectory()) {
+        throw new Error("workspace_root_not_directory");
+      }
+      if (stored !== absPath) {
+        writeWorkspaceRootConfig(absPath);
+      }
+      return absPath;
+    } catch {
+      // try next candidate
+    }
+  }
+
+  const safeFallback = path.resolve(fallback);
+  fs.mkdirSync(safeFallback, { recursive: true });
+  writeWorkspaceRootConfig(safeFallback);
+  return safeFallback;
+};
 
 const sanitizeWorkspaceName = (input, fallback) => {
   const cleaned = String(input || "")
@@ -272,7 +336,10 @@ const createWindow = async () => {
     autoHideMenuBar: true,
     frame: false,
     titleBarStyle: "hidden",
-    thickFrame: false,
+    thickFrame: true,
+    backgroundColor: "#f8fafc",
+    hasShadow: true,
+    roundedCorners: true,
     webPreferences: {
       preload: path.join(__dirname, "preload.cjs"),
       contextIsolation: true,
@@ -300,6 +367,21 @@ const createWindow = async () => {
     shell.openExternal(url);
     return { action: "deny" };
   });
+
+  const emitMaximizedChanged = () => {
+    if (!mainWindow || mainWindow.isDestroyed()) {
+      return;
+    }
+    mainWindow.webContents.send("desktop:window:maximized-changed", {
+      maximized: mainWindow.isMaximized()
+    });
+  };
+
+  mainWindow.on("maximize", emitMaximizedChanged);
+  mainWindow.on("unmaximize", emitMaximizedChanged);
+  mainWindow.on("enter-full-screen", emitMaximizedChanged);
+  mainWindow.on("leave-full-screen", emitMaximizedChanged);
+  emitMaximizedChanged();
 
   mainWindow.on("closed", () => {
     mainWindow = null;
@@ -437,6 +519,9 @@ ipcMain.handle("desktop:window:toggle-maximize", async () => {
   if (!mainWindow || mainWindow.isDestroyed()) {
     return { ok: false, maximized: false };
   }
+  if (mainWindow.isFullScreen()) {
+    mainWindow.setFullScreen(false);
+  }
   if (mainWindow.isMaximized()) {
     mainWindow.unmaximize();
   } else {
@@ -450,6 +535,42 @@ ipcMain.handle("desktop:window:is-maximized", async () => {
     return false;
   }
   return mainWindow.isMaximized();
+});
+
+ipcMain.handle("desktop:window:drag-from-maximized", async (_event, payload = {}) => {
+  if (!mainWindow || mainWindow.isDestroyed()) {
+    return { ok: false, maximized: false };
+  }
+  if (mainWindow.isFullScreen()) {
+    mainWindow.setFullScreen(false);
+  }
+  if (!mainWindow.isMaximized()) {
+    return { ok: true, maximized: false };
+  }
+  const screenX = Number(payload?.screenX || 0);
+  const screenY = Number(payload?.screenY || 0);
+  const clientX = Number(payload?.clientX || 0);
+  const viewportWidth = Math.max(1, Number(payload?.viewportWidth || 1));
+  const pointerRatio = clamp(clientX / viewportWidth, 0.06, 0.94);
+
+  mainWindow.unmaximize();
+  const bounds = mainWindow.getBounds();
+  const display = screen.getDisplayNearestPoint({
+    x: Math.round(screenX),
+    y: Math.round(screenY)
+  });
+  const workArea = display?.workArea || { x: 0, y: 0, width: bounds.width, height: bounds.height };
+  const targetX = Math.round(screenX - bounds.width * pointerRatio);
+  const targetY = Math.round(screenY - 14);
+  const maxX = workArea.x + Math.max(0, workArea.width - bounds.width);
+  const maxY = workArea.y + Math.max(0, workArea.height - bounds.height);
+
+  mainWindow.setPosition(
+    clamp(targetX, workArea.x, maxX),
+    clamp(targetY, workArea.y, maxY)
+  );
+
+  return { ok: true, maximized: false };
 });
 
 ipcMain.handle("desktop:window:close", async () => {
@@ -632,6 +753,65 @@ ipcMain.handle("desktop:data:create-workspace-folder", async (_event, payload = 
   }
 });
 
+ipcMain.handle("desktop:data:read-workspace-file", async (_event, payload = {}) => {
+  const rootPath = ensureWorkspaceDir();
+  try {
+    const { absRoot, absTarget, relPath } = resolveWorkspacePath(rootPath, payload?.relPath || "");
+    if (!relPath) {
+      throw new Error("invalid_file_path");
+    }
+    if (!fs.existsSync(absTarget)) {
+      throw new Error("file_not_found");
+    }
+    if (!fs.statSync(absTarget).isFile()) {
+      throw new Error("target_not_file");
+    }
+    const content = fs.readFileSync(absTarget, "utf8");
+    return {
+      ok: true,
+      rootPath: absRoot,
+      relPath,
+      absPath: absTarget,
+      content
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      error: String(error?.message || error || "read_workspace_file_failed"),
+      rootPath
+    };
+  }
+});
+
+ipcMain.handle("desktop:data:write-workspace-file", async (_event, payload = {}) => {
+  const rootPath = ensureWorkspaceDir();
+  try {
+    const { absRoot, absTarget, relPath } = resolveWorkspacePath(rootPath, payload?.relPath || "");
+    if (!relPath) {
+      throw new Error("invalid_file_path");
+    }
+    const parentAbs = path.dirname(absTarget);
+    fs.mkdirSync(parentAbs, { recursive: true });
+    if (fs.existsSync(absTarget) && !fs.statSync(absTarget).isFile()) {
+      throw new Error("target_not_file");
+    }
+    const content = String(payload?.content ?? "");
+    fs.writeFileSync(absTarget, content, "utf8");
+    return {
+      ok: true,
+      rootPath: absRoot,
+      relPath,
+      absPath: absTarget
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      error: String(error?.message || error || "write_workspace_file_failed"),
+      rootPath
+    };
+  }
+});
+
 ipcMain.handle("desktop:data:open-workspace-dir", async () => {
   const rootPath = ensureWorkspaceDir();
   const error = await shell.openPath(rootPath);
@@ -725,6 +905,90 @@ ipcMain.handle("desktop:data:open-workspace-dir", async () => {
     rootPath,
     error: String(error || "")
   };
+});
+
+ipcMain.handle("desktop:data:read-workspace-file", async (_event, payload = {}) => {
+  const rootPath = ensureWorkspaceDir();
+  try {
+    const { absRoot, absTarget, relPath } = resolveWorkspacePath(rootPath, payload?.relPath || "");
+    if (!relPath) {
+      throw new Error("invalid_file_path");
+    }
+    if (!fs.existsSync(absTarget)) {
+      throw new Error("file_not_found");
+    }
+    if (!fs.statSync(absTarget).isFile()) {
+      throw new Error("target_not_file");
+    }
+    const content = fs.readFileSync(absTarget, "utf8");
+    return {
+      ok: true,
+      rootPath: absRoot,
+      relPath,
+      absPath: absTarget,
+      content
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      error: String(error?.message || error || "read_workspace_file_failed"),
+      rootPath
+    };
+  }
+});
+
+ipcMain.handle("desktop:data:write-workspace-file", async (_event, payload = {}) => {
+  const rootPath = ensureWorkspaceDir();
+  try {
+    const { absRoot, absTarget, relPath } = resolveWorkspacePath(rootPath, payload?.relPath || "");
+    if (!relPath) {
+      throw new Error("invalid_file_path");
+    }
+    const parentAbs = path.dirname(absTarget);
+    fs.mkdirSync(parentAbs, { recursive: true });
+    if (fs.existsSync(absTarget) && !fs.statSync(absTarget).isFile()) {
+      throw new Error("target_not_file");
+    }
+    const content = String(payload?.content ?? "");
+    fs.writeFileSync(absTarget, content, "utf8");
+    return {
+      ok: true,
+      rootPath: absRoot,
+      relPath,
+      absPath: absTarget
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      error: String(error?.message || error || "write_workspace_file_failed"),
+      rootPath
+    };
+  }
+});
+
+ipcMain.handle("desktop:data:pick-workspace-root", async () => {
+  if (!mainWindow || mainWindow.isDestroyed()) {
+    return { ok: false, error: "window_unavailable" };
+  }
+  const currentRoot = ensureWorkspaceDir();
+  const picked = await dialog.showOpenDialog(mainWindow, {
+    title: "Select workspace root",
+    defaultPath: currentRoot,
+    properties: ["openDirectory", "createDirectory"]
+  });
+  if (picked.canceled || !picked.filePaths || picked.filePaths.length === 0) {
+    return { ok: false, canceled: true, rootPath: currentRoot };
+  }
+  try {
+    const rootPath = setWorkspaceRootDir(picked.filePaths[0]);
+    return { ok: true, rootPath };
+  } catch (error) {
+    return {
+      ok: false,
+      error: String(error?.message || error || "set_workspace_root_failed"),
+      rootPath: currentRoot
+    };
+  }
 });
 
 ipcMain.handle("desktop:assets:get-image-dir", async () => {
