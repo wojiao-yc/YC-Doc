@@ -269,6 +269,7 @@ const readWorkspaceTreeNode = (absPath, relPath = "") => {
       name,
       relPath,
       absPath,
+      size: stat.size,
       children: []
     };
   }
@@ -288,6 +289,7 @@ const readWorkspaceTreeNode = (absPath, relPath = "") => {
         name: entry.name,
         relPath: childRel,
         absPath: childAbs,
+        size: fs.statSync(childAbs).size,
         children: []
       });
     }
@@ -304,7 +306,29 @@ const readWorkspaceTreeNode = (absPath, relPath = "") => {
     name,
     relPath,
     absPath,
+    size: 0,
     children
+  };
+};
+
+const resolveWorkspaceNodeTarget = (rootPath, rawRelPath = "") => {
+  const { absRoot, absTarget, relPath } = resolveWorkspacePath(rootPath, rawRelPath);
+  if (!relPath) {
+    throw new Error("cannot_modify_workspace_root");
+  }
+  if (!fs.existsSync(absTarget)) {
+    throw new Error("target_not_found");
+  }
+  const parentRelPathRaw = path.posix.dirname(relPath);
+  const parentRelPath = parentRelPathRaw === "." ? "" : parentRelPathRaw;
+  const { absTarget: parentAbs } = resolveWorkspacePath(rootPath, parentRelPath);
+  return {
+    absRoot,
+    absTarget,
+    relPath,
+    parentAbs,
+    parentRelPath,
+    currentName: path.posix.basename(relPath)
   };
 };
 
@@ -909,6 +933,78 @@ ipcMain.handle("desktop:data:create-workspace-folder", async (_event, payload = 
     return {
       ok: false,
       error: String(error?.message || error || "create_workspace_folder_failed"),
+      rootPath
+    };
+  }
+});
+
+ipcMain.handle("desktop:data:rename-workspace-node", async (_event, payload = {}) => {
+  const rootPath = ensureWorkspaceDir();
+  try {
+    const {
+      absRoot,
+      absTarget,
+      relPath,
+      parentAbs,
+      parentRelPath,
+      currentName
+    } = resolveWorkspaceNodeTarget(rootPath, payload?.relPath || "");
+    const stat = fs.statSync(absTarget);
+    const requestedName = sanitizeWorkspaceName(payload?.name, "");
+    if (!requestedName) {
+      throw new Error("invalid_name");
+    }
+    if (requestedName === currentName) {
+      return {
+        ok: true,
+        rootPath: absRoot,
+        relPath,
+        previousRelPath: relPath,
+        absPath: absTarget,
+        type: stat.isDirectory() ? "folder" : "file",
+        name: currentName
+      };
+    }
+    const nextAbs = path.join(parentAbs, requestedName);
+    if (fs.existsSync(nextAbs)) {
+      throw new Error("target_already_exists");
+    }
+    fs.renameSync(absTarget, nextAbs);
+    const nextRelPath = parentRelPath ? `${parentRelPath}/${requestedName}` : requestedName;
+    return {
+      ok: true,
+      rootPath: absRoot,
+      relPath: nextRelPath,
+      previousRelPath: relPath,
+      absPath: nextAbs,
+      type: stat.isDirectory() ? "folder" : "file",
+      name: requestedName
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      error: String(error?.message || error || "rename_workspace_node_failed"),
+      rootPath
+    };
+  }
+});
+
+ipcMain.handle("desktop:data:delete-workspace-node", async (_event, payload = {}) => {
+  const rootPath = ensureWorkspaceDir();
+  try {
+    const { absRoot, absTarget, relPath } = resolveWorkspaceNodeTarget(rootPath, payload?.relPath || "");
+    const stat = fs.statSync(absTarget);
+    fs.rmSync(absTarget, { recursive: true, force: false });
+    return {
+      ok: true,
+      rootPath: absRoot,
+      relPath,
+      type: stat.isDirectory() ? "folder" : "file"
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      error: String(error?.message || error || "delete_workspace_node_failed"),
       rootPath
     };
   }

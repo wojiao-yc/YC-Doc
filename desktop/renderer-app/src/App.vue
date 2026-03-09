@@ -180,6 +180,7 @@
             ? (isDark ? 'bg-orange-500/15 text-orange-200' : 'bg-orange-50 text-orange-700')
             : (isDark ? 'text-slate-300 hover:bg-slate-900/70' : 'text-gray-700 hover:bg-gray-100')"
           @click="selectStorageNode(item.id)"
+          @contextmenu.prevent.stop="openStorageNodeContextMenu($event, item.id)"
         >
           <span class="w-4 h-4 inline-flex items-center justify-center text-[11px]">
             <template v-if="item.type === 'folder'">
@@ -215,7 +216,7 @@
         :style="viewHeaderStyle"
       >
         <div class="header-meta header-meta-inline min-w-0 flex-1">
-          <span class="header-meta-title">{{ activeStep.title }}</span>
+          <span class="header-meta-title">{{ stepDisplayTitle(activeStep, currentStepIndex) }}</span>
           <span class="header-meta-dot">·</span>
           <span class="header-meta-sub header-meta-sub-inline">{{ activeStep.subtitle || "未设置副标题" }}</span>
         </div>
@@ -578,7 +579,7 @@
       v-if="isEditMode"
       class="sidebar-resize-handle inspector-resize-handle flex-shrink-0"
       :class="[
-        isSidebarHidden ? 'is-hidden' : '',
+        isInspectorSidebarHidden ? 'is-hidden' : '',
         isDark ? 'is-dark' : ''
       ]"
       @mousedown="startSidebarResizeDrag"
@@ -587,31 +588,35 @@
     </div>
 
     <aside
-      v-if="isEditMode"
+      v-if="showInspectorSidebar"
       class="sidebar-panel inspector-sidebar-panel flex flex-col flex-shrink-0 border-l min-h-0"
-      :style="{ width: `${sidebarPanelWidth}px` }"
+      :style="{ width: `${inspectorSidebarPanelWidth}px` }"
       :class="[
-        isSidebarCollapsed ? 'is-collapsed' : '',
-        isSidebarDragging ? 'is-dragging' : '',
-        isSidebarHidden
+        isInspectorSidebarCollapsed ? 'is-collapsed' : '',
+        isEditMode && isSidebarDragging ? 'is-dragging' : '',
+        isInspectorSidebarHidden
           ? 'is-hidden border-transparent bg-transparent'
           : (isDark ? 'border-slate-800 bg-slate-950' : 'border-gray-200 bg-[#fafafa]')
       ]"
     >
-      <div :class="isSidebarCollapsed ? 'px-2 py-3' : 'p-4 pb-3'" class="border-b" :style="{ borderColor: isDark ? '#1e293b' : '#e5e7eb' }">
-        <div :class="isSidebarCollapsed ? 'flex flex-col items-center gap-2' : 'flex items-start justify-between gap-2'">
-          <div :class="isSidebarCollapsed ? 'flex items-center justify-center w-full' : 'flex items-center gap-2 min-w-0'">
-            <div class="w-7 h-7 bg-orange-500 rounded-lg flex items-center justify-center text-white text-xs font-bold">ED</div>
-            <div v-if="!isSidebarCollapsed" class="min-w-0">
+      <div :class="isInspectorSidebarCollapsed ? 'px-2 py-3' : 'p-4 pb-3'" class="border-b" :style="{ borderColor: isDark ? '#1e293b' : '#e5e7eb' }">
+        <div :class="isInspectorSidebarCollapsed ? 'flex flex-col items-center gap-2' : 'flex items-start justify-between gap-2'">
+          <div :class="isInspectorSidebarCollapsed ? 'flex items-center justify-center w-full' : 'flex items-center gap-2 min-w-0'">
+            <div class="w-7 h-7 bg-orange-500 rounded-lg flex items-center justify-center text-white text-xs font-bold">
+              {{ isEditMode ? "ED" : "ST" }}
+            </div>
+            <div v-if="!isInspectorSidebarCollapsed" class="min-w-0">
               <h2 class="text-sm font-semibold tracking-tight truncate" :class="isDark ? 'text-slate-100' : 'text-gray-800'">
-                编辑控制栏
+                {{ isEditMode ? "编辑控制栏" : "步骤栏" }}
               </h2>
-              <p class="text-xs mt-0.5" :class="isDark ? 'text-slate-500' : 'text-gray-400'">原顶栏 + 原步骤栏</p>
+              <p class="text-xs mt-0.5" :class="isDark ? 'text-slate-500' : 'text-gray-400'">
+                {{ isEditMode ? "原顶栏 + 原步骤栏" : `第 ${currentStepIndex + 1} / ${steps.length} 步` }}
+              </p>
             </div>
           </div>
         </div>
 
-        <div v-if="!isSidebarCollapsed" class="mt-3 space-y-2">
+        <div v-if="isEditMode && !isInspectorSidebarCollapsed" class="mt-3 space-y-2">
           <input
             v-model="activeStep.title"
             type="text"
@@ -627,7 +632,7 @@
             placeholder="步骤副标题（可选）"
           />
         </div>
-        <div v-if="!isSidebarCollapsed" class="sidebar-overall-progress" :class="isDark ? 'is-dark' : ''">
+        <div v-if="!isInspectorSidebarCollapsed" class="sidebar-overall-progress" :class="isDark ? 'is-dark' : ''">
           <span class="sidebar-overall-progress-fill" :style="{ width: `${Math.round(sidebarChapterProgress * 100)}%` }"></span>
         </div>
       </div>
@@ -637,11 +642,11 @@
           v-for="(step, index) in steps"
           :key="step.id"
           @click="currentId = step.id"
-          :title="isSidebarCollapsed ? step.title : ''"
-          :draggable="true"
-          @dragstart="onDragStart($event, index, true)"
-          @dragover="onDragOver($event, true)"
-          @drop="onDrop($event, index, true)"
+          :title="isInspectorSidebarCollapsed ? stepDisplayTitle(step, index) : ''"
+          :draggable="isEditMode"
+          @dragstart="onDragStart($event, index, isEditMode)"
+          @dragover="onDragOver($event, isEditMode)"
+          @drop="onDrop($event, index, isEditMode)"
           class="nav-step-item px-4 py-3.5 flex items-start gap-3 cursor-pointer transition-all border-l-4"
           :class="[
             currentId === step.id
@@ -661,8 +666,8 @@
             </span>
           </div>
 
-          <div v-if="!isSidebarCollapsed" class="flex-1 min-w-0">
-            <div class="space-y-1">
+          <div v-if="!isInspectorSidebarCollapsed" class="flex-1 min-w-0">
+            <div v-if="isEditMode" class="space-y-1">
               <input
                 v-model="step.title"
                 type="text"
@@ -680,12 +685,20 @@
                 placeholder="副标题（可选）"
               />
             </div>
+            <div v-else class="min-w-0 space-y-1 px-1">
+              <div class="truncate text-sm font-medium" :class="isDark ? 'text-slate-100' : 'text-gray-800'">
+                {{ stepDisplayTitle(step, index) }}
+              </div>
+              <div class="truncate text-[11px]" :class="isDark ? 'text-slate-400' : 'text-gray-500'">
+                {{ step.subtitle || stepPreviewText(step) }}
+              </div>
+            </div>
           </div>
         </div>
       </nav>
 
       <div
-        v-if="!isSidebarCollapsed && !isSidebarHidden"
+        v-if="isEditMode && !isInspectorSidebarCollapsed && !isInspectorSidebarHidden"
         class="border-t p-4 space-y-3"
         :class="isDark ? 'border-slate-800' : 'border-gray-200'"
       >
@@ -717,6 +730,10 @@
             <input v-model="collapseHeaderInView" type="checkbox" :class="isDark ? 'accent-cyan-400' : 'accent-blue-600'" />
             展示模式收起顶栏
           </label>
+          <label class="flex items-center gap-2 text-xs" :class="isDark ? 'text-slate-300' : 'text-gray-700'">
+            <input v-model="collapseStepsSidebarInView" type="checkbox" :class="isDark ? 'accent-cyan-400' : 'accent-blue-600'" />
+            展示模式收起原始步骤栏
+          </label>
         </div>
 
         <div class="grid grid-cols-2 gap-2">
@@ -740,6 +757,20 @@
     </aside>
     </div>
 
+    <div
+      v-if="storageNodeMenu.open"
+      class="term-context-menu"
+      :style="{ left: `${storageNodeMenu.x}px`, top: `${storageNodeMenu.y}px` }"
+      @mousedown.stop
+    >
+      <button type="button" class="term-context-item" @click="openStorageRenameDialog(storageNodeMenu.nodeId)">
+        重命名
+      </button>
+      <button type="button" class="term-context-item is-danger" @click="deleteStorageNode(storageNodeMenu.nodeId)">
+        删除
+      </button>
+    </div>
+
     <div v-if="desktopRenameDialog.open" class="term-rename-mask" @mousedown.self="cancelDesktopRenameDialog">
       <div class="term-rename-card" @mousedown.stop>
         <div class="term-rename-title">重命名终端</div>
@@ -754,6 +785,23 @@
         <div class="term-rename-actions">
           <button type="button" class="term-rename-btn" @click="cancelDesktopRenameDialog">取消</button>
           <button type="button" class="term-rename-btn is-primary" @click="confirmDesktopRenameDialog">确定</button>
+        </div>
+      </div>
+    </div>
+
+    <div v-if="storageRenameDialog.open" class="term-rename-mask" @mousedown.self="cancelStorageRenameDialog">
+      <div class="term-rename-card" @mousedown.stop>
+        <div class="term-rename-title">{{ storageRenameDialog.kind === "folder" ? "重命名文件夹" : "重命名文件" }}</div>
+        <input
+          ref="storageRenameInputRef"
+          v-model="storageRenameDialog.value"
+          class="term-rename-input"
+          @keydown.enter.prevent="confirmStorageRenameDialog"
+          @keydown.esc.prevent="cancelStorageRenameDialog"
+        />
+        <div class="term-rename-actions">
+          <button type="button" class="term-rename-btn" @click="cancelStorageRenameDialog">取消</button>
+          <button type="button" class="term-rename-btn is-primary" @click="confirmStorageRenameDialog">确定</button>
         </div>
       </div>
     </div>
@@ -777,6 +825,7 @@ const mode = ref("edit");
 const isDark = ref(false);
 const gestureNavigationEnabled = ref(false);
 const collapseHeaderInView = ref(false);
+const collapseStepsSidebarInView = ref(false);
 const isEditMode = computed(() => mode.value === "edit");
 const terminalPanelHeight = ref(320);
 const terminalMaximized = ref(false);
@@ -823,6 +872,19 @@ const desktopSplitRatio = ref(50);
 const activeDesktopPane = ref("primary");
 const primaryPaneSessionId = ref("");
 const secondaryPaneSessionId = ref("");
+const storageNodeMenu = ref({
+  open: false,
+  x: 0,
+  y: 0,
+  nodeId: ""
+});
+const storageRenameDialog = ref({
+  open: false,
+  nodeId: "",
+  value: "",
+  kind: "file"
+});
+const storageRenameInputRef = ref(null);
 const desktopTabMenu = ref({
   open: false,
   x: 0,
@@ -893,6 +955,7 @@ const TERMINAL_HIDE_THRESHOLD = 56;
 const TERMINAL_MAX_SNAP_GAP = 20;
 const GESTURE_NAV_STORAGE_KEY = "yc-doc.gesture-nav.v1";
 const VIEW_HEADER_COLLAPSE_STORAGE_KEY = "yc-doc.view-header-collapse.v1";
+const VIEW_STEPS_SIDEBAR_COLLAPSE_STORAGE_KEY = "yc-doc.view-steps-sidebar-collapse.v1";
 const STORAGE_TREE_STORAGE_KEY = "yc-doc.storage-tree.v1";
 const STORAGE_EXPANDED_STORAGE_KEY = "yc-doc.storage-expanded.v1";
 const STORAGE_SELECTED_STORAGE_KEY = "yc-doc.storage-selected.v1";
@@ -910,8 +973,6 @@ const {
   isLastStep,
   next,
   prev,
-  addStep,
-  removeStep,
   onDragStart,
   onDragOver,
   onDrop
@@ -928,47 +989,112 @@ const {
   resetDisplayWidth
 } = useResizable();
 
+const createBlankStep = (id = 1) => ({
+  id,
+  title: "",
+  subtitle: "",
+  content: ""
+});
+
+const createBlankSteps = () => [createBlankStep(1)];
+const normalizeMarkdownText = (value) => String(value || "").replace(/\r\n/g, "\n");
+const trimOuterBlankLines = (value) => String(value || "").replace(/^\n+/, "").replace(/\n+$/, "");
+const isBlankStep = (step) =>
+  !String(step?.title || "").trim()
+  && !String(step?.subtitle || "").trim()
+  && !String(step?.content || "").trim();
+
+const isSingleBlankStepList = (list) =>
+  Array.isArray(list)
+  && list.length === 1
+  && isBlankStep(list[0]);
+
+const defaultStepTitle = (index) => `步骤 ${index + 1}`;
+
+const stepDisplayTitle = (step, index = 0) => {
+  const title = String(step?.title || "").trim();
+  if (title) {
+    return title;
+  }
+  const content = String(step?.content || "").trim();
+  if ((steps.value?.length || 0) <= 1) {
+    return content ? "文档" : "空白文档";
+  }
+  return defaultStepTitle(index);
+};
+
+const stepPreviewText = (step) => {
+  const lines = normalizeMarkdownText(step?.content || "")
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean);
+  return lines[0] || "空白内容";
+};
+
 const parseMarkdownToSteps = (rawMarkdown) => {
-  const text = String(rawMarkdown || "").replace(/\r\n/g, "\n");
-  const matches = [...text.matchAll(/^#\s+(.+?)\s*$/gm)];
-  if (!matches.length) {
-    const single = text.trim();
-    return [
-      {
-        id: 1,
-        title: "文档",
-        subtitle: "",
-        content: single
-      }
-    ];
-  }
+  const text = normalizeMarkdownText(rawMarkdown);
+  const lines = text.split("\n");
+  const sections = [];
+  let fenceChar = "";
+  let pendingPrefixLines = [];
+  let currentSection = null;
 
-  const parsed = [];
-  for (let index = 0; index < matches.length; index += 1) {
-    const match = matches[index];
-    const nextMatch = matches[index + 1];
-    const sectionStart = Number(match.index || 0);
-    const sectionEnd = nextMatch ? Number(nextMatch.index || text.length) : text.length;
-    const sectionRaw = text.slice(sectionStart, sectionEnd).trim();
-    const headingLine = String(match[0] || "");
-    const title = String(match[1] || `Section ${index + 1}`).trim() || `Section ${index + 1}`;
-    const body = sectionRaw.startsWith(headingLine)
-      ? sectionRaw.slice(headingLine.length).replace(/^\s*\n/, "")
-      : sectionRaw;
-    parsed.push({
-      id: index + 1,
-      title,
-      subtitle: "",
-      content: String(body || "").trim()
+  const flushSection = () => {
+    if (!currentSection) {
+      return;
+    }
+    sections.push({
+      title: currentSection.title,
+      content: trimOuterBlankLines(currentSection.lines.join("\n"))
     });
+  };
+
+  for (const line of lines) {
+    const fenceMatch = line.match(/^(```|~~~)/);
+    if (fenceMatch) {
+      const nextFenceChar = fenceMatch[1][0];
+      fenceChar = fenceChar === nextFenceChar ? "" : (fenceChar || nextFenceChar);
+    }
+
+    const headingMatch = !fenceChar ? line.match(/^#\s+(.+?)\s*$/) : null;
+    if (headingMatch) {
+      flushSection();
+      currentSection = {
+        title: String(headingMatch[1] || "").trim(),
+        lines: sections.length === 0 ? [...pendingPrefixLines] : []
+      };
+      pendingPrefixLines = [];
+      continue;
+    }
+
+    if (currentSection) {
+      currentSection.lines.push(line);
+    } else {
+      pendingPrefixLines.push(line);
+    }
   }
 
-  return parsed.length ? parsed : [{
-    id: 1,
-    title: "文档",
+  flushSection();
+
+  if (!sections.length) {
+    const single = trimOuterBlankLines(text);
+    if (!single) {
+      return createBlankSteps();
+    }
+    return [{
+      id: 1,
+      title: "",
+      subtitle: "",
+      content: single
+    }];
+  }
+
+  return sections.map((section, index) => ({
+    id: index + 1,
+    title: String(section.title || "").trim(),
     subtitle: "",
-    content: text.trim()
-  }];
+    content: String(section.content || "")
+  }));
 };
 
 const formatBytes = (value) => {
@@ -993,12 +1119,80 @@ const isMarkdownFileTooLarge = (size) => {
 };
 
 const serializeStepsToMarkdown = (sourceSteps) => {
-  const chunks = (Array.isArray(sourceSteps) ? sourceSteps : []).map((step, index) => {
-    const title = String(step?.title || `Section ${index + 1}`).trim() || `Section ${index + 1}`;
-    const content = String(step?.content || "").trim();
-    return `# ${title}\n\n${content}`;
+  const normalizedSteps = Array.isArray(sourceSteps) ? sourceSteps : [];
+  if (!normalizedSteps.length || isSingleBlankStepList(normalizedSteps)) {
+    return "";
+  }
+  if (normalizedSteps.length === 1 && !String(normalizedSteps[0]?.title || "").trim()) {
+    const rawContent = trimOuterBlankLines(normalizeMarkdownText(normalizedSteps[0]?.content || ""));
+    return rawContent ? `${rawContent}\n` : "";
+  }
+  const chunks = normalizedSteps.map((step, index) => {
+    const title = String(step?.title || "").trim() || defaultStepTitle(index);
+    const content = trimOuterBlankLines(normalizeMarkdownText(step?.content || ""));
+    return content ? `# ${title}\n\n${content}` : `# ${title}`;
   });
   return `${chunks.join("\n\n").trim()}\n`;
+};
+
+const addStep = () => {
+  const list = Array.isArray(steps.value) ? steps.value : [];
+  if (!list.length) {
+    steps.value = [{
+      ...createBlankStep(1),
+      title: defaultStepTitle(0)
+    }];
+    currentId.value = steps.value[0].id;
+    return;
+  }
+
+  if (isSingleBlankStepList(list)) {
+    steps.value = [{
+      ...list[0],
+      title: defaultStepTitle(0)
+    }];
+    currentId.value = steps.value[0].id;
+    return;
+  }
+
+  if (list.length === 1 && !String(list[0]?.title || "").trim()) {
+    steps.value = [{
+      ...list[0],
+      title: defaultStepTitle(0)
+    }];
+  }
+
+  const nextId = steps.value.length
+    ? Math.max(...steps.value.map((step) => Number(step.id) || 0)) + 1
+    : 1;
+  const nextIndex = steps.value.length;
+  const nextStep = {
+    id: nextId,
+    title: defaultStepTitle(nextIndex),
+    subtitle: "",
+    content: ""
+  };
+  steps.value = [...steps.value, nextStep];
+  currentId.value = nextId;
+};
+
+const removeStep = () => {
+  const list = Array.isArray(steps.value) ? [...steps.value] : [];
+  if (!list.length) {
+    resetBlankEditorState();
+    return;
+  }
+  const idx = list.findIndex((step) => step.id === currentId.value);
+  if (idx === -1) {
+    return;
+  }
+  if (list.length === 1) {
+    resetBlankEditorState();
+    return;
+  }
+  list.splice(idx, 1);
+  steps.value = list;
+  currentId.value = list[Math.max(0, idx - 1)]?.id ?? list[0]?.id ?? 1;
 };
 
 const writeActiveMarkdownNow = async (targetRelPath = activeMarkdownRelPath.value) => {
@@ -1077,6 +1271,7 @@ if (typeof window !== "undefined") {
   try {
     gestureNavigationEnabled.value = localStorage.getItem(GESTURE_NAV_STORAGE_KEY) === "1";
     collapseHeaderInView.value = localStorage.getItem(VIEW_HEADER_COLLAPSE_STORAGE_KEY) === "1";
+    collapseStepsSidebarInView.value = localStorage.getItem(VIEW_STEPS_SIDEBAR_COLLAPSE_STORAGE_KEY) === "1";
     if (!isDesktopStorage) {
       const rawTree = localStorage.getItem(STORAGE_TREE_STORAGE_KEY);
       const parsedTree = rawTree ? JSON.parse(rawTree) : null;
@@ -1096,6 +1291,7 @@ if (typeof window !== "undefined") {
   } catch {
     gestureNavigationEnabled.value = false;
     collapseHeaderInView.value = false;
+    collapseStepsSidebarInView.value = false;
     storageTree.value = null;
     storageFolderExpandedMap.value = { [STORAGE_ROOT_ID]: true };
     selectedStorageNodeId.value = STORAGE_ROOT_ID;
@@ -1224,7 +1420,8 @@ const loadDesktopStorageTree = async () => {
     if (canAutoLoadMarkdownNode(selected?.node)) {
       void loadStepsFromMarkdownFile(String(selected.node.relPath || ""), false);
     } else {
-      const firstMarkdown = findFirstMarkdownNode(storageTree.value);
+      const shouldAutoPickFirstMarkdown = !selected?.node || selected.node.id === STORAGE_ROOT_ID;
+      const firstMarkdown = shouldAutoPickFirstMarkdown ? findFirstMarkdownNode(storageTree.value) : null;
       if (firstMarkdown?.relPath) {
         selectedStorageNodeId.value = String(firstMarkdown.id || selectedStorageNodeId.value);
         void loadStepsFromMarkdownFile(String(firstMarkdown.relPath), false);
@@ -1233,11 +1430,11 @@ const loadDesktopStorageTree = async () => {
       if (selected?.node?.type === "file" && isMarkdownFileName(selected.node.name)) {
         showToast(`已跳过超大 Markdown: ${selected.node.name} (${formatBytes(selected.node.size)})`);
       }
-      activeMarkdownRelPath.value = "";
+      resetBlankEditorState();
     }
   } catch (error) {
     showToast(`读取存储目录失败: ${String(error?.message || error || "unknown_error")}`);
-    activeMarkdownRelPath.value = "";
+    resetBlankEditorState();
     storageTree.value = ensureStorageTree(storageTree.value);
   } finally {
     storageLoading.value = false;
@@ -1261,6 +1458,48 @@ const findStorageNodeInTree = (node, targetId, parentId = "") => {
     }
   }
   return null;
+};
+
+const clearScheduledMarkdownSave = () => {
+  if (!markdownSaveTimer) {
+    return;
+  }
+  clearTimeout(markdownSaveTimer);
+  markdownSaveTimer = null;
+};
+
+const resetBlankEditorState = () => {
+  activeMarkdownRelPath.value = "";
+  steps.value = createBlankSteps();
+  currentId.value = steps.value[0]?.id ?? 1;
+};
+
+const isRelPathAffectedByNode = (fileRelPath, nodeRelPath, nodeType) => {
+  const filePath = String(fileRelPath || "").trim();
+  const targetPath = String(nodeRelPath || "").trim();
+  if (!filePath || !targetPath) {
+    return false;
+  }
+  if (nodeType === "folder") {
+    return filePath === targetPath || filePath.startsWith(`${targetPath}/`);
+  }
+  return filePath === targetPath;
+};
+
+const joinStorageRelPath = (parentRelPath, name) =>
+  parentRelPath ? `${parentRelPath}/${name}` : name;
+
+const rebuildLocalStorageRelPaths = (node, parentRelPath = "") => {
+  if (!node || typeof node !== "object") {
+    return;
+  }
+  node.relPath = node.id === STORAGE_ROOT_ID ? "" : joinStorageRelPath(parentRelPath, String(node.name || ""));
+  if (node.type !== "folder" || !Array.isArray(node.children)) {
+    return;
+  }
+  for (const child of node.children) {
+    rebuildLocalStorageRelPaths(child, node.relPath);
+  }
 };
 
 const canAutoLoadMarkdownNode = (node) =>
@@ -1307,6 +1546,10 @@ const fileSidebarPanelWidth = computed(() => {
   return fileSidebarWidth.value;
 });
 
+const showInspectorSidebar = computed(() => isEditMode.value || !collapseStepsSidebarInView.value);
+const isInspectorSidebarCollapsed = computed(() => isEditMode.value && isSidebarCollapsed.value);
+const isInspectorSidebarHidden = computed(() => isEditMode.value && isSidebarHidden.value);
+
 const sidebarPanelWidth = computed(() => {
   if (isSidebarHidden.value) {
     return 0;
@@ -1315,6 +1558,16 @@ const sidebarPanelWidth = computed(() => {
     return SIDEBAR_COLLAPSED_WIDTH;
   }
   return sidebarWidth.value;
+});
+
+const inspectorSidebarPanelWidth = computed(() => {
+  if (!showInspectorSidebar.value) {
+    return 0;
+  }
+  if (!isEditMode.value) {
+    return clamp(sidebarWidth.value, SIDEBAR_MIN_WIDTH, SIDEBAR_MAX_WIDTH);
+  }
+  return sidebarPanelWidth.value;
 });
 
 const viewHeaderStyle = computed(() => {
@@ -1425,16 +1678,17 @@ const selectStorageNode = (id) => {
       ...storageFolderExpandedMap.value,
       [targetId]: true
     };
-    activeMarkdownRelPath.value = "";
+    resetBlankEditorState();
   } else if (matched?.node?.type === "file" && isMarkdownFileName(matched.node.name)) {
     if (isMarkdownFileTooLarge(matched.node.size)) {
       showToast(`Markdown 文件过大，无法载入: ${matched.node.name} (${formatBytes(matched.node.size)})`);
+      resetBlankEditorState();
       persistStorageState();
       return;
     }
     void loadStepsFromMarkdownFile(String(matched.node.relPath || ""), true);
   } else {
-    activeMarkdownRelPath.value = "";
+    resetBlankEditorState();
   }
   persistStorageState();
 };
@@ -1516,8 +1770,8 @@ const createStorageFile = async () => {
       if (!result?.ok) {
         throw new Error(String(result?.error || "create_file_failed"));
       }
-      await loadDesktopStorageTree();
       selectedStorageNodeId.value = String(result.relPath || selectedStorageNodeId.value);
+      await loadDesktopStorageTree();
       if (String(result.name || "").toLowerCase().endsWith(".md")) {
         await loadStepsFromMarkdownFile(String(result.relPath || ""), false);
       }
@@ -1568,8 +1822,8 @@ const createStorageFolder = async () => {
       if (!result?.ok) {
         throw new Error(String(result?.error || "create_folder_failed"));
       }
-      await loadDesktopStorageTree();
       selectedStorageNodeId.value = String(result.relPath || selectedStorageNodeId.value);
+      await loadDesktopStorageTree();
       persistStorageState();
       showToast(`已创建文件夹: ${result.name || name}`);
       return;
@@ -1601,6 +1855,230 @@ const createStorageFolder = async () => {
   };
   selectedStorageNodeId.value = folderNode.id;
   persistStorageState();
+};
+
+const renameLocalStorageNode = (nodeId, nextName) => {
+  const draft = cloneStorageTree(storageTree.value);
+  const matched = findStorageNodeInTree(draft, nodeId);
+  if (!matched || matched.node.id === STORAGE_ROOT_ID) {
+    return null;
+  }
+  matched.node.name = nextName;
+  const parent = findStorageNodeInTree(draft, matched.parentId || STORAGE_ROOT_ID);
+  rebuildLocalStorageRelPaths(matched.node, String(parent?.node?.relPath || ""));
+  storageTree.value = draft;
+  return matched.node;
+};
+
+const deleteLocalStorageNode = (nodeId) => {
+  const draft = cloneStorageTree(storageTree.value);
+  const matched = findStorageNodeInTree(draft, nodeId);
+  if (!matched || !matched.parentId) {
+    return null;
+  }
+  const parent = findStorageNodeInTree(draft, matched.parentId);
+  if (!parent?.node || parent.node.type !== "folder") {
+    return null;
+  }
+  parent.node.children = (Array.isArray(parent.node.children) ? parent.node.children : [])
+    .filter((child) => child.id !== nodeId);
+  storageTree.value = draft;
+  return {
+    parentId: matched.parentId,
+    node: matched.node
+  };
+};
+
+const closeStorageNodeContextMenu = () => {
+  if (!storageNodeMenu.value.open) {
+    return;
+  }
+  storageNodeMenu.value.open = false;
+};
+
+const openStorageNodeContextMenu = (event, nodeId) => {
+  const targetId = String(nodeId || "").trim();
+  if (!targetId || targetId === STORAGE_ROOT_ID) {
+    return;
+  }
+  closeDesktopTabContextMenu();
+  selectedStorageNodeId.value = targetId;
+  const matched = findStorageNodeInTree(storageTree.value, targetId);
+  if (matched?.node?.type === "folder") {
+    storageFolderExpandedMap.value = {
+      ...storageFolderExpandedMap.value,
+      [targetId]: true
+    };
+  }
+  persistStorageState();
+  storageNodeMenu.value = {
+    open: true,
+    x: event.clientX,
+    y: event.clientY,
+    nodeId: targetId
+  };
+};
+
+const openStorageRenameDialog = (nodeId) => {
+  closeStorageNodeContextMenu();
+  const targetId = String(nodeId || "").trim();
+  const matched = findStorageNodeInTree(storageTree.value, targetId);
+  if (!matched || matched.node.id === STORAGE_ROOT_ID) {
+    return;
+  }
+  storageRenameDialog.value = {
+    open: true,
+    nodeId: targetId,
+    value: String(matched.node.name || ""),
+    kind: matched.node.type === "folder" ? "folder" : "file"
+  };
+  nextTick(() => {
+    const input = storageRenameInputRef.value;
+    if (input && typeof input.focus === "function") {
+      input.focus();
+      if (typeof input.select === "function") {
+        input.select();
+      }
+    }
+  });
+};
+
+const cancelStorageRenameDialog = () => {
+  if (!storageRenameDialog.value.open) {
+    return;
+  }
+  storageRenameDialog.value = {
+    open: false,
+    nodeId: "",
+    value: "",
+    kind: "file"
+  };
+};
+
+const renameStorageNode = async (nodeId, nextName) => {
+  const targetId = String(nodeId || "").trim();
+  const trimmedName = String(nextName || "").trim();
+  const matched = findStorageNodeInTree(storageTree.value, targetId);
+  if (!matched || matched.node.id === STORAGE_ROOT_ID) {
+    return false;
+  }
+  if (!trimmedName) {
+    return false;
+  }
+
+  const previousRelPath = String(matched.node.relPath || "");
+  const affectedActiveFile = isRelPathAffectedByNode(
+    activeMarkdownRelPath.value,
+    previousRelPath,
+    matched.node.type
+  );
+
+  if (isDesktopStorage && desktopDataBridge?.renameWorkspaceNode) {
+    try {
+      if (affectedActiveFile && activeMarkdownRelPath.value) {
+        clearScheduledMarkdownSave();
+        await writeActiveMarkdownNow(activeMarkdownRelPath.value);
+      }
+      const result = await desktopDataBridge.renameWorkspaceNode({
+        relPath: previousRelPath,
+        name: trimmedName
+      });
+      if (!result?.ok) {
+        throw new Error(String(result?.error || "rename_workspace_node_failed"));
+      }
+      selectedStorageNodeId.value = String(result.relPath || matched.node.id);
+      await loadDesktopStorageTree();
+      persistStorageState();
+      showToast(`已重命名为 ${result.name || trimmedName}`);
+      return true;
+    } catch (error) {
+      showToast(`重命名失败: ${String(error?.message || error || "unknown_error")}`);
+      return false;
+    }
+  }
+
+  const renamedNode = renameLocalStorageNode(targetId, trimmedName);
+  if (!renamedNode) {
+    showToast("重命名失败");
+    return false;
+  }
+
+  selectedStorageNodeId.value = renamedNode.id;
+  if (renamedNode.type === "file" && isMarkdownFileName(renamedNode.name)) {
+    activeMarkdownRelPath.value = String(renamedNode.relPath || "");
+  } else {
+    resetBlankEditorState();
+  }
+  persistStorageState();
+  showToast(`已重命名为 ${trimmedName}`);
+  return true;
+};
+
+const confirmStorageRenameDialog = async () => {
+  const targetId = String(storageRenameDialog.value.nodeId || "");
+  const trimmedName = String(storageRenameDialog.value.value || "").trim();
+  if (!targetId || !trimmedName) {
+    return;
+  }
+  const renamed = await renameStorageNode(targetId, trimmedName);
+  if (renamed) {
+    cancelStorageRenameDialog();
+  }
+};
+
+const deleteStorageNode = async (nodeId) => {
+  closeStorageNodeContextMenu();
+  const targetId = String(nodeId || "").trim();
+  const matched = findStorageNodeInTree(storageTree.value, targetId);
+  if (!matched || matched.node.id === STORAGE_ROOT_ID) {
+    return;
+  }
+  const targetLabel = matched.node.type === "folder" ? "文件夹" : "文件";
+  const confirmed = typeof window === "undefined" || typeof window.confirm !== "function"
+    ? true
+    : window.confirm(`确认删除${targetLabel}“${matched.node.name}”吗？`);
+  if (!confirmed) {
+    return;
+  }
+
+  const targetRelPath = String(matched.node.relPath || "");
+  const affectedActiveFile = isRelPathAffectedByNode(
+    activeMarkdownRelPath.value,
+    targetRelPath,
+    matched.node.type
+  );
+  if (affectedActiveFile) {
+    clearScheduledMarkdownSave();
+  }
+
+  if (isDesktopStorage && desktopDataBridge?.deleteWorkspaceNode) {
+    try {
+      const result = await desktopDataBridge.deleteWorkspaceNode({
+        relPath: targetRelPath
+      });
+      if (!result?.ok) {
+        throw new Error(String(result?.error || "delete_workspace_node_failed"));
+      }
+      selectedStorageNodeId.value = matched.parentId || STORAGE_ROOT_ID;
+      await loadDesktopStorageTree();
+      persistStorageState();
+      showToast(`已删除${targetLabel}: ${matched.node.name}`);
+      return;
+    } catch (error) {
+      showToast(`删除失败: ${String(error?.message || error || "unknown_error")}`);
+      return;
+    }
+  }
+
+  const removed = deleteLocalStorageNode(targetId);
+  if (!removed) {
+    showToast("删除失败");
+    return;
+  }
+  selectedStorageNodeId.value = removed.parentId || STORAGE_ROOT_ID;
+  resetBlankEditorState();
+  persistStorageState();
+  showToast(`已删除${targetLabel}: ${matched.node.name}`);
 };
 
 const openStorageRootDir = async () => {
@@ -2090,6 +2568,7 @@ const openDesktopTabContextMenu = (event, sid) => {
   if (!id) {
     return;
   }
+  closeStorageNodeContextMenu();
   desktopTabMenu.value = {
     open: true,
     x: event.clientX,
@@ -2889,6 +3368,17 @@ watch(collapseHeaderInView, (enabled) => {
   }
 });
 
+watch(collapseStepsSidebarInView, (enabled) => {
+  if (typeof window === "undefined") {
+    return;
+  }
+  try {
+    localStorage.setItem(VIEW_STEPS_SIDEBAR_COLLAPSE_STORAGE_KEY, enabled ? "1" : "0");
+  } catch {
+    // ignore storage failure
+  }
+});
+
 watch(storageTree, () => {
   ensureSelectedStorageNodeValid();
   persistStorageState();
@@ -3155,13 +3645,11 @@ const onKeydown = (event) => {
 
 const onGlobalPointerDown = (event) => {
   const target = event.target;
-  if (!desktopTabMenu.value.open) {
-    return;
-  }
   if (target instanceof Element && target.closest(".term-context-menu")) {
     return;
   }
   closeDesktopTabContextMenu();
+  closeStorageNodeContextMenu();
 };
 
 const onGlobalKeyup = (event) => {
@@ -3176,6 +3664,7 @@ onMounted(() => {
   window.addEventListener("keyup", onGlobalKeyup, true);
   window.addEventListener("mousedown", onGlobalPointerDown, true);
   window.addEventListener("blur", closeDesktopTabContextMenu);
+  window.addEventListener("blur", closeStorageNodeContextMenu);
   window.addEventListener("blur", releasePasteShortcutLocks);
   window.addEventListener("resize", refreshContentProgress);
   if (isDesktopStorage) {
@@ -3205,6 +3694,7 @@ onBeforeUnmount(() => {
   isSidebarDragging.value = false;
   isFileSidebarDragging.value = false;
   cancelDesktopRenameDialog();
+  cancelStorageRenameDialog();
   disposeDesktopTerminal();
   disposeTerminal();
   if (sidebarDragMoveHandler) {
@@ -3239,6 +3729,7 @@ onBeforeUnmount(() => {
   window.removeEventListener("keyup", onGlobalKeyup, true);
   window.removeEventListener("mousedown", onGlobalPointerDown, true);
   window.removeEventListener("blur", closeDesktopTabContextMenu);
+  window.removeEventListener("blur", closeStorageNodeContextMenu);
   window.removeEventListener("blur", releasePasteShortcutLocks);
   window.removeEventListener("resize", refreshContentProgress);
   if (desktopWindowMaximizeOff) {

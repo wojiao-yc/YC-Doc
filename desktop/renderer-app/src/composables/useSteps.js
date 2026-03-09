@@ -4,6 +4,7 @@ import { initialSteps } from "../data/steps";
 const STEPS_STORAGE_KEY = "yc-doc.steps.v1";
 const STEP_ID_STORAGE_KEY = "yc-doc.current-id.v1";
 const DESKTOP_SAVE_DELAY_MS = 260;
+const EMPTY_MARKDOWN_STEPS = [{ id: 1, title: "", subtitle: "", content: "" }];
 
 const cloneSteps = (source) =>
   (Array.isArray(source) ? source : [])
@@ -52,15 +53,16 @@ const readStoredCurrentId = (items) => {
 };
 
 export const useSteps = (showToast) => {
-  const fallbackSteps = cloneSteps(initialSteps);
-  const steps = ref(readStoredSteps() || fallbackSteps);
-  const currentId = ref(readStoredCurrentId(steps.value));
-  const draggedIndex = ref(null);
   const desktopDataBridge = getDesktopDataBridge();
   const useMarkdownStorage = Boolean(
     desktopDataBridge?.readWorkspaceFile
     && desktopDataBridge?.writeWorkspaceFile
   );
+  const fallbackSteps = useMarkdownStorage ? cloneSteps(EMPTY_MARKDOWN_STEPS) : cloneSteps(initialSteps);
+  const initialStepsValue = useMarkdownStorage ? fallbackSteps : (readStoredSteps() || fallbackSteps);
+  const steps = ref(initialStepsValue);
+  const currentId = ref(useMarkdownStorage ? (initialStepsValue[0]?.id ?? 1) : readStoredCurrentId(steps.value));
+  const draggedIndex = ref(null);
 
   let desktopHydrated = useMarkdownStorage ? true : !desktopDataBridge?.loadSteps;
   let desktopSaveTimer = null;
@@ -77,6 +79,9 @@ export const useSteps = (showToast) => {
   const isLastStep = computed(() => currentStepIndex.value === steps.value.length - 1);
 
   const persistLocalSteps = (list) => {
+    if (useMarkdownStorage) {
+      return;
+    }
     if (typeof window === "undefined") {
       return;
     }
@@ -88,6 +93,9 @@ export const useSteps = (showToast) => {
   };
 
   const persistLocalCurrentId = (value) => {
+    if (useMarkdownStorage) {
+      return;
+    }
     if (typeof window === "undefined") {
       return;
     }

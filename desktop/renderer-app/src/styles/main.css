@@ -967,6 +967,10 @@ body {
   background: #f1f5f9;
 }
 
+.term-context-item.is-danger {
+  color: #be123c;
+}
+
 .term-rename-mask {
   position: fixed;
   inset: 0;
@@ -1338,6 +1342,10 @@ body {
 
 .dark-ui .term-context-item:hover {
   background: #1e293b;
+}
+
+.dark-ui .term-context-item.is-danger {
+  color: #fda4af;
 }
 
 .dark-ui .term-rename-card {
