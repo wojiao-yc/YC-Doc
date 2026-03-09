@@ -97,8 +97,11 @@ const serializeInlineNodes = (nodes) =>
       if (tag === "EM" || tag === "I") {
         return `*${children}*`;
       }
-      if (tag === "DEL" || tag === "S") {
+      if (tag === "DEL" || tag === "S" || tag === "STRIKE") {
         return `~~${children}~~`;
+      }
+      if (tag === "U") {
+        return `<u>${children}</u>`;
       }
       if (tag === "CODE") {
         return wrapInlineCode(node.textContent || "");

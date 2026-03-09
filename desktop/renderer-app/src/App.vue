@@ -254,10 +254,10 @@
                 class="min-h-[520px] flex flex-col"
               >
                 <div
-                  class="px-1 pb-4 flex items-center justify-between gap-3 flex-wrap"
+                  class="px-1 pb-4 flex flex-col items-start gap-3"
                 >
                   <span class="text-sm font-medium" :class="isDark ? 'text-slate-100' : 'text-gray-700'">所见即所得编辑</span>
-                  <div class="flex items-center gap-2 flex-wrap">
+                  <div class="flex w-full items-center gap-2 flex-wrap">
                     <button
                       type="button"
                       class="px-2 py-1 text-xs rounded-lg transition-all"
@@ -335,6 +335,15 @@
                       class="px-2 py-1 text-xs rounded-lg transition-all"
                       :class="isDark ? 'bg-slate-800 hover:bg-slate-700 text-slate-200' : 'bg-white hover:bg-gray-100 text-gray-700 border border-gray-200'"
                       @mousedown.prevent
+                      @click="insertVisualEditorTable"
+                    >
+                      表格
+                    </button>
+                    <button
+                      type="button"
+                      class="px-2 py-1 text-xs rounded-lg transition-all"
+                      :class="isDark ? 'bg-slate-800 hover:bg-slate-700 text-slate-200' : 'bg-white hover:bg-gray-100 text-gray-700 border border-gray-200'"
+                      @mousedown.prevent
                       @click="insertImageToMarkdown"
                     >
                       插入图片
@@ -395,8 +404,9 @@
                       @focus="onVisualEditorFocus"
                       @blur="onVisualEditorBlur"
                       @input="onVisualEditorInput"
-                      @keydown="onVisualEditorKeydown"
-                      @keyup="onVisualEditorKeyup"
+                      @keydown.capture="onVisualEditorKeydown"
+                      @keyup.capture="onVisualEditorKeyup"
+                      @paste="onVisualEditorPaste"
                       @mouseup="updateCurrentStepFromVisualEditorSelection"
                       @click="onVisualEditorClick"
                     ></div>
@@ -879,6 +889,7 @@ import { useResizable } from "./composables/useResizable";
 import { useSteps } from "./composables/useSteps";
 import { useTerminal } from "./composables/useTerminal";
 import { useToast } from "./composables/useToast";
+import { escapeHtml } from "./utils/escapeHtml";
 import {
   isRichEditorEffectivelyEmpty,
   normalizeImageHref,
@@ -1463,6 +1474,34 @@ const focusStepInEditMode = async (index) => {
   await scrollEditorToStep(index);
 };
 
+const hasVisualEditorSelection = () => {
+  if (typeof window === "undefined" || !visualEditorRef.value) {
+    return false;
+  }
+  const selection = window.getSelection?.();
+  if (!selection || selection.rangeCount <= 0 || selection.isCollapsed) {
+    return false;
+  }
+  const range = selection.getRangeAt(0);
+  return visualEditorRef.value.contains(range.commonAncestorContainer);
+};
+
+const getVisualEditorSelectedText = () => {
+  if (!hasVisualEditorSelection()) {
+    return "";
+  }
+  return String(window.getSelection?.()?.toString?.() || "");
+};
+
+const insertVisualEditorHtml = (html) => {
+  if (typeof document === "undefined" || typeof document.execCommand !== "function") {
+    return;
+  }
+  focusVisualEditor();
+  document.execCommand("insertHTML", false, String(html || ""));
+  syncMarkdownFromVisualEditor();
+};
+
 const runVisualEditorCommand = (command, value = null) => {
   if (typeof document === "undefined" || typeof document.execCommand !== "function") {
     return;
@@ -1478,6 +1517,161 @@ const formatVisualEditorBlock = (tagName) => {
   }
   const formatValue = `<${String(tagName).toLowerCase()}>`;
   runVisualEditorCommand("formatBlock", formatValue);
+};
+
+const setVisualEditorHeadingLevel = (level) => {
+  const safeLevel = clamp(Number(level) || 0, 0, 6);
+  if (safeLevel <= 0) {
+    formatVisualEditorBlock("p");
+    return;
+  }
+  formatVisualEditorBlock(`h${safeLevel}`);
+};
+
+const shiftVisualEditorHeadingLevel = (delta) => {
+  const block = findVisualEditorBlockElement(resolveVisualEditorSelectionNode());
+  const currentLevel = block instanceof HTMLElement && /^H[1-6]$/.test(block.tagName)
+    ? Number(block.tagName.slice(1))
+    : 0;
+  const nextLevel = clamp(currentLevel + Number(delta || 0), 0, 6);
+  setVisualEditorHeadingLevel(nextLevel);
+};
+
+const toggleVisualEditorLink = () => {
+  const selectedText = getVisualEditorSelectedText().trim();
+  const suggestedUrl = /^https?:\/\//i.test(selectedText) ? selectedText : "https://";
+  const rawUrl = typeof window?.prompt === "function"
+    ? window.prompt("请输入链接地址", suggestedUrl)
+    : suggestedUrl;
+  const url = String(rawUrl || "").trim();
+  if (!url) {
+    return;
+  }
+  if (hasVisualEditorSelection()) {
+    runVisualEditorCommand("createLink", url);
+    return;
+  }
+  insertVisualEditorHtml(`<a href="${escapeHtml(url)}" data-md-href="${escapeHtml(url)}">${escapeHtml(url)}</a>`);
+};
+
+const toggleVisualEditorInlineCode = () => {
+  const selectedText = getVisualEditorSelectedText();
+  const content = escapeHtml(selectedText || "code");
+  insertVisualEditorHtml(`<code>${content}</code>`);
+};
+
+const insertVisualEditorCodeFence = () => {
+  const block = findVisualEditorBlockElement(resolveVisualEditorSelectionNode());
+  const editor = visualEditorRef.value;
+  if (!editor) {
+    return;
+  }
+  const codeBlock = document.createElement("pre");
+  codeBlock.setAttribute("data-md-block", "code");
+  const codeNode = document.createElement("code");
+  codeBlock.appendChild(codeNode);
+
+  if (block instanceof HTMLElement) {
+    block.insertAdjacentElement("afterend", codeBlock);
+  } else {
+    editor.appendChild(codeBlock);
+  }
+  const nextParagraph = createVisualEditorEmptyParagraph();
+  codeBlock.insertAdjacentElement("afterend", nextParagraph);
+  focusVisualEditor();
+  placeCaretAtNodeBoundary(codeNode, true);
+  syncMarkdownFromVisualEditor();
+};
+
+const handleVisualEditorShortcut = (event) => {
+  const primaryModifier = event.metaKey || event.ctrlKey;
+  if (!primaryModifier) {
+    return false;
+  }
+
+  const code = String(event.code || "");
+
+  if (!event.shiftKey && code === "KeyB") {
+    event.preventDefault();
+    runVisualEditorCommand("bold");
+    return true;
+  }
+  if (!event.shiftKey && code === "KeyI") {
+    event.preventDefault();
+    runVisualEditorCommand("italic");
+    return true;
+  }
+  if (!event.shiftKey && code === "KeyK") {
+    event.preventDefault();
+    toggleVisualEditorLink();
+    return true;
+  }
+  if (!event.shiftKey && code === "Backquote") {
+    event.preventDefault();
+    toggleVisualEditorInlineCode();
+    return true;
+  }
+  if (!event.shiftKey && code === "Backslash") {
+    event.preventDefault();
+    runVisualEditorCommand("removeFormat");
+    return true;
+  }
+  if (!event.shiftKey && code === "KeyU") {
+    event.preventDefault();
+    runVisualEditorCommand("underline");
+    return true;
+  }
+  if (!event.shiftKey && code === "Digit0") {
+    event.preventDefault();
+    setVisualEditorHeadingLevel(0);
+    return true;
+  }
+  if (!event.shiftKey && /^Digit[1-6]$/.test(code)) {
+    event.preventDefault();
+    setVisualEditorHeadingLevel(Number(code.slice(-1)));
+    return true;
+  }
+  if (event.shiftKey && code === "Equal") {
+    event.preventDefault();
+    shiftVisualEditorHeadingLevel(1);
+    return true;
+  }
+  if (!event.shiftKey && code === "Minus") {
+    event.preventDefault();
+    shiftVisualEditorHeadingLevel(-1);
+    return true;
+  }
+  if (event.shiftKey && code === "BracketLeft") {
+    event.preventDefault();
+    runVisualEditorCommand("insertOrderedList");
+    return true;
+  }
+  if (event.shiftKey && code === "BracketRight") {
+    event.preventDefault();
+    runVisualEditorCommand("insertUnorderedList");
+    return true;
+  }
+  if (event.shiftKey && code === "KeyQ") {
+    event.preventDefault();
+    formatVisualEditorBlock("blockquote");
+    return true;
+  }
+  if (event.shiftKey && code === "KeyK") {
+    event.preventDefault();
+    insertVisualEditorCodeFence();
+    return true;
+  }
+  if (event.shiftKey && code === "KeyI") {
+    event.preventDefault();
+    void insertImageToMarkdown();
+    return true;
+  }
+  if (event.altKey && event.shiftKey && code === "Digit5") {
+    event.preventDefault();
+    runVisualEditorCommand("strikeThrough");
+    return true;
+  }
+  return false;
 };
 
 const createVisualEditorEmptyParagraph = () => {
@@ -1496,6 +1690,71 @@ const replaceVisualEditorBlockWithParagraph = (block) => {
   placeCaretAtNodeBoundary(paragraph, true);
   syncMarkdownFromVisualEditor();
   return paragraph;
+};
+
+const liftVisualEditorEmptyListItem = (listItem) => {
+  if (!(listItem instanceof HTMLElement) || listItem.tagName !== "LI") {
+    return false;
+  }
+  const list = listItem.parentElement;
+  if (!(list instanceof HTMLElement) || !["UL", "OL"].includes(list.tagName)) {
+    return false;
+  }
+  const paragraph = createVisualEditorEmptyParagraph();
+  list.insertAdjacentElement("afterend", paragraph);
+  listItem.remove();
+  if (!list.children.length) {
+    list.remove();
+  }
+  focusVisualEditor();
+  placeCaretAtNodeBoundary(paragraph, true);
+  syncMarkdownFromVisualEditor();
+  return true;
+};
+
+const insertVisualEditorTable = () => {
+  const editor = visualEditorRef.value;
+  if (!editor) {
+    return;
+  }
+
+  const table = document.createElement("table");
+  const thead = document.createElement("thead");
+  const headerRow = document.createElement("tr");
+  ["列 1", "列 2", "列 3"].forEach((label) => {
+    const cell = document.createElement("th");
+    cell.textContent = label;
+    headerRow.appendChild(cell);
+  });
+  thead.appendChild(headerRow);
+
+  const tbody = document.createElement("tbody");
+  const bodyRow = document.createElement("tr");
+  ["内容", "内容", "内容"].forEach((label) => {
+    const cell = document.createElement("td");
+    cell.textContent = label;
+    bodyRow.appendChild(cell);
+  });
+  tbody.appendChild(bodyRow);
+
+  table.appendChild(thead);
+  table.appendChild(tbody);
+
+  const anchorBlock = findVisualEditorBlockElement(resolveVisualEditorSelectionNode());
+  if (anchorBlock) {
+    anchorBlock.insertAdjacentElement("afterend", table);
+  } else {
+    editor.appendChild(table);
+  }
+
+  const nextParagraph = createVisualEditorEmptyParagraph();
+  table.insertAdjacentElement("afterend", nextParagraph);
+  const firstEditableCell = table.querySelector("tbody td") || table.querySelector("th");
+  focusVisualEditor();
+  if (firstEditableCell instanceof HTMLElement) {
+    placeCaretAtNodeBoundary(firstEditableCell, true);
+  }
+  syncMarkdownFromVisualEditor();
 };
 
 const insertVisualEditorImage = (url) => {
@@ -1573,6 +1832,28 @@ const applyVisualEditorShortcut = () => {
     return true;
   }
 
+  const codeFenceMatch = rawText.match(/^```([a-zA-Z0-9_-]*)\s*$/);
+  if (codeFenceMatch) {
+    const codeBlock = document.createElement("pre");
+    codeBlock.setAttribute("data-md-block", "code");
+    const lang = String(codeFenceMatch[1] || "").trim();
+    if (lang) {
+      codeBlock.setAttribute("data-code-lang", lang);
+    }
+    const codeNode = document.createElement("code");
+    if (lang) {
+      codeNode.className = `language-${lang}`;
+    }
+    codeBlock.appendChild(codeNode);
+    block.replaceWith(codeBlock);
+    const paragraph = createVisualEditorEmptyParagraph();
+    codeBlock.insertAdjacentElement("afterend", paragraph);
+    focusVisualEditor();
+    placeCaretAtNodeBoundary(codeNode, true);
+    syncMarkdownFromVisualEditor();
+    return true;
+  }
+
   const bulletMatch = rawText.match(/^[-*]\s*(.*)$/);
   if (bulletMatch) {
     const list = document.createElement("ul");
@@ -1587,6 +1868,17 @@ const applyVisualEditorShortcut = () => {
     block.replaceWith(list);
     focusVisualEditor();
     placeCaretAtNodeBoundary(item, false);
+    syncMarkdownFromVisualEditor();
+    return true;
+  }
+
+  if (/^([-*_])\1{2,}\s*$/.test(rawText)) {
+    const hr = document.createElement("hr");
+    block.replaceWith(hr);
+    const paragraph = createVisualEditorEmptyParagraph();
+    hr.insertAdjacentElement("afterend", paragraph);
+    focusVisualEditor();
+    placeCaretAtNodeBoundary(paragraph, true);
     syncMarkdownFromVisualEditor();
     return true;
   }
@@ -1612,6 +1904,26 @@ const applyVisualEditorShortcut = () => {
   return false;
 };
 
+const shouldTreatPastedTextAsMarkdown = (text) => {
+  const content = normalizeMarkdownText(text);
+  if (!content.trim()) {
+    return false;
+  }
+  if (content.includes("\n")) {
+    return true;
+  }
+  return /(^|\n)\s*(#{1,6}\s|[-*+]\s|\d+\.\s|>\s|```|\|.*\||!\[.*\]\(|\[.*\]\(.*\)|(?:[-*_]){3,}\s*$)/m.test(content);
+};
+
+const onVisualEditorPaste = (event) => {
+  const text = String(event.clipboardData?.getData("text/plain") || "");
+  if (!shouldTreatPastedTextAsMarkdown(text)) {
+    return;
+  }
+  event.preventDefault();
+  insertVisualEditorHtml(renderMarkdownToEditableHtml(text));
+};
+
 const onVisualEditorFocus = () => {
   visualEditorFocused = true;
   updateVisualEditorEmptyState();
@@ -1629,10 +1941,30 @@ const onVisualEditorInput = () => {
 };
 
 const onVisualEditorKeydown = (event) => {
+  if (event.defaultPrevented) {
+    return;
+  }
+  if ((event.metaKey || event.ctrlKey) && handleVisualEditorShortcut(event)) {
+    return;
+  }
+
   const block = findVisualEditorBlockElement(resolveVisualEditorSelectionNode());
+  const listItem = block instanceof HTMLElement && block.tagName === "LI"
+    ? block
+    : (block instanceof HTMLElement ? block.closest("li") : null);
   if (event.key === "Tab") {
     event.preventDefault();
+    if (listItem || (block instanceof HTMLElement && block.tagName === "BLOCKQUOTE")) {
+      runVisualEditorCommand(event.shiftKey ? "outdent" : "indent");
+      return;
+    }
     runVisualEditorCommand("insertText", "  ");
+    return;
+  }
+
+  if (event.key === "Enter" && event.shiftKey) {
+    event.preventDefault();
+    runVisualEditorCommand("insertLineBreak");
     return;
   }
 
@@ -1646,16 +1978,37 @@ const onVisualEditorKeydown = (event) => {
     return;
   }
 
+  if (event.key === "Enter" && !event.shiftKey && listItem instanceof HTMLElement) {
+    const text = normalizeMarkdownText(listItem.textContent || "").replace(/\u00a0/g, " ").trim();
+    if (!text) {
+      event.preventDefault();
+      liftVisualEditorEmptyListItem(listItem);
+      return;
+    }
+  }
+
   if (event.key === "Backspace" && block instanceof HTMLElement) {
     const text = normalizeMarkdownText(block.textContent || "").replace(/\u00a0/g, " ").trim();
     if (!text && (/^H[1-6]$/.test(block.tagName) || block.tagName === "BLOCKQUOTE")) {
       event.preventDefault();
       replaceVisualEditorBlockWithParagraph(block);
+      return;
+    }
+  }
+
+  if (event.key === "Backspace" && listItem instanceof HTMLElement) {
+    const text = normalizeMarkdownText(listItem.textContent || "").replace(/\u00a0/g, " ").trim();
+    if (!text) {
+      event.preventDefault();
+      liftVisualEditorEmptyListItem(listItem);
     }
   }
 };
 
 const onVisualEditorKeyup = (event) => {
+  if (event.defaultPrevented) {
+    return;
+  }
   if (event.key === " " || event.key === "Enter") {
     if (applyVisualEditorShortcut()) {
       return;
@@ -4251,6 +4604,16 @@ const onTerminalInputKeydown = (event) => {
 };
 
 const onKeydown = (event) => {
+  if (event.defaultPrevented) {
+    return;
+  }
+  const visualSelectionNode = resolveVisualEditorSelectionNode();
+  if (isEditMode.value && (document.activeElement?.isContentEditable || visualSelectionNode)) {
+    if ((event.metaKey || event.ctrlKey) && handleVisualEditorShortcut(event)) {
+      return;
+    }
+  }
+
   const tag = document.activeElement?.tagName?.toLowerCase() || "";
   const typing = tag === "input" || tag === "textarea" || document.activeElement?.isContentEditable;
 
