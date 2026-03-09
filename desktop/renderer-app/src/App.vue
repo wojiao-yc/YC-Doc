@@ -218,7 +218,7 @@
         <div class="header-meta header-meta-inline min-w-0 flex-1">
           <span class="header-meta-title">{{ stepDisplayTitle(activeStep, currentStepIndex) }}</span>
           <span class="header-meta-dot">·</span>
-          <span class="header-meta-sub header-meta-sub-inline">{{ activeStep.subtitle || "未设置副标题" }}</span>
+          <span class="header-meta-sub header-meta-sub-inline">{{ activeStep.subtitle || stepPreviewText(activeStep) }}</span>
         </div>
         <div class="flex items-center gap-2 sm:gap-3 flex-nowrap shrink-0">
           <span class="header-meta-page">第 {{ currentStepIndex + 1 }} / {{ steps.length }} 页</span>
@@ -251,86 +251,155 @@
 
               <div
                 v-else
-                ref="editSplitRef"
-                class="flex border rounded-xl overflow-hidden shadow-sm min-h-[520px]"
-                :class="isDark ? 'border-slate-800 bg-slate-950' : 'border-gray-200 bg-white'"
+                class="min-h-[520px] flex flex-col"
               >
                 <div
-                  class="min-w-0 border-r flex flex-col"
-                  :style="{ width: `${editorPaneWidth}px` }"
-                  :class="isDark ? 'border-slate-800' : 'border-gray-200'"
+                  class="px-1 pb-4 flex items-center justify-between gap-3 flex-wrap"
                 >
-                  <div
-                    class="px-4 py-3 border-b flex items-center justify-between gap-2"
-                    :class="isDark ? 'bg-slate-900 border-slate-800' : 'bg-gray-50 border-gray-200'"
-                  >
-                    <span class="text-sm font-medium" :class="isDark ? 'text-slate-100' : 'text-gray-700'">Markdown 编辑</span>
-                    <div class="flex items-center gap-2">
-                      <button
-                        type="button"
-                        class="px-2 py-1 text-xs rounded-lg transition-all"
-                        :class="isDark ? 'bg-slate-800 hover:bg-slate-700 text-slate-200' : 'bg-white hover:bg-gray-100 text-gray-700 border border-gray-200'"
-                        @click="insertImageToMarkdown"
-                      >
-                        插入图片
-                      </button>
-                      <button
-                        v-if="isDesktopPty"
-                        type="button"
-                        class="px-2 py-1 text-xs rounded-lg transition-all"
-                        :class="isDark ? 'bg-slate-800 hover:bg-slate-700 text-slate-200' : 'bg-white hover:bg-gray-100 text-gray-700 border border-gray-200'"
-                        @click="openDesktopImageFolder"
-                      >
-                        图片目录
-                      </button>
-                    </div>
+                  <span class="text-sm font-medium" :class="isDark ? 'text-slate-100' : 'text-gray-700'">所见即所得编辑</span>
+                  <div class="flex items-center gap-2 flex-wrap">
+                    <button
+                      type="button"
+                      class="px-2 py-1 text-xs rounded-lg transition-all"
+                      :class="isDark ? 'bg-slate-800 hover:bg-slate-700 text-slate-200' : 'bg-white hover:bg-gray-100 text-gray-700 border border-gray-200'"
+                      @mousedown.prevent
+                      @click="formatVisualEditorBlock('p')"
+                    >
+                      正文
+                    </button>
+                    <button
+                      type="button"
+                      class="px-2 py-1 text-xs rounded-lg transition-all"
+                      :class="isDark ? 'bg-slate-800 hover:bg-slate-700 text-slate-200' : 'bg-white hover:bg-gray-100 text-gray-700 border border-gray-200'"
+                      @mousedown.prevent
+                      @click="formatVisualEditorBlock('h1')"
+                    >
+                      H1
+                    </button>
+                    <button
+                      type="button"
+                      class="px-2 py-1 text-xs rounded-lg transition-all"
+                      :class="isDark ? 'bg-slate-800 hover:bg-slate-700 text-slate-200' : 'bg-white hover:bg-gray-100 text-gray-700 border border-gray-200'"
+                      @mousedown.prevent
+                      @click="formatVisualEditorBlock('h2')"
+                    >
+                      H2
+                    </button>
+                    <button
+                      type="button"
+                      class="px-2 py-1 text-xs rounded-lg transition-all"
+                      :class="isDark ? 'bg-slate-800 hover:bg-slate-700 text-slate-200' : 'bg-white hover:bg-gray-100 text-gray-700 border border-gray-200'"
+                      @mousedown.prevent
+                      @click="runVisualEditorCommand('bold')"
+                    >
+                      粗体
+                    </button>
+                    <button
+                      type="button"
+                      class="px-2 py-1 text-xs rounded-lg transition-all"
+                      :class="isDark ? 'bg-slate-800 hover:bg-slate-700 text-slate-200' : 'bg-white hover:bg-gray-100 text-gray-700 border border-gray-200'"
+                      @mousedown.prevent
+                      @click="runVisualEditorCommand('italic')"
+                    >
+                      斜体
+                    </button>
+                    <button
+                      type="button"
+                      class="px-2 py-1 text-xs rounded-lg transition-all"
+                      :class="isDark ? 'bg-slate-800 hover:bg-slate-700 text-slate-200' : 'bg-white hover:bg-gray-100 text-gray-700 border border-gray-200'"
+                      @mousedown.prevent
+                      @click="runVisualEditorCommand('insertUnorderedList')"
+                    >
+                      无序列表
+                    </button>
+                    <button
+                      type="button"
+                      class="px-2 py-1 text-xs rounded-lg transition-all"
+                      :class="isDark ? 'bg-slate-800 hover:bg-slate-700 text-slate-200' : 'bg-white hover:bg-gray-100 text-gray-700 border border-gray-200'"
+                      @mousedown.prevent
+                      @click="runVisualEditorCommand('insertOrderedList')"
+                    >
+                      有序列表
+                    </button>
+                    <button
+                      type="button"
+                      class="px-2 py-1 text-xs rounded-lg transition-all"
+                      :class="isDark ? 'bg-slate-800 hover:bg-slate-700 text-slate-200' : 'bg-white hover:bg-gray-100 text-gray-700 border border-gray-200'"
+                      @mousedown.prevent
+                      @click="formatVisualEditorBlock('blockquote')"
+                    >
+                      引用
+                    </button>
+                    <button
+                      type="button"
+                      class="px-2 py-1 text-xs rounded-lg transition-all"
+                      :class="isDark ? 'bg-slate-800 hover:bg-slate-700 text-slate-200' : 'bg-white hover:bg-gray-100 text-gray-700 border border-gray-200'"
+                      @mousedown.prevent
+                      @click="insertImageToMarkdown"
+                    >
+                      插入图片
+                    </button>
+                    <button
+                      v-if="isDesktopPty"
+                      type="button"
+                      class="px-2 py-1 text-xs rounded-lg transition-all"
+                      :class="isDark ? 'bg-slate-800 hover:bg-slate-700 text-slate-200' : 'bg-white hover:bg-gray-100 text-gray-700 border border-gray-200'"
+                      @mousedown.prevent
+                      @click="openDesktopImageFolder"
+                    >
+                      图片目录
+                    </button>
+                    <button
+                      type="button"
+                      class="px-2 py-1 text-xs rounded-lg transition-all"
+                      :class="isDark ? 'bg-slate-800 hover:bg-slate-700 text-slate-200' : 'bg-white hover:bg-gray-100 text-gray-700 border border-gray-200'"
+                      @mousedown.prevent
+                      @click="adjustVisualEditorWidth(-80)"
+                    >
+                      更窄
+                    </button>
+                    <button
+                      type="button"
+                      class="px-2 py-1 text-xs rounded-lg transition-all"
+                      :class="isDark ? 'bg-slate-800 hover:bg-slate-700 text-slate-200' : 'bg-white hover:bg-gray-100 text-gray-700 border border-gray-200'"
+                      @mousedown.prevent
+                      @click="adjustVisualEditorWidth(80)"
+                    >
+                      更宽
+                    </button>
+                    <span class="text-xs font-mono px-2 py-1 rounded-lg" :class="isDark ? 'bg-slate-800 text-slate-300' : 'bg-gray-200 text-gray-600'">
+                      {{ displayWidth }}px
+                    </span>
+                    <button
+                      type="button"
+                      class="px-2 py-1 text-xs rounded-lg transition-all"
+                      :class="isDark ? 'bg-slate-800 hover:bg-slate-700 text-slate-200' : 'bg-white hover:bg-gray-100 text-gray-700 border border-gray-200'"
+                      @mousedown.prevent
+                      @click="resetDisplayWidth"
+                    >
+                      重置宽度
+                    </button>
                   </div>
-                  <textarea
-                    ref="editorTextareaRef"
-                    v-model="documentMarkdown"
-                    class="flex-1 w-full p-6 font-mono text-sm leading-relaxed bg-transparent resize-none focus:outline-none"
-                    :class="isDark ? 'text-slate-100' : 'text-gray-800'"
-                    spellcheck="false"
-                    @blur="flushPendingMarkdownSave()"
-                  ></textarea>
                 </div>
 
-                <div
-                  class="w-2 cursor-col-resize flex-shrink-0"
-                  :class="isDark ? 'bg-slate-950 hover:bg-orange-500/10' : 'bg-white hover:bg-orange-200/40'"
-                  @mousedown="startEditorResize"
-                >
-                  <div class="w-px h-full mx-auto" :class="isDark ? 'bg-slate-800' : 'bg-gray-200'"></div>
-                </div>
-
-                <div class="flex-1 min-w-0 flex flex-col">
-                  <div class="px-4 py-3 border-b flex items-center justify-between" :class="isDark ? 'bg-slate-900 border-slate-800' : 'bg-gray-50 border-gray-200'">
-                    <span class="text-sm font-medium" :class="isDark ? 'text-slate-100' : 'text-gray-700'">实时预览（最终展示宽度）</span>
-                    <div class="flex items-center gap-2 text-xs font-mono" :class="isDark ? 'text-slate-400' : 'text-gray-500'">
-                      <span>宽度</span>
-                      <span class="px-2 py-1 rounded-lg" :class="isDark ? 'bg-slate-800 text-slate-200' : 'bg-gray-200 text-gray-700'">
-                        {{ displayWidth }}px
-                      </span>
-                      <button
-                        @click="resetDisplayWidth"
-                        class="px-2 py-1 rounded-lg transition-all"
-                        :class="isDark ? 'bg-slate-800 hover:bg-slate-700 text-slate-200' : 'bg-white hover:bg-gray-100 text-gray-700 border border-gray-200'"
-                      >
-                        重置
-                      </button>
-                    </div>
-                  </div>
-
-                  <div ref="editPreviewScrollRef" class="flex-1 p-6 overflow-y-auto relative">
-                    <div class="mx-auto relative" :style="displayStyle">
-                      <div data-preview="1" :class="isDark ? 'md-dark' : 'md-light'" v-html="renderedMarkdown"></div>
-                      <div class="absolute top-0 -right-3 bottom-0 w-3 cursor-ew-resize" @mousedown="startDisplayResize">
-                        <div class="w-px h-full mx-auto" :class="isDark ? 'bg-orange-400/40' : 'bg-orange-500/40'"></div>
-                      </div>
-                    </div>
-                    <div class="mt-3 text-xs" :class="isDark ? 'text-slate-500' : 'text-gray-400'">
-                      提示：拖动预览右侧竖条可调整最终展示宽度。
-                    </div>
+                <div ref="visualEditorScrollRef" class="flex-1 overflow-y-auto py-2">
+                  <div class="mx-auto" :style="displayStyle">
+                    <div
+                      ref="visualEditorRef"
+                      class="visual-editor"
+                      :class="isDark ? 'md-dark' : 'md-light'"
+                      data-placeholder="直接编辑文档内容，效果和最终展示一致"
+                      :data-empty="isVisualEditorEmpty ? '1' : '0'"
+                      contenteditable="true"
+                      spellcheck="false"
+                      @focus="onVisualEditorFocus"
+                      @blur="onVisualEditorBlur"
+                      @input="onVisualEditorInput"
+                      @keydown="onVisualEditorKeydown"
+                      @keyup="onVisualEditorKeyup"
+                      @mouseup="updateCurrentStepFromVisualEditorSelection"
+                      @click="onVisualEditorClick"
+                    ></div>
                   </div>
                 </div>
               </div>
@@ -626,13 +695,6 @@
             :class="isDark ? 'border-slate-700 bg-slate-900 text-slate-100 focus:border-orange-400' : 'border-gray-200 bg-white text-gray-800 focus:border-orange-500'"
             placeholder="步骤标题"
           />
-          <input
-            v-model="activeStep.subtitle"
-            type="text"
-            class="w-full h-9 rounded-lg border px-3 text-xs focus:outline-none"
-            :class="isDark ? 'border-slate-700 bg-slate-900 text-slate-300 focus:border-orange-400' : 'border-gray-200 bg-white text-gray-600 focus:border-orange-500'"
-            placeholder="步骤副标题（可选）"
-          />
         </div>
         <div v-if="!isInspectorSidebarCollapsed" class="sidebar-overall-progress" :class="isDark ? 'is-dark' : ''">
           <span class="sidebar-overall-progress-fill" :style="{ width: `${Math.round(sidebarChapterProgress * 100)}%` }"></span>
@@ -678,14 +740,9 @@
                 :class="isDark ? 'text-slate-100 hover:border-slate-700' : 'text-gray-800'"
                 placeholder="标题"
               />
-              <input
-                v-model="step.subtitle"
-                type="text"
-                @click.stop
-                class="w-full text-[11px] bg-transparent border-b border-transparent hover:border-gray-300 focus:border-orange-500 focus:outline-none px-1 py-0.5"
-                :class="isDark ? 'text-slate-400 hover:border-slate-700' : 'text-gray-500'"
-                placeholder="副标题（可选）"
-              />
+              <div class="truncate text-[11px] px-1" :class="isDark ? 'text-slate-500' : 'text-gray-500'">
+                {{ stepPreviewText(step) }}
+              </div>
             </div>
             <div v-else class="min-w-0 space-y-1 px-1">
               <div class="truncate text-sm font-medium" :class="isDark ? 'text-slate-100' : 'text-gray-800'">
@@ -822,6 +879,12 @@ import { useResizable } from "./composables/useResizable";
 import { useSteps } from "./composables/useSteps";
 import { useTerminal } from "./composables/useTerminal";
 import { useToast } from "./composables/useToast";
+import {
+  isRichEditorEffectivelyEmpty,
+  normalizeImageHref,
+  renderMarkdownToEditableHtml,
+  serializeRichEditorToMarkdown
+} from "./utils/markdownVisualEditor";
 
 const mode = ref("edit");
 const isDark = ref(false);
@@ -834,8 +897,8 @@ const terminalMaximized = ref(false);
 const terminalTab = ref("terminal");
 const mainRef = ref(null);
 const contentScrollRef = ref(null);
-const editorTextareaRef = ref(null);
-const editPreviewScrollRef = ref(null);
+const visualEditorRef = ref(null);
+const visualEditorScrollRef = ref(null);
 const terminalViewportRef = ref(null);
 const terminalSplitWrapRef = ref(null);
 const currentContentReadProgress = ref(0);
@@ -854,6 +917,7 @@ const storageFolderExpandedMap = ref({ [STORAGE_ROOT_ID]: true });
 const selectedStorageNodeId = ref(STORAGE_ROOT_ID);
 const activeMarkdownRelPath = ref("");
 const documentMarkdown = ref("");
+const isVisualEditorEmpty = ref(true);
 const markdownHydrating = ref(false);
 const windowIsMaximized = ref(false);
 const SIDEBAR_COLLAPSED_WIDTH = 72;
@@ -955,6 +1019,8 @@ let desktopWindowMaximizeOff = null;
 let markdownSaveTimer = null;
 let pendingDocumentMarkdownFromSteps = null;
 let pendingStepsFromDocumentMarkdown = false;
+let visualEditorHydrating = false;
+let visualEditorFocused = false;
 
 const clamp = (value, min, max) => Math.min(max, Math.max(min, value));
 const TERMINAL_MIN_HEIGHT = 120;
@@ -986,19 +1052,20 @@ const {
 } = useSteps(showToast);
 
 const previewMarkdownState = computed(() => ({
-  content: isEditMode.value ? documentMarkdown.value : String(activeStep.value?.content || "")
+  content: isEditMode.value ? "" : String(activeStep.value?.content || "")
 }));
 
 const {
   sidebarWidth,
-  editorPaneWidth,
   displayWidth,
   displayStyle,
-  editSplitRef,
-  startEditorResize,
-  startDisplayResize,
   resetDisplayWidth
 } = useResizable();
+
+const adjustVisualEditorWidth = (delta) => {
+  const maxWidth = typeof window === "undefined" ? 2200 : Math.min(2200, window.innerWidth - 80);
+  displayWidth.value = clamp(displayWidth.value + Number(delta || 0), 520, Math.max(520, maxWidth));
+};
 
 const createBlankStep = (id = 1) => ({
   id,
@@ -1006,6 +1073,24 @@ const createBlankStep = (id = 1) => ({
   subtitle: "",
   content: ""
 });
+
+const VISUAL_EDITOR_BLOCK_TAGS = new Set([
+  "P",
+  "DIV",
+  "H1",
+  "H2",
+  "H3",
+  "H4",
+  "H5",
+  "H6",
+  "PRE",
+  "UL",
+  "OL",
+  "LI",
+  "BLOCKQUOTE",
+  "TABLE",
+  "HR"
+]);
 
 const createBlankSteps = () => [createBlankStep(1)];
 const normalizeMarkdownText = (value) => String(value || "").replace(/\r\n/g, "\n");
@@ -1183,6 +1268,19 @@ const syncDocumentMarkdownFromSteps = (sourceSteps = steps.value) => {
   documentMarkdown.value = nextMarkdown;
 };
 
+const applyExternalMarkdownChange = async (nextMarkdown, { focusIndex = null } = {}) => {
+  documentMarkdown.value = normalizeMarkdownText(nextMarkdown);
+  await nextTick();
+  await syncVisualEditorFromMarkdown(true);
+  if (Number.isFinite(focusIndex)) {
+    const safeIndex = clamp(Number(focusIndex) || 0, 0, Math.max(0, steps.value.length - 1));
+    currentId.value = steps.value[safeIndex]?.id ?? steps.value[0]?.id ?? 1;
+    if (isEditMode.value) {
+      await focusStepInEditMode(safeIndex);
+    }
+  }
+};
+
 const syncStepsFromDocumentMarkdown = (rawMarkdown, preserveIndex = currentStepIndex.value) => {
   const parsed = parseMarkdownToSteps(rawMarkdown);
   const targetIndex = clamp(Number(preserveIndex) || 0, 0, Math.max(0, parsed.length - 1));
@@ -1192,47 +1290,385 @@ const syncStepsFromDocumentMarkdown = (rawMarkdown, preserveIndex = currentStepI
 };
 
 documentMarkdown.value = serializeStepsToMarkdown(steps.value);
-const markdownSections = computed(() => extractMarkdownSections(documentMarkdown.value));
 const contentPaneKey = computed(() => (isEditMode.value ? mode.value : `${mode.value}:${currentId.value}`));
+
+const updateVisualEditorEmptyState = () => {
+  isVisualEditorEmpty.value = !visualEditorRef.value || isRichEditorEffectivelyEmpty(visualEditorRef.value);
+};
+
+const focusVisualEditor = () => {
+  if (typeof visualEditorRef.value?.focus === "function") {
+    visualEditorRef.value.focus();
+  }
+};
+
+const placeCaretAtNodeBoundary = (node, collapseToStart = true) => {
+  if (!(node instanceof Node) || typeof window === "undefined") {
+    return;
+  }
+  const selection = window.getSelection?.();
+  if (!selection) {
+    return;
+  }
+  const range = document.createRange();
+  range.selectNodeContents(node);
+  range.collapse(collapseToStart);
+  selection.removeAllRanges();
+  selection.addRange(range);
+};
+
+const resolveVisualEditorSelectionNode = () => {
+  if (typeof window === "undefined" || !visualEditorRef.value) {
+    return null;
+  }
+  const selection = window.getSelection?.();
+  const anchor = selection?.anchorNode || null;
+  if (!anchor || !visualEditorRef.value.contains(anchor)) {
+    return null;
+  }
+  return anchor;
+};
+
+const findVisualEditorBlockElement = (sourceNode) => {
+  const editor = visualEditorRef.value;
+  if (!editor || !sourceNode) {
+    return null;
+  }
+  let current = sourceNode.nodeType === Node.ELEMENT_NODE ? sourceNode : sourceNode.parentElement;
+  while (current && current !== editor) {
+    if (current instanceof HTMLElement && VISUAL_EDITOR_BLOCK_TAGS.has(current.tagName)) {
+      return current;
+    }
+    current = current.parentElement;
+  }
+  return editor.firstElementChild instanceof HTMLElement ? editor.firstElementChild : null;
+};
+
+const resolveVisualEditorStepTarget = (index) => {
+  const editor = visualEditorRef.value;
+  if (!editor) {
+    return null;
+  }
+  const headings = Array.from(editor.querySelectorAll("h1"));
+  const safeIndex = Math.max(0, Math.min(index, Math.max(0, steps.value.length - 1)));
+  if (headings[safeIndex] instanceof HTMLElement) {
+    return headings[safeIndex];
+  }
+  return editor.firstElementChild instanceof HTMLElement ? editor.firstElementChild : editor;
+};
+
+const getVisualEditorSectionIndexForNode = (sourceNode) => {
+  const editor = visualEditorRef.value;
+  if (!editor || !sourceNode) {
+    return 0;
+  }
+  const anchor = sourceNode.nodeType === Node.ELEMENT_NODE ? sourceNode : sourceNode.parentElement;
+  if (!(anchor instanceof HTMLElement)) {
+    return 0;
+  }
+  const headings = Array.from(editor.querySelectorAll("h1"));
+  if (!headings.length) {
+    return 0;
+  }
+  let current = anchor;
+  while (current && current !== editor) {
+    if (current.tagName === "H1") {
+      const foundIndex = headings.indexOf(current);
+      return foundIndex === -1 ? 0 : foundIndex;
+    }
+    current = current.parentElement;
+  }
+  for (let index = headings.length - 1; index >= 0; index -= 1) {
+    const heading = headings[index];
+    if (heading === anchor) {
+      return index;
+    }
+    const relation = heading.compareDocumentPosition(anchor);
+    if (relation & Node.DOCUMENT_POSITION_FOLLOWING) {
+      return index;
+    }
+  }
+  return 0;
+};
+
+const updateCurrentStepFromVisualEditorSelection = () => {
+  if (!isEditMode.value || visualEditorHydrating) {
+    return;
+  }
+  const anchor = resolveVisualEditorSelectionNode();
+  if (!anchor) {
+    return;
+  }
+  const targetIndex = getVisualEditorSectionIndexForNode(anchor);
+  const targetId = steps.value[targetIndex]?.id ?? steps.value[0]?.id ?? 1;
+  if (targetId !== currentId.value) {
+    currentId.value = targetId;
+  }
+};
+
+const syncVisualEditorFromMarkdown = async (force = false) => {
+  await nextTick();
+  const editor = visualEditorRef.value;
+  if (!editor) {
+    return;
+  }
+  if (!force && visualEditorFocused) {
+    updateVisualEditorEmptyState();
+    return;
+  }
+  const nextHtml = renderMarkdownToEditableHtml(documentMarkdown.value);
+  if (!force && editor.innerHTML === nextHtml) {
+    updateVisualEditorEmptyState();
+    return;
+  }
+  visualEditorHydrating = true;
+  editor.innerHTML = nextHtml;
+  visualEditorHydrating = false;
+  updateVisualEditorEmptyState();
+};
+
+const syncMarkdownFromVisualEditor = () => {
+  const editor = visualEditorRef.value;
+  if (!editor || visualEditorHydrating) {
+    return;
+  }
+  const nextMarkdown = serializeRichEditorToMarkdown(editor);
+  updateVisualEditorEmptyState();
+  if (documentMarkdown.value === nextMarkdown) {
+    updateCurrentStepFromVisualEditorSelection();
+    return;
+  }
+  documentMarkdown.value = nextMarkdown;
+  updateCurrentStepFromVisualEditorSelection();
+};
 
 const scrollEditorToStep = async (index) => {
   await nextTick();
-  const textarea = editorTextareaRef.value;
-  const target = markdownSections.value[Math.max(0, Math.min(index, markdownSections.value.length - 1))];
-  if (!textarea || !target) {
+  const host = visualEditorScrollRef.value;
+  const target = resolveVisualEditorStepTarget(index);
+  if (!host || !target) {
     return;
   }
-  if (typeof textarea.setSelectionRange === "function") {
-    textarea.setSelectionRange(target.startIndex, target.startIndex);
-  }
-  if (typeof textarea.focus === "function") {
-    textarea.focus();
-  }
-};
-
-const scrollEditPreviewToStep = async (index) => {
-  await nextTick();
-  const host = editPreviewScrollRef.value;
-  if (!host) {
-    return;
-  }
-  const headings = Array.from(host.querySelectorAll("h1"));
-  if (!headings.length) {
-    host.scrollTop = 0;
-    return;
-  }
-  const target = headings[Math.max(0, Math.min(index, headings.length - 1))];
+  const hostRect = host.getBoundingClientRect();
+  const targetRect = target.getBoundingClientRect();
   host.scrollTo({
-    top: Math.max(0, target.offsetTop - 12),
+    top: Math.max(0, host.scrollTop + targetRect.top - hostRect.top - 24),
     behavior: "auto"
   });
+  focusVisualEditor();
+  placeCaretAtNodeBoundary(target, true);
 };
 
 const focusStepInEditMode = async (index) => {
-  await Promise.all([
-    scrollEditorToStep(index),
-    scrollEditPreviewToStep(index)
-  ]);
+  await scrollEditorToStep(index);
+};
+
+const runVisualEditorCommand = (command, value = null) => {
+  if (typeof document === "undefined" || typeof document.execCommand !== "function") {
+    return;
+  }
+  focusVisualEditor();
+  document.execCommand(command, false, value);
+  syncMarkdownFromVisualEditor();
+};
+
+const formatVisualEditorBlock = (tagName) => {
+  if (!tagName) {
+    return;
+  }
+  const formatValue = `<${String(tagName).toLowerCase()}>`;
+  runVisualEditorCommand("formatBlock", formatValue);
+};
+
+const createVisualEditorEmptyParagraph = () => {
+  const paragraph = document.createElement("p");
+  paragraph.appendChild(document.createElement("br"));
+  return paragraph;
+};
+
+const replaceVisualEditorBlockWithParagraph = (block) => {
+  if (!(block instanceof HTMLElement)) {
+    return null;
+  }
+  const paragraph = createVisualEditorEmptyParagraph();
+  block.replaceWith(paragraph);
+  focusVisualEditor();
+  placeCaretAtNodeBoundary(paragraph, true);
+  syncMarkdownFromVisualEditor();
+  return paragraph;
+};
+
+const insertVisualEditorImage = (url) => {
+  const editor = visualEditorRef.value;
+  const safeUrl = String(url || "").trim();
+  if (!editor || !safeUrl) {
+    return;
+  }
+
+  const paragraph = document.createElement("p");
+  const image = document.createElement("img");
+  image.src = normalizeImageHref(safeUrl);
+  image.alt = "image";
+  image.setAttribute("data-md-src", safeUrl);
+  image.setAttribute("loading", "lazy");
+  paragraph.appendChild(image);
+
+  const anchorBlock = findVisualEditorBlockElement(resolveVisualEditorSelectionNode());
+  if (anchorBlock) {
+    anchorBlock.insertAdjacentElement("afterend", paragraph);
+  } else {
+    editor.appendChild(paragraph);
+  }
+
+  const nextParagraph = createVisualEditorEmptyParagraph();
+  paragraph.insertAdjacentElement("afterend", nextParagraph);
+  focusVisualEditor();
+  placeCaretAtNodeBoundary(nextParagraph, true);
+  syncMarkdownFromVisualEditor();
+};
+
+const applyVisualEditorShortcut = () => {
+  const block = findVisualEditorBlockElement(resolveVisualEditorSelectionNode());
+  if (!(block instanceof HTMLElement) || !["P", "DIV"].includes(block.tagName)) {
+    return false;
+  }
+
+  const rawText = normalizeMarkdownText(block.textContent || "").replace(/\u00a0/g, " ");
+  if (!rawText.trim()) {
+    return false;
+  }
+
+  const headingMatch = rawText.match(/^(#{1,6})\s*(.*)$/);
+  if (headingMatch) {
+    const level = clamp(headingMatch[1].length, 1, 6);
+    const heading = document.createElement(`h${level}`);
+    const content = String(headingMatch[2] || "");
+    if (content) {
+      heading.textContent = content;
+    } else {
+      heading.appendChild(document.createElement("br"));
+    }
+    block.replaceWith(heading);
+    focusVisualEditor();
+    placeCaretAtNodeBoundary(heading, false);
+    syncMarkdownFromVisualEditor();
+    return true;
+  }
+
+  const quoteMatch = rawText.match(/^>\s*(.*)$/);
+  if (quoteMatch) {
+    const quote = document.createElement("blockquote");
+    const paragraph = document.createElement("p");
+    const content = String(quoteMatch[1] || "");
+    if (content) {
+      paragraph.textContent = content;
+    } else {
+      paragraph.appendChild(document.createElement("br"));
+    }
+    quote.appendChild(paragraph);
+    block.replaceWith(quote);
+    focusVisualEditor();
+    placeCaretAtNodeBoundary(paragraph, false);
+    syncMarkdownFromVisualEditor();
+    return true;
+  }
+
+  const bulletMatch = rawText.match(/^[-*]\s*(.*)$/);
+  if (bulletMatch) {
+    const list = document.createElement("ul");
+    const item = document.createElement("li");
+    const content = String(bulletMatch[1] || "");
+    if (content) {
+      item.textContent = content;
+    } else {
+      item.appendChild(document.createElement("br"));
+    }
+    list.appendChild(item);
+    block.replaceWith(list);
+    focusVisualEditor();
+    placeCaretAtNodeBoundary(item, false);
+    syncMarkdownFromVisualEditor();
+    return true;
+  }
+
+  const orderedMatch = rawText.match(/^\d+\.\s*(.*)$/);
+  if (orderedMatch) {
+    const list = document.createElement("ol");
+    const item = document.createElement("li");
+    const content = String(orderedMatch[1] || "");
+    if (content) {
+      item.textContent = content;
+    } else {
+      item.appendChild(document.createElement("br"));
+    }
+    list.appendChild(item);
+    block.replaceWith(list);
+    focusVisualEditor();
+    placeCaretAtNodeBoundary(item, false);
+    syncMarkdownFromVisualEditor();
+    return true;
+  }
+
+  return false;
+};
+
+const onVisualEditorFocus = () => {
+  visualEditorFocused = true;
+  updateVisualEditorEmptyState();
+};
+
+const onVisualEditorBlur = async () => {
+  visualEditorFocused = false;
+  syncMarkdownFromVisualEditor();
+  await flushPendingMarkdownSave();
+  await syncVisualEditorFromMarkdown(true);
+};
+
+const onVisualEditorInput = () => {
+  syncMarkdownFromVisualEditor();
+};
+
+const onVisualEditorKeydown = (event) => {
+  const block = findVisualEditorBlockElement(resolveVisualEditorSelectionNode());
+  if (event.key === "Tab") {
+    event.preventDefault();
+    runVisualEditorCommand("insertText", "  ");
+    return;
+  }
+
+  if (event.key === "Enter" && !event.shiftKey && block instanceof HTMLElement && /^H[1-6]$/.test(block.tagName)) {
+    event.preventDefault();
+    const paragraph = createVisualEditorEmptyParagraph();
+    block.insertAdjacentElement("afterend", paragraph);
+    focusVisualEditor();
+    placeCaretAtNodeBoundary(paragraph, true);
+    syncMarkdownFromVisualEditor();
+    return;
+  }
+
+  if (event.key === "Backspace" && block instanceof HTMLElement) {
+    const text = normalizeMarkdownText(block.textContent || "").replace(/\u00a0/g, " ").trim();
+    if (!text && (/^H[1-6]$/.test(block.tagName) || block.tagName === "BLOCKQUOTE")) {
+      event.preventDefault();
+      replaceVisualEditorBlockWithParagraph(block);
+    }
+  }
+};
+
+const onVisualEditorKeyup = (event) => {
+  if (event.key === " " || event.key === "Enter") {
+    if (applyVisualEditorShortcut()) {
+      return;
+    }
+  }
+  updateCurrentStepFromVisualEditorSelection();
+};
+
+const onVisualEditorClick = (event) => {
+  if (event.target instanceof Element && event.target.closest("a")) {
+    event.preventDefault();
+  }
+  updateCurrentStepFromVisualEditorSelection();
 };
 
 const handleStepSelection = async (stepId, index) => {
@@ -1267,69 +1703,39 @@ const prev = async () => {
   await focusStepInEditMode(previousIndex);
 };
 
-const addStep = () => {
-  const list = Array.isArray(steps.value) ? steps.value : [];
-  if (!list.length) {
-    steps.value = [{
-      ...createBlankStep(1),
-      title: defaultStepTitle(0)
-    }];
-    currentId.value = steps.value[0].id;
-    void focusStepInEditMode(0);
+const addStep = async () => {
+  const list = parseMarkdownToSteps(documentMarkdown.value);
+  if (!list.length || isSingleBlankStepList(list)) {
+    await applyExternalMarkdownChange(`# ${defaultStepTitle(0)}\n`, { focusIndex: 0 });
     return;
   }
 
-  if (isSingleBlankStepList(list)) {
-    steps.value = [{
-      ...list[0],
-      title: defaultStepTitle(0)
-    }];
-    currentId.value = steps.value[0].id;
-    void focusStepInEditMode(0);
-    return;
-  }
-
-  if (list.length === 1 && !String(list[0]?.title || "").trim()) {
-    steps.value = [{
-      ...list[0],
-      title: defaultStepTitle(0)
-    }];
-  }
-
-  const nextId = steps.value.length
-    ? Math.max(...steps.value.map((step) => Number(step.id) || 0)) + 1
-    : 1;
-  const nextIndex = steps.value.length;
-  const nextStep = {
-    id: nextId,
-    title: defaultStepTitle(nextIndex),
+  const insertIndex = clamp(currentStepIndex.value + 1, 0, list.length);
+  const nextSteps = list.map((step) => ({ ...step }));
+  nextSteps.splice(insertIndex, 0, {
+    id: 0,
+    title: defaultStepTitle(insertIndex),
     subtitle: "",
     content: ""
-  };
-  steps.value = [...steps.value, nextStep];
-  currentId.value = nextId;
-  void focusStepInEditMode(nextIndex);
+  });
+  await applyExternalMarkdownChange(serializeStepsToMarkdown(nextSteps), { focusIndex: insertIndex });
 };
 
-const removeStep = () => {
-  const list = Array.isArray(steps.value) ? [...steps.value] : [];
-  if (!list.length) {
-    resetBlankEditorState({ preserveActiveFile: true });
+const removeStep = async () => {
+  const list = parseMarkdownToSteps(documentMarkdown.value);
+  if (!list.length || isSingleBlankStepList(list)) {
+    await applyExternalMarkdownChange("", { focusIndex: 0 });
     return;
   }
-  const idx = list.findIndex((step) => step.id === currentId.value);
-  if (idx === -1) {
-    return;
-  }
+  const idx = clamp(currentStepIndex.value, 0, Math.max(0, list.length - 1));
   if (list.length === 1) {
-    resetBlankEditorState({ preserveActiveFile: true });
+    await applyExternalMarkdownChange("", { focusIndex: 0 });
     return;
   }
-  list.splice(idx, 1);
-  steps.value = list;
+  const nextSteps = list.map((step) => ({ ...step }));
+  nextSteps.splice(idx, 1);
   const nextIndex = Math.max(0, idx - 1);
-  currentId.value = list[nextIndex]?.id ?? list[0]?.id ?? 1;
-  void focusStepInEditMode(nextIndex);
+  await applyExternalMarkdownChange(serializeStepsToMarkdown(nextSteps), { focusIndex: nextIndex });
 };
 
 const writeActiveMarkdownNow = async (targetRelPath = activeMarkdownRelPath.value) => {
@@ -3524,6 +3930,12 @@ watch(renderedMarkdown, () => {
   });
 });
 
+watch(isEditMode, (editing) => {
+  if (editing) {
+    void syncVisualEditorFromMarkdown(true);
+  }
+});
+
 watch([terminalOpen, terminalTab], async ([open, tab]) => {
   if (!isDesktopPty.value) {
     return;
@@ -3587,14 +3999,17 @@ watch(selectedStorageNodeId, () => {
 
 watch(documentMarkdown, (value) => {
   if (markdownHydrating.value) {
+    void syncVisualEditorFromMarkdown(true);
     return;
   }
   if (pendingDocumentMarkdownFromSteps !== null && value === pendingDocumentMarkdownFromSteps) {
     pendingDocumentMarkdownFromSteps = null;
+    void syncVisualEditorFromMarkdown(true);
     return;
   }
   pendingDocumentMarkdownFromSteps = null;
   syncStepsFromDocumentMarkdown(value);
+  void syncVisualEditorFromMarkdown();
   if (!activeMarkdownRelPath.value) {
     return;
   }
@@ -3668,6 +4083,10 @@ const toggleMode = async () => {
 const appendMarkdownImage = (url) => {
   const safeUrl = String(url || "").trim();
   if (!safeUrl) {
+    return;
+  }
+  if (isEditMode.value && visualEditorRef.value) {
+    insertVisualEditorImage(safeUrl);
     return;
   }
   const current = String(documentMarkdown.value || "");
@@ -3890,6 +4309,7 @@ onMounted(() => {
       void syncDesktopFullscreenState();
     });
   }
+  void syncVisualEditorFromMarkdown(true);
   if (isDesktopWindowControls) {
     void syncDesktopMaximizeState();
     bindDesktopWindowMaximizeListener();

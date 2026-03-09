@@ -248,6 +248,50 @@ body {
 }
 
 /* Markdown */
+.visual-editor {
+  min-height: calc(100vh - 320px);
+  padding: 10px 4px 80px;
+  outline: none;
+  line-height: 1.8;
+  caret-color: #f97316;
+  position: relative;
+  word-break: break-word;
+}
+
+.visual-editor:focus {
+  outline: none;
+}
+
+.visual-editor[data-empty="1"]::before {
+  content: attr(data-placeholder);
+  position: absolute;
+  top: 10px;
+  left: 4px;
+  color: #94a3b8;
+  pointer-events: none;
+}
+
+.dark-ui .visual-editor[data-empty="1"]::before {
+  color: #64748b;
+}
+
+.visual-editor > :first-child {
+  margin-top: 0;
+}
+
+.visual-editor > :last-child {
+  margin-bottom: 0;
+}
+
+.visual-editor pre {
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.visual-editor img {
+  cursor: default;
+}
+
 .md-light h1,
 .md-light h2,
 .md-light h3,
