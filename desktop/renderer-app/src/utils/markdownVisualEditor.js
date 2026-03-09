@@ -176,6 +176,10 @@ const serializeBlockNodes = (nodes) => {
       return;
     }
 
+    if (node.getAttribute?.("data-md-transient")) {
+      return;
+    }
+
     const tag = node.tagName.toUpperCase();
     let markdown = "";
 
