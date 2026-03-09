@@ -58,7 +58,187 @@ const ensureDesktopDataDir = () => {
   return dir;
 };
 
+const ensureWorkspaceDir = () => {
+  const dir = path.join(app.getPath("documents"), "YC-Doc-Workspace");
+  fs.mkdirSync(dir, { recursive: true });
+  return dir;
+};
+
 const getStepsDataPath = () => path.join(ensureDesktopDataDir(), "steps.json");
+
+const sanitizeWorkspaceName = (input, fallback) => {
+  const cleaned = String(input || "")
+    .trim()
+    .replace(/[\\/:*?"<>|]+/g, "_")
+    .replace(/\s+/g, " ");
+  const safe = cleaned.replace(/^\.+$/, "_");
+  return safe || fallback;
+};
+
+const normalizeWorkspaceRelPath = (rawRelPath = "") => {
+  const asPosix = String(rawRelPath || "").replace(/\\/g, "/").replace(/^\/+/, "");
+  const normalized = path.posix.normalize(asPosix || ".");
+  if (normalized.startsWith("..")) {
+    throw new Error("invalid_relative_path");
+  }
+  return normalized === "." ? "" : normalized;
+};
+
+const resolveWorkspacePath = (rootDir, rawRelPath = "") => {
+  const relPath = normalizeWorkspaceRelPath(rawRelPath);
+  const absRoot = path.resolve(rootDir);
+  const absTarget = path.resolve(absRoot, relPath.split("/").join(path.sep));
+  const relative = path.relative(absRoot, absTarget);
+  if (relative.startsWith("..") || path.isAbsolute(relative)) {
+    throw new Error("workspace_path_escape");
+  }
+  return { absRoot, absTarget, relPath };
+};
+
+const toWorkspaceRel = (absRoot, absPath) => {
+  const rel = path.relative(absRoot, absPath);
+  if (!rel || rel === ".") {
+    return "";
+  }
+  return rel.split(path.sep).join("/");
+};
+
+/* legacy block kept for compatibility notes:
+const pickUniqueName = (targetDir, requestedName, asFolder) => {
+  const original = String(requestedName || "").trim();
+  const ext = asFolder ? "" : path.extname(original);
+  const base = asFolder
+    ? original
+    : path.basename(original, ext) || "未命名";
+  let index = 0;
+  while (index < 10000) {
+    const suffix = index === 0 ? "" : ` (${index})`;
+    const candidate = asFolder ? `${base}${suffix}` : `${base}${suffix}${ext}`;
+    if (!fs.existsSync(path.join(targetDir, candidate))) {
+      return candidate;
+    }
+    index += 1;
+  }
+  throw new Error("name_conflict_too_many");
+};
+
+const readWorkspaceTreeNode = (absPath, relPath = "") => {
+  const name = relPath ? path.basename(absPath) : "存储根目录";
+  const stat = fs.statSync(absPath);
+
+  if (!stat.isDirectory()) {
+    return {
+      type: "file",
+      name,
+      relPath,
+      absPath,
+      children: []
+    };
+  }
+
+  const children = [];
+  const entries = fs.readdirSync(absPath, { withFileTypes: true });
+  for (const entry of entries) {
+    const childAbs = path.join(absPath, entry.name);
+    const childRel = relPath ? `${relPath}/${entry.name}` : entry.name;
+    if (entry.isDirectory()) {
+      children.push(readWorkspaceTreeNode(childAbs, childRel));
+      continue;
+    }
+    if (entry.isFile()) {
+      children.push({
+        type: "file",
+        name: entry.name,
+        relPath: childRel,
+        absPath: childAbs,
+        children: []
+      });
+    }
+  }
+  children.sort((a, b) => {
+    if (a.type !== b.type) {
+      return a.type === "folder" ? -1 : 1;
+    }
+    return a.name.localeCompare(b.name, "zh-CN");
+  });
+
+  return {
+    type: "folder",
+    name,
+    relPath,
+    absPath,
+    children
+  };
+};
+
+*/
+
+const pickUniqueName = (targetDir, requestedName, asFolder) => {
+  const original = String(requestedName || "").trim();
+  const ext = asFolder ? "" : path.extname(original);
+  const base = asFolder
+    ? original
+    : path.basename(original, ext) || "untitled";
+  let index = 0;
+  while (index < 10000) {
+    const suffix = index === 0 ? "" : ` (${index})`;
+    const candidate = asFolder ? `${base}${suffix}` : `${base}${suffix}${ext}`;
+    if (!fs.existsSync(path.join(targetDir, candidate))) {
+      return candidate;
+    }
+    index += 1;
+  }
+  throw new Error("name_conflict_too_many");
+};
+
+const readWorkspaceTreeNode = (absPath, relPath = "") => {
+  const name = relPath ? path.basename(absPath) : "workspace";
+  const stat = fs.statSync(absPath);
+
+  if (!stat.isDirectory()) {
+    return {
+      type: "file",
+      name,
+      relPath,
+      absPath,
+      children: []
+    };
+  }
+
+  const children = [];
+  const entries = fs.readdirSync(absPath, { withFileTypes: true });
+  for (const entry of entries) {
+    const childAbs = path.join(absPath, entry.name);
+    const childRel = relPath ? `${relPath}/${entry.name}` : entry.name;
+    if (entry.isDirectory()) {
+      children.push(readWorkspaceTreeNode(childAbs, childRel));
+      continue;
+    }
+    if (entry.isFile()) {
+      children.push({
+        type: "file",
+        name: entry.name,
+        relPath: childRel,
+        absPath: childAbs,
+        children: []
+      });
+    }
+  }
+  children.sort((a, b) => {
+    if (a.type !== b.type) {
+      return a.type === "folder" ? -1 : 1;
+    }
+    return a.name.localeCompare(b.name, "zh-CN");
+  });
+
+  return {
+    type: "folder",
+    name,
+    relPath,
+    absPath,
+    children
+  };
+};
 
 const toFileUrl = (targetPath) => pathToFileURL(String(targetPath || "")).href;
 
@@ -90,6 +270,9 @@ const createWindow = async () => {
     minWidth: 1000,
     minHeight: 700,
     autoHideMenuBar: true,
+    frame: false,
+    titleBarStyle: "hidden",
+    thickFrame: false,
     webPreferences: {
       preload: path.join(__dirname, "preload.cjs"),
       contextIsolation: true,
@@ -242,6 +425,41 @@ ipcMain.handle("desktop:window:is-fullscreen", async () => {
   return mainWindow.isFullScreen();
 });
 
+ipcMain.handle("desktop:window:minimize", async () => {
+  if (!mainWindow || mainWindow.isDestroyed()) {
+    return { ok: false };
+  }
+  mainWindow.minimize();
+  return { ok: true };
+});
+
+ipcMain.handle("desktop:window:toggle-maximize", async () => {
+  if (!mainWindow || mainWindow.isDestroyed()) {
+    return { ok: false, maximized: false };
+  }
+  if (mainWindow.isMaximized()) {
+    mainWindow.unmaximize();
+  } else {
+    mainWindow.maximize();
+  }
+  return { ok: true, maximized: mainWindow.isMaximized() };
+});
+
+ipcMain.handle("desktop:window:is-maximized", async () => {
+  if (!mainWindow || mainWindow.isDestroyed()) {
+    return false;
+  }
+  return mainWindow.isMaximized();
+});
+
+ipcMain.handle("desktop:window:close", async () => {
+  if (!mainWindow || mainWindow.isDestroyed()) {
+    return { ok: false };
+  }
+  mainWindow.close();
+  return { ok: true };
+});
+
 ipcMain.handle("desktop:data:get-steps-path", async () => ({
   ok: true,
   path: getStepsDataPath()
@@ -298,6 +516,215 @@ ipcMain.handle("desktop:data:save-steps", async (_event, payload = {}) => {
       path: filePath
     };
   }
+});
+
+ipcMain.handle("desktop:data:get-workspace-root", async () => {
+  const rootPath = ensureWorkspaceDir();
+  return {
+    ok: true,
+    rootPath
+  };
+});
+
+ipcMain.handle("desktop:data:read-workspace-tree", async () => {
+  const rootPath = ensureWorkspaceDir();
+  try {
+    const { absRoot } = resolveWorkspacePath(rootPath, "");
+    const tree = readWorkspaceTreeNode(absRoot, "");
+    return {
+      ok: true,
+      rootPath: absRoot,
+      tree
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      error: String(error?.message || error || "read_workspace_failed"),
+      rootPath
+    };
+  }
+});
+
+/* legacy create handlers (kept commented due historical encoding issues)
+ipcMain.handle("desktop:data:create-workspace-file", async (_event, payload = {}) => {
+  const rootPath = ensureWorkspaceDir();
+  try {
+    const { absRoot, absTarget: parentAbs, relPath: parentRelPath } = resolveWorkspacePath(
+      rootPath,
+      payload?.parentRelPath || ""
+    );
+    if (!fs.existsSync(parentAbs)) {
+      fs.mkdirSync(parentAbs, { recursive: true });
+    }
+    if (!fs.statSync(parentAbs).isDirectory()) {
+      throw new Error("parent_not_directory");
+    }
+    /*
+    /*
+
+    let requested = sanitizeWorkspaceName(payload?.name, "未命名.md");
+    if (!path.extname(requested)) {
+      requested = `${requested}.md`;
+    }
+    * /
+    let requested = sanitizeWorkspaceName(payload?.name, "untitled.md");
+    if (!path.extname(requested)) {
+      requested = `${requested}.md`;
+    }
+    const finalName = pickUniqueName(parentAbs, requested, false);
+    const targetAbs = path.join(parentAbs, finalName);
+    fs.writeFileSync(targetAbs, "", { encoding: "utf8", flag: "wx" });
+    const relPath = toWorkspaceRel(absRoot, targetAbs);
+
+    return {
+      ok: true,
+      rootPath: absRoot,
+      parentRelPath,
+      name: finalName,
+      relPath,
+      absPath: targetAbs
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      error: String(error?.message || error || "create_workspace_file_failed"),
+      rootPath
+    };
+  }
+});
+
+ipcMain.handle("desktop:data:create-workspace-folder", async (_event, payload = {}) => {
+  const rootPath = ensureWorkspaceDir();
+  try {
+    const { absRoot, absTarget: parentAbs, relPath: parentRelPath } = resolveWorkspacePath(
+      rootPath,
+      payload?.parentRelPath || ""
+    );
+    if (!fs.existsSync(parentAbs)) {
+      fs.mkdirSync(parentAbs, { recursive: true });
+    }
+    if (!fs.statSync(parentAbs).isDirectory()) {
+      throw new Error("parent_not_directory");
+    }
+
+    const requested = sanitizeWorkspaceName(payload?.name, "新建文件夹");
+    * /
+    const requested = sanitizeWorkspaceName(payload?.name, "new-folder");
+    const finalName = pickUniqueName(parentAbs, requested, true);
+    const targetAbs = path.join(parentAbs, finalName);
+    fs.mkdirSync(targetAbs, { recursive: false });
+    const relPath = toWorkspaceRel(absRoot, targetAbs);
+
+    return {
+      ok: true,
+      rootPath: absRoot,
+      parentRelPath,
+      name: finalName,
+      relPath,
+      absPath: targetAbs
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      error: String(error?.message || error || "create_workspace_folder_failed"),
+      rootPath
+    };
+  }
+});
+
+ipcMain.handle("desktop:data:open-workspace-dir", async () => {
+  const rootPath = ensureWorkspaceDir();
+  const error = await shell.openPath(rootPath);
+  return {
+    ok: !error,
+    rootPath,
+    error: String(error || "")
+  };
+});
+
+*/
+
+ipcMain.handle("desktop:data:create-workspace-file", async (_event, payload = {}) => {
+  const rootPath = ensureWorkspaceDir();
+  try {
+    const { absRoot, absTarget: parentAbs, relPath: parentRelPath } = resolveWorkspacePath(
+      rootPath,
+      payload?.parentRelPath || ""
+    );
+    fs.mkdirSync(parentAbs, { recursive: true });
+    if (!fs.statSync(parentAbs).isDirectory()) {
+      throw new Error("parent_not_directory");
+    }
+
+    let requested = sanitizeWorkspaceName(payload?.name, "untitled.md");
+    if (!path.extname(requested)) {
+      requested = `${requested}.md`;
+    }
+    const finalName = pickUniqueName(parentAbs, requested, false);
+    const targetAbs = path.join(parentAbs, finalName);
+    fs.writeFileSync(targetAbs, "", { encoding: "utf8", flag: "wx" });
+    const relPath = toWorkspaceRel(absRoot, targetAbs);
+
+    return {
+      ok: true,
+      rootPath: absRoot,
+      parentRelPath,
+      name: finalName,
+      relPath,
+      absPath: targetAbs
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      error: String(error?.message || error || "create_workspace_file_failed"),
+      rootPath
+    };
+  }
+});
+
+ipcMain.handle("desktop:data:create-workspace-folder", async (_event, payload = {}) => {
+  const rootPath = ensureWorkspaceDir();
+  try {
+    const { absRoot, absTarget: parentAbs, relPath: parentRelPath } = resolveWorkspacePath(
+      rootPath,
+      payload?.parentRelPath || ""
+    );
+    fs.mkdirSync(parentAbs, { recursive: true });
+    if (!fs.statSync(parentAbs).isDirectory()) {
+      throw new Error("parent_not_directory");
+    }
+
+    const requested = sanitizeWorkspaceName(payload?.name, "new-folder");
+    const finalName = pickUniqueName(parentAbs, requested, true);
+    const targetAbs = path.join(parentAbs, finalName);
+    fs.mkdirSync(targetAbs, { recursive: false });
+    const relPath = toWorkspaceRel(absRoot, targetAbs);
+
+    return {
+      ok: true,
+      rootPath: absRoot,
+      parentRelPath,
+      name: finalName,
+      relPath,
+      absPath: targetAbs
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      error: String(error?.message || error || "create_workspace_folder_failed"),
+      rootPath
+    };
+  }
+});
+
+ipcMain.handle("desktop:data:open-workspace-dir", async () => {
+  const rootPath = ensureWorkspaceDir();
+  const error = await shell.openPath(rootPath);
+  return {
+    ok: !error,
+    rootPath,
+    error: String(error || "")
+  };
 });
 
 ipcMain.handle("desktop:assets:get-image-dir", async () => {

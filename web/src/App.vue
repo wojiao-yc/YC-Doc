@@ -6,266 +6,199 @@
     :class="{ 'dark-ui': isDark }"
   >
     <aside
-      class="sidebar-panel flex flex-col flex-shrink-0 border-r min-h-0"
-      :style="{ width: `${sidebarPanelWidth}px` }"
+      v-if="isEditMode"
+      class="sidebar-panel file-sidebar-panel flex flex-col flex-shrink-0 border-r min-h-0"
+      :style="{ width: `${fileSidebarPanelWidth}px` }"
       :class="[
-        isSidebarCollapsed ? 'is-collapsed' : '',
-        isSidebarDragging ? 'is-dragging' : '',
-        isSidebarHidden
+        isFileSidebarCollapsed ? 'is-collapsed' : '',
+        isFileSidebarDragging ? 'is-dragging' : '',
+        isFileSidebarHidden
           ? 'is-hidden border-transparent bg-transparent'
           : (isDark ? 'border-slate-800 bg-slate-950' : 'border-gray-200 bg-[#fafafa]')
       ]"
     >
-      <div :class="isSidebarCollapsed ? 'px-2 py-3' : 'p-5 pb-4'">
-        <div :class="isSidebarCollapsed ? 'flex flex-col items-center gap-2' : 'flex items-start justify-between gap-2'">
-          <div :class="isSidebarCollapsed ? 'flex items-center justify-center w-full' : 'flex items-center gap-3 min-w-0'">
-            <div class="w-8 h-8 bg-orange-500 rounded-lg flex items-center justify-center text-white font-bold">G</div>
-            <div v-if="!isSidebarCollapsed" class="min-w-0">
-              <h1 class="font-bold text-lg tracking-tight truncate" :class="isDark ? 'text-slate-100' : 'text-gray-800'">
-                Gemini Doc
-              </h1>
-              <p class="text-xs mt-0.5" :class="isDark ? 'text-slate-500' : 'text-gray-400'">交互式汇报系统 Pro</p>
-            </div>
-          </div>
-          <div v-if="isEditMode" :class="isSidebarCollapsed ? 'flex items-center justify-center w-full' : 'flex items-center gap-1 shrink-0'">
-            <button
-              type="button"
-              class="sidebar-collapse-btn sidebar-tip-btn"
-              :data-tip="isSidebarCollapsed ? '展开侧栏' : '折叠侧栏'"
-              @click="toggleSidebarCollapse"
-            >
-              <span v-if="isSidebarCollapsed">›</span>
-              <span v-else>‹</span>
-            </button>
-          </div>
-        </div>
-        <div v-if="!isSidebarCollapsed" class="sidebar-overall-progress" :class="isDark ? 'is-dark' : ''">
-          <span class="sidebar-overall-progress-fill" :style="{ width: `${Math.round(sidebarChapterProgress * 100)}%` }"></span>
-        </div>
-      </div>
-
-      <nav class="flex-1 min-h-0 overflow-y-auto">
-        <div
-          v-for="(step, index) in steps"
-          :key="step.id"
-          @click="currentId = step.id"
-          :title="isSidebarCollapsed ? step.title : ''"
-          :draggable="isEditMode"
-          @dragstart="onDragStart($event, index, isEditMode)"
-          @dragover="onDragOver($event, isEditMode)"
-          @drop="onDrop($event, index, isEditMode)"
-          class="nav-step-item px-4 py-3.5 flex items-start gap-3 cursor-pointer transition-all border-l-4"
-          :class="[
-            currentId === step.id
-              ? (isDark ? 'bg-orange-500/10 border-orange-400' : 'bg-orange-50/60 border-orange-500')
-              : (isDark ? 'border-transparent hover:bg-slate-900/60' : 'border-transparent hover:bg-gray-100')
-          ]"
-        >
-          <div class="nav-step-side">
-            <div
-              class="mt-1 w-6 h-6 rounded flex items-center justify-center text-xs font-bold transition-all"
-              :class="[
-                isEditMode
-                  ? (isDark ? 'bg-slate-800 text-slate-400' : 'bg-gray-200 text-gray-400')
-                  : (index < currentStepIndex
-                    ? 'bg-orange-500 text-white'
-                    : (currentId === step.id
-                      ? 'bg-orange-500 text-white'
-                      : (isDark ? 'bg-slate-800 text-slate-400' : 'bg-gray-200 text-gray-400')))
-              ]"
-            >
-              {{ isEditMode ? index + 1 : (index < currentStepIndex ? '✓' : index + 1) }}
-            </div>
-            <span class="nav-step-track" :class="isDark ? 'is-dark' : ''">
-              <span class="nav-step-track-fill" :style="{ transform: `scaleY(${stepProgressForIndex(index)})` }"></span>
-            </span>
-          </div>
-
-          <div v-if="!isSidebarCollapsed" class="flex-1 min-w-0">
-            <div v-if="isEditMode" class="space-y-1">
-              <input
-                v-model="step.title"
-                type="text"
-                @click.stop
-                class="w-full text-sm font-medium bg-transparent border-b border-transparent hover:border-gray-300 focus:border-orange-500 focus:outline-none px-1 py-0.5"
-                :class="isDark ? 'text-slate-100 hover:border-slate-700' : 'text-gray-800'"
-                placeholder="标题"
-              />
-              <input
-                v-model="step.subtitle"
-                type="text"
-                @click.stop
-                class="w-full text-[11px] bg-transparent border-b border-transparent hover:border-gray-300 focus:border-orange-500 focus:outline-none px-1 py-0.5"
-                :class="isDark ? 'text-slate-400 hover:border-slate-700' : 'text-gray-500'"
-                placeholder="副标题（可选）"
-              />
-            </div>
-
-            <div v-else class="flex flex-col" :class="{ 'justify-center': !step.subtitle, 'min-h-[2.5rem]': !step.subtitle }">
-              <h3
-                class="text-sm font-medium"
-                :class="currentId === step.id ? 'text-orange-600 font-bold' : (isDark ? 'text-slate-300' : 'text-gray-600')"
-              >
-                {{ step.title }}
-              </h3>
-              <p v-if="step.subtitle" class="text-[11px] mt-1" :class="isDark ? 'text-slate-500' : 'text-gray-400'">
-                {{ step.subtitle }}
+      <div :class="isFileSidebarCollapsed ? 'px-2 py-3' : 'p-4 pb-3'" class="border-b" :style="{ borderColor: isDark ? '#1e293b' : '#e5e7eb' }">
+        <div :class="isFileSidebarCollapsed ? 'flex flex-col items-center gap-2' : 'flex items-start justify-between gap-2'">
+          <div :class="isFileSidebarCollapsed ? 'flex items-center justify-center w-full' : 'flex items-center gap-2 min-w-0'">
+            <div class="w-7 h-7 rounded-lg flex items-center justify-center text-white text-xs font-bold bg-orange-500">FS</div>
+            <div v-if="!isFileSidebarCollapsed" class="min-w-0">
+              <h2 class="text-sm font-semibold truncate" :class="isDark ? 'text-slate-100' : 'text-gray-800'">文件管理</h2>
+              <p class="text-[11px] mt-0.5 truncate" :class="isDark ? 'text-slate-500' : 'text-gray-400'">
+                {{ storageLocationText }}
               </p>
             </div>
           </div>
         </div>
-      </nav>
-
-      <div
-        v-if="isEditMode && !isSidebarCollapsed && !isSidebarHidden"
-        class="border-t p-4 space-y-3"
-        :class="isDark ? 'border-slate-800' : 'border-gray-200'"
-      >
-        <button
-          @click="addStep"
-          class="w-full flex items-center justify-center gap-2 px-4 py-2 text-sm rounded-lg border transition-all"
-          :class="isDark
-            ? 'border-orange-300/30 bg-orange-500/15 text-orange-100 hover:bg-orange-500/25'
-            : 'border-orange-200 bg-orange-50 text-orange-700 hover:bg-orange-100'"
-        >
-          ＋ 添加新步骤
-        </button>
-        <button
-          @click="removeStep"
-          class="w-full flex items-center justify-center gap-2 px-4 py-2 text-sm rounded-lg border transition-all"
-          :class="isDark
-            ? 'border-rose-300/30 bg-rose-500/15 text-rose-100 hover:bg-rose-500/25'
-            : 'border-rose-200 bg-rose-50 text-rose-700 hover:bg-rose-100'"
-        >
-          🗑 删除当前步骤
-        </button>
+        <div v-if="!isFileSidebarCollapsed" class="mt-3 flex items-center gap-2">
+          <button
+            type="button"
+            class="flex-1 px-2.5 py-1.5 text-xs rounded-lg border transition-all"
+            :class="isDark ? 'border-slate-700 text-slate-200 bg-slate-900 hover:bg-slate-800' : 'border-gray-200 text-gray-700 bg-white hover:bg-gray-100'"
+            @click="createStorageFile"
+          >
+            + 新建文件
+          </button>
+          <button
+            type="button"
+            class="flex-1 px-2.5 py-1.5 text-xs rounded-lg border transition-all"
+            :class="isDark ? 'border-slate-700 text-slate-200 bg-slate-900 hover:bg-slate-800' : 'border-gray-200 text-gray-700 bg-white hover:bg-gray-100'"
+            @click="createStorageFolder"
+          >
+            + 新建文件夹
+          </button>
+          <button
+            v-if="isDesktopStorage"
+            type="button"
+            class="px-2.5 py-1.5 text-xs rounded-lg border transition-all"
+            :class="isDark ? 'border-slate-700 text-slate-200 bg-slate-900 hover:bg-slate-800' : 'border-gray-200 text-gray-700 bg-white hover:bg-gray-100'"
+            @click="openStorageRootDir"
+          >
+            打开目录
+          </button>
+        </div>
+        <p v-if="!isFileSidebarCollapsed" class="text-[11px] mt-2" :class="isDark ? 'text-slate-500' : 'text-gray-400'">
+          {{ storageStats }}
+        </p>
       </div>
+
+      <nav class="flex-1 min-h-0 overflow-y-auto p-2">
+        <button
+          v-for="item in visibleStorageNodes"
+          :key="item.id"
+          type="button"
+          class="w-full rounded-lg mb-1 transition-all flex items-center gap-2 text-left"
+          :title="isFileSidebarCollapsed ? item.name : ''"
+          :style="{ padding: '6px 8px', paddingLeft: `${8 + item.depth * 14}px` }"
+          :class="selectedStorageNodeId === item.id
+            ? (isDark ? 'bg-orange-500/15 text-orange-200' : 'bg-orange-50 text-orange-700')
+            : (isDark ? 'text-slate-300 hover:bg-slate-900/70' : 'text-gray-700 hover:bg-gray-100')"
+          @click="selectStorageNode(item.id)"
+        >
+          <span class="w-4 h-4 inline-flex items-center justify-center text-[11px]">
+            <template v-if="item.type === 'folder'">
+              <span @click.stop="toggleStorageFolder(item.id)">{{ isStorageFolderExpanded(item.id) ? '▾' : '▸' }}</span>
+            </template>
+            <template v-else>
+              •
+            </template>
+          </span>
+          <span class="text-xs">{{ item.type === "folder" ? "📁" : "📄" }}</span>
+          <span v-if="!isFileSidebarCollapsed" class="truncate text-xs">{{ item.name }}</span>
+        </button>
+      </nav>
     </aside>
 
     <div
       v-if="isEditMode"
-      class="sidebar-resize-handle flex-shrink-0"
+      class="sidebar-resize-handle file-sidebar-resize-handle flex-shrink-0"
       :class="[
-        isSidebarHidden ? 'is-hidden' : '',
+        isFileSidebarHidden ? 'is-hidden' : '',
         isDark ? 'is-dark' : ''
       ]"
-      @mousedown="startSidebarResizeDrag"
+      @mousedown="startFileSidebarResizeDrag"
     >
       <div class="sidebar-resize-line"></div>
     </div>
 
     <main ref="mainRef" class="relative flex-1 min-w-0 min-h-0 flex flex-col" :class="isDark ? 'bg-slate-950' : 'bg-white'">
-      <header
-        class="sticky top-0 z-30 px-10 py-5 border-b flex justify-between items-center backdrop-blur"
-        :class="isDark ? 'border-slate-800 bg-slate-950/80' : 'border-gray-100 bg-white/80'"
-        :style="editHeaderStyle"
-      >
-        <div class="header-meta header-meta-inline min-w-0 flex-1">
-          <template v-if="isEditMode">
-            <input
-              v-model="activeStep.title"
-              type="text"
-              class="header-meta-input header-meta-input-title"
-              :class="isDark ? 'is-dark' : ''"
-              placeholder="步骤标题"
-            />
-            <input
-              v-model="activeStep.subtitle"
-              type="text"
-              class="header-meta-input header-meta-input-sub"
-              :class="isDark ? 'is-dark' : ''"
-              placeholder="步骤副标题（可选）"
-            />
-          </template>
-          <template v-else>
-            <span class="header-meta-title">{{ activeStep.title }}</span>
-            <span class="header-meta-dot">·</span>
-            <span class="header-meta-sub header-meta-sub-inline">{{ activeStep.subtitle || "未设置副标题" }}</span>
-          </template>
-        </div>
-
-        <div class="flex items-center gap-2 sm:gap-3 flex-nowrap shrink-0">
-          <template v-if="isEditMode">
-            <div class="relative app-settings-popover">
-              <button
-                type="button"
-                class="px-3 py-2 text-sm rounded-lg transition-all flex items-center justify-center shrink-0"
-                :class="isDark ? 'bg-slate-800 text-slate-100 hover:bg-slate-700' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'"
-                @click.stop="toggleSettingsPanel"
-              >
-                ⚙
-              </button>
-              <div
-                v-if="settingsPanelOpen"
-                class="absolute right-0 top-[calc(100%+10px)] z-40 w-80 rounded-xl border p-3 shadow-xl"
-                :class="isDark ? 'border-slate-700 bg-slate-900 text-slate-100' : 'border-gray-200 bg-white text-gray-800'"
-                @click.stop
-              >
-                <div class="text-xs mb-2" :class="isDark ? 'text-slate-400' : 'text-gray-500'">设置</div>
-                <label
-                  class="flex items-start gap-3 rounded-lg p-2 cursor-pointer transition-all"
-                  :class="isDark ? 'hover:bg-slate-800/80' : 'hover:bg-gray-50'"
-                >
-                  <input
-                    v-model="gestureNavigationEnabled"
-                    type="checkbox"
-                    class="mt-0.5 h-4 w-4"
-                    :class="isDark ? 'accent-cyan-400' : 'accent-blue-600'"
-                  />
-                  <span class="text-sm leading-6">
-                    翻页模式
-                  </span>
-                </label>
-                <label
-                  class="flex items-start gap-3 rounded-lg p-2 cursor-pointer transition-all"
-                  :class="isDark ? 'hover:bg-slate-800/80' : 'hover:bg-gray-50'"
-                >
-                  <input
-                    v-model="collapseHeaderInView"
-                    type="checkbox"
-                    class="mt-0.5 h-4 w-4"
-                    :class="isDark ? 'accent-cyan-400' : 'accent-blue-600'"
-                  />
-                  <span class="text-sm leading-6">
-                    展示模式收起顶栏
-                  </span>
-                </label>
-              </div>
-            </div>
-
-            <button
-              @click="toggleDark"
-              class="px-3 py-2 text-sm rounded-lg transition-all flex items-center gap-2 whitespace-nowrap shrink-0"
-              :class="isDark ? 'bg-slate-800 text-slate-100 hover:bg-slate-700' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'"
-            >
-              🌙 <span class="hidden xl:inline">主题</span>
-            </button>
-
-            <button
-              @click="toggleMode"
-              class="px-4 py-2 text-sm rounded-lg transition-all flex items-center gap-2 whitespace-nowrap shrink-0"
-              :class="'bg-orange-500 text-white hover:bg-orange-600'"
-            >
-              <span>👁 <span class="hidden xl:inline">展示</span></span>
-            </button>
-          </template>
-          <template v-else>
-            <span class="header-meta-page">第 {{ currentStepIndex + 1 }} / {{ steps.length }} 页</span>
-          </template>
-        </div>
-      </header>
-
       <div
         v-if="isEditMode"
-        class="h-2 border-b cursor-row-resize flex items-center justify-center select-none"
-        :class="isDark ? 'border-slate-800 bg-slate-950' : 'border-gray-100 bg-white'"
-        @mousedown="startEditHeaderResize"
+        class="app-chrome-bar"
+        :class="isDark ? 'is-dark' : ''"
       >
-        <div
-          class="h-0.5 w-14 rounded-full transition-all"
-          :class="isDark ? 'bg-slate-700' : 'bg-gray-300'"
-        ></div>
+        <div class="app-chrome-no-drag">
+          <button
+            type="button"
+            class="term-window-btn term-tip-btn"
+            :data-tip="isFileSidebarCollapsed || isFileSidebarHidden ? '展开左边栏' : '收起左边栏'"
+            :aria-label="isFileSidebarCollapsed || isFileSidebarHidden ? '展开左边栏' : '收起左边栏'"
+            @click="toggleFileSidebarCollapse"
+          >
+            <svg class="chrome-icon" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+              <rect x="1.8" y="2.2" width="12.4" height="11.6" rx="2" stroke="currentColor" stroke-width="1.2" />
+              <path
+                :d="isFileSidebarCollapsed || isFileSidebarHidden ? 'M11.2 3.8v8.4' : 'M4.8 3.8v8.4'"
+                stroke="currentColor"
+                stroke-width="1.2"
+                stroke-linecap="round"
+              />
+            </svg>
+          </button>
+        </div>
+        <div class="app-chrome-drag"></div>
+        <div class="app-chrome-no-drag">
+          <button
+            type="button"
+            class="term-window-btn term-tip-btn"
+            :data-tip="isSidebarCollapsed || isSidebarHidden ? '展开右边栏' : '收起右边栏'"
+            :aria-label="isSidebarCollapsed || isSidebarHidden ? '展开右边栏' : '收起右边栏'"
+            @click="toggleSidebarCollapse"
+          >
+            <svg class="chrome-icon" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+              <rect x="1.8" y="2.2" width="12.4" height="11.6" rx="2" stroke="currentColor" stroke-width="1.2" />
+              <path
+                :d="isSidebarCollapsed || isSidebarHidden ? 'M4.8 3.8v8.4' : 'M11.2 3.8v8.4'"
+                stroke="currentColor"
+                stroke-width="1.2"
+                stroke-linecap="round"
+              />
+            </svg>
+          </button>
+          <button
+            type="button"
+            class="term-window-btn term-tip-btn"
+            data-tip="最小化"
+            aria-label="最小化"
+            @click="handleWindowMinimize"
+          >
+            <svg class="chrome-icon" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+              <path d="M4 8h8" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" />
+            </svg>
+          </button>
+          <button
+            type="button"
+            class="term-window-btn term-tip-btn"
+            :data-tip="windowIsMaximized ? '还原' : '最大化'"
+            :aria-label="windowIsMaximized ? '还原' : '最大化'"
+            @click="handleWindowToggleMaximize"
+          >
+            <svg v-if="windowIsMaximized" class="chrome-icon" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+              <rect x="4.7" y="3.3" width="7.1" height="7.1" rx="0.8" stroke="currentColor" stroke-width="1.2" />
+              <path d="M3.4 5.5V12h6.5" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" />
+            </svg>
+            <svg v-else class="chrome-icon" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+              <rect x="3.5" y="3.5" width="9" height="9" rx="1" stroke="currentColor" stroke-width="1.2" />
+            </svg>
+          </button>
+          <button
+            type="button"
+            class="term-window-btn term-window-btn-close term-tip-btn"
+            data-tip="关闭"
+            aria-label="关闭"
+            @click="handleWindowClose"
+          >
+            <svg class="chrome-icon" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+              <path d="M4.5 4.5l7 7m0-7-7 7" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" />
+            </svg>
+          </button>
+        </div>
       </div>
+
+      <header
+        v-if="!isEditMode"
+        class="sticky top-0 z-30 px-10 py-5 border-b flex justify-between items-center backdrop-blur"
+        :class="isDark ? 'border-slate-800 bg-slate-950/80' : 'border-gray-100 bg-white/80'"
+        :style="viewHeaderStyle"
+      >
+        <div class="header-meta header-meta-inline min-w-0 flex-1">
+          <span class="header-meta-title">{{ activeStep.title }}</span>
+          <span class="header-meta-dot">·</span>
+          <span class="header-meta-sub header-meta-sub-inline">{{ activeStep.subtitle || "未设置副标题" }}</span>
+        </div>
+        <div class="flex items-center gap-2 sm:gap-3 flex-nowrap shrink-0">
+          <span class="header-meta-page">第 {{ currentStepIndex + 1 }} / {{ steps.length }} 页</span>
+        </div>
+      </header>
 
       <section
         v-show="!terminalMaximized"
@@ -508,33 +441,6 @@
                 <path d="M6.8 6.4v4.4M9.2 6.4v4.4" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
               </svg>
             </button>
-            <button
-              type="button"
-              class="term-icon-btn term-tip-btn"
-              :data-tip="terminalMaximized ? '还原面板' : '最大化面板'"
-              :aria-label="terminalMaximized ? '还原面板' : '最大化面板'"
-              @mousedown.stop
-              @click="toggleTerminalMaximize"
-            >
-              <svg v-if="!terminalMaximized" class="term-icon" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-                <path d="M2.5 6V2.5H6M10 2.5h3.5V6M13.5 10v3.5H10M6 13.5H2.5V10" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>
-              </svg>
-              <svg v-else class="term-icon" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-                <path d="M5 3.5h7.5V11M11 5H3.5v7.5H11z" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/>
-              </svg>
-            </button>
-            <button
-              type="button"
-              class="term-icon-btn term-tip-btn"
-              data-tip="隐藏面板"
-              aria-label="隐藏面板"
-              @mousedown.stop
-              @click="closeTerminal"
-            >
-              <svg class="term-icon" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-                <path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
-              </svg>
-            </button>
           </div>
         </div>
         <div
@@ -644,6 +550,171 @@
       <div v-if="!terminalOpen" class="term-edge-grab" @mousedown="startTerminalPullResize"></div>
     </main>
 
+    <div
+      v-if="isEditMode"
+      class="sidebar-resize-handle inspector-resize-handle flex-shrink-0"
+      :class="[
+        isSidebarHidden ? 'is-hidden' : '',
+        isDark ? 'is-dark' : ''
+      ]"
+      @mousedown="startSidebarResizeDrag"
+    >
+      <div class="sidebar-resize-line"></div>
+    </div>
+
+    <aside
+      v-if="isEditMode"
+      class="sidebar-panel inspector-sidebar-panel flex flex-col flex-shrink-0 border-l min-h-0"
+      :style="{ width: `${sidebarPanelWidth}px` }"
+      :class="[
+        isSidebarCollapsed ? 'is-collapsed' : '',
+        isSidebarDragging ? 'is-dragging' : '',
+        isSidebarHidden
+          ? 'is-hidden border-transparent bg-transparent'
+          : (isDark ? 'border-slate-800 bg-slate-950' : 'border-gray-200 bg-[#fafafa]')
+      ]"
+    >
+      <div :class="isSidebarCollapsed ? 'px-2 py-3' : 'p-4 pb-3'" class="border-b" :style="{ borderColor: isDark ? '#1e293b' : '#e5e7eb' }">
+        <div :class="isSidebarCollapsed ? 'flex flex-col items-center gap-2' : 'flex items-start justify-between gap-2'">
+          <div :class="isSidebarCollapsed ? 'flex items-center justify-center w-full' : 'flex items-center gap-2 min-w-0'">
+            <div class="w-7 h-7 bg-orange-500 rounded-lg flex items-center justify-center text-white text-xs font-bold">ED</div>
+            <div v-if="!isSidebarCollapsed" class="min-w-0">
+              <h2 class="text-sm font-semibold tracking-tight truncate" :class="isDark ? 'text-slate-100' : 'text-gray-800'">
+                编辑控制栏
+              </h2>
+              <p class="text-xs mt-0.5" :class="isDark ? 'text-slate-500' : 'text-gray-400'">原顶栏 + 原步骤栏</p>
+            </div>
+          </div>
+        </div>
+
+        <div v-if="!isSidebarCollapsed" class="mt-3 space-y-2">
+          <input
+            v-model="activeStep.title"
+            type="text"
+            class="w-full h-9 rounded-lg border px-3 text-sm font-medium focus:outline-none"
+            :class="isDark ? 'border-slate-700 bg-slate-900 text-slate-100 focus:border-orange-400' : 'border-gray-200 bg-white text-gray-800 focus:border-orange-500'"
+            placeholder="步骤标题"
+          />
+          <input
+            v-model="activeStep.subtitle"
+            type="text"
+            class="w-full h-9 rounded-lg border px-3 text-xs focus:outline-none"
+            :class="isDark ? 'border-slate-700 bg-slate-900 text-slate-300 focus:border-orange-400' : 'border-gray-200 bg-white text-gray-600 focus:border-orange-500'"
+            placeholder="步骤副标题（可选）"
+          />
+        </div>
+        <div v-if="!isSidebarCollapsed" class="sidebar-overall-progress" :class="isDark ? 'is-dark' : ''">
+          <span class="sidebar-overall-progress-fill" :style="{ width: `${Math.round(sidebarChapterProgress * 100)}%` }"></span>
+        </div>
+      </div>
+
+      <nav class="flex-1 min-h-0 overflow-y-auto">
+        <div
+          v-for="(step, index) in steps"
+          :key="step.id"
+          @click="currentId = step.id"
+          :title="isSidebarCollapsed ? step.title : ''"
+          :draggable="true"
+          @dragstart="onDragStart($event, index, true)"
+          @dragover="onDragOver($event, true)"
+          @drop="onDrop($event, index, true)"
+          class="nav-step-item px-4 py-3.5 flex items-start gap-3 cursor-pointer transition-all border-l-4"
+          :class="[
+            currentId === step.id
+              ? (isDark ? 'bg-orange-500/10 border-orange-400' : 'bg-orange-50/60 border-orange-500')
+              : (isDark ? 'border-transparent hover:bg-slate-900/60' : 'border-transparent hover:bg-gray-100')
+          ]"
+        >
+          <div class="nav-step-side">
+            <div
+              class="mt-1 w-6 h-6 rounded flex items-center justify-center text-xs font-bold transition-all"
+              :class="isDark ? 'bg-slate-800 text-slate-300' : 'bg-gray-200 text-gray-500'"
+            >
+              {{ index + 1 }}
+            </div>
+            <span class="nav-step-track" :class="isDark ? 'is-dark' : ''">
+              <span class="nav-step-track-fill" :style="{ transform: `scaleY(${stepProgressForIndex(index)})` }"></span>
+            </span>
+          </div>
+
+          <div v-if="!isSidebarCollapsed" class="flex-1 min-w-0">
+            <div class="space-y-1">
+              <input
+                v-model="step.title"
+                type="text"
+                @click.stop
+                class="w-full text-sm font-medium bg-transparent border-b border-transparent hover:border-gray-300 focus:border-orange-500 focus:outline-none px-1 py-0.5"
+                :class="isDark ? 'text-slate-100 hover:border-slate-700' : 'text-gray-800'"
+                placeholder="标题"
+              />
+              <input
+                v-model="step.subtitle"
+                type="text"
+                @click.stop
+                class="w-full text-[11px] bg-transparent border-b border-transparent hover:border-gray-300 focus:border-orange-500 focus:outline-none px-1 py-0.5"
+                :class="isDark ? 'text-slate-400 hover:border-slate-700' : 'text-gray-500'"
+                placeholder="副标题（可选）"
+              />
+            </div>
+          </div>
+        </div>
+      </nav>
+
+      <div
+        v-if="!isSidebarCollapsed && !isSidebarHidden"
+        class="border-t p-4 space-y-3"
+        :class="isDark ? 'border-slate-800' : 'border-gray-200'"
+      >
+        <button
+          @click="addStep"
+          class="w-full flex items-center justify-center gap-2 px-4 py-2 text-sm rounded-lg border transition-all"
+          :class="isDark
+            ? 'border-orange-300/30 bg-orange-500/15 text-orange-100 hover:bg-orange-500/25'
+            : 'border-orange-200 bg-orange-50 text-orange-700 hover:bg-orange-100'"
+        >
+          ＋ 添加新步骤
+        </button>
+        <button
+          @click="removeStep"
+          class="w-full flex items-center justify-center gap-2 px-4 py-2 text-sm rounded-lg border transition-all"
+          :class="isDark
+            ? 'border-rose-300/30 bg-rose-500/15 text-rose-100 hover:bg-rose-500/25'
+            : 'border-rose-200 bg-rose-50 text-rose-700 hover:bg-rose-100'"
+        >
+          🗑 删除当前步骤
+        </button>
+
+        <div class="space-y-2 rounded-lg border p-3" :class="isDark ? 'border-slate-800 bg-slate-900/40' : 'border-gray-200 bg-white'">
+          <label class="flex items-center gap-2 text-xs" :class="isDark ? 'text-slate-300' : 'text-gray-700'">
+            <input v-model="gestureNavigationEnabled" type="checkbox" :class="isDark ? 'accent-cyan-400' : 'accent-blue-600'" />
+            翻页模式
+          </label>
+          <label class="flex items-center gap-2 text-xs" :class="isDark ? 'text-slate-300' : 'text-gray-700'">
+            <input v-model="collapseHeaderInView" type="checkbox" :class="isDark ? 'accent-cyan-400' : 'accent-blue-600'" />
+            展示模式收起顶栏
+          </label>
+        </div>
+
+        <div class="grid grid-cols-2 gap-2">
+          <button
+            type="button"
+            class="px-3 py-2 text-sm rounded-lg transition-all"
+            :class="isDark ? 'bg-slate-800 text-slate-100 hover:bg-slate-700' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'"
+            @click="toggleDark"
+          >
+            🌙 主题
+          </button>
+          <button
+            type="button"
+            class="px-3 py-2 text-sm rounded-lg transition-all bg-orange-500 text-white hover:bg-orange-600"
+            @click="toggleMode"
+          >
+            👁 展示
+          </button>
+        </div>
+      </div>
+    </aside>
+
     <div v-if="desktopRenameDialog.open" class="term-rename-mask" @mousedown.self="cancelDesktopRenameDialog">
       <div class="term-rename-card" @mousedown.stop>
         <div class="term-rename-title">重命名终端</div>
@@ -679,11 +750,8 @@ import { useToast } from "./composables/useToast";
 
 const mode = ref("edit");
 const isDark = ref(false);
-const settingsPanelOpen = ref(false);
 const gestureNavigationEnabled = ref(false);
 const collapseHeaderInView = ref(false);
-const editHeaderHeight = ref(92);
-const editHeaderHidden = ref(false);
 const isEditMode = computed(() => mode.value === "edit");
 const terminalPanelHeight = ref(320);
 const terminalMaximized = ref(false);
@@ -692,15 +760,31 @@ const mainRef = ref(null);
 const contentScrollRef = ref(null);
 const terminalViewportRef = ref(null);
 const terminalSplitWrapRef = ref(null);
+const currentContentReadProgress = ref(0);
 const isSidebarCollapsed = ref(false);
 const isSidebarHidden = ref(false);
 const isSidebarDragging = ref(false);
-const currentContentReadProgress = ref(0);
+const isFileSidebarCollapsed = ref(false);
+const isFileSidebarHidden = ref(false);
+const isFileSidebarDragging = ref(false);
+const fileSidebarWidth = ref(280);
+const STORAGE_ROOT_ID = "workspace-root";
+const storageTree = ref(null);
+const storageRootPath = ref("");
+const storageLoading = ref(false);
+const storageFolderExpandedMap = ref({ [STORAGE_ROOT_ID]: true });
+const selectedStorageNodeId = ref(STORAGE_ROOT_ID);
+const windowIsMaximized = ref(false);
 const SIDEBAR_COLLAPSED_WIDTH = 72;
 const SIDEBAR_MIN_WIDTH = 240;
 const SIDEBAR_MAX_WIDTH = 560;
 const SIDEBAR_HIDE_SNAP = 44;
 const SIDEBAR_COLLAPSE_SNAP = SIDEBAR_COLLAPSED_WIDTH + 34;
+const FILE_SIDEBAR_COLLAPSED_WIDTH = 68;
+const FILE_SIDEBAR_MIN_WIDTH = 220;
+const FILE_SIDEBAR_MAX_WIDTH = 520;
+const FILE_SIDEBAR_HIDE_SNAP = 44;
+const FILE_SIDEBAR_COLLAPSE_SNAP = FILE_SIDEBAR_COLLAPSED_WIDTH + 30;
 const desktopPrimaryTerminalRef = ref(null);
 const desktopSecondaryTerminalRef = ref(null);
 const desktopSessions = ref([]);
@@ -727,6 +811,18 @@ const desktopRenameInputRef = ref(null);
 const desktopSessionBuffers = new Map();
 const desktopWindowBridge = typeof window !== "undefined" ? window.desktopWindow : null;
 const desktopPtyBridge = typeof window !== "undefined" ? window.desktopPty : null;
+const desktopDataBridge = typeof window !== "undefined" ? window.desktopData : null;
+const isDesktopStorage = Boolean(
+  desktopDataBridge?.getWorkspaceRoot
+  && desktopDataBridge?.readWorkspaceTree
+  && desktopDataBridge?.createWorkspaceFile
+  && desktopDataBridge?.createWorkspaceFolder
+);
+const isDesktopWindowControls = Boolean(
+  desktopWindowBridge?.minimize
+  && desktopWindowBridge?.toggleMaximize
+  && desktopWindowBridge?.close
+);
 const paneTerminals = { primary: null, secondary: null };
 const paneFits = { primary: null, secondary: null };
 const paneInputs = { primary: null, secondary: null };
@@ -752,8 +848,10 @@ let sidebarDragRaf = 0;
 let sidebarDragPendingWidth = null;
 let sidebarDragMoveHandler = null;
 let sidebarDragUpHandler = null;
-let editHeaderDragMoveHandler = null;
-let editHeaderDragUpHandler = null;
+let fileSidebarDragRaf = 0;
+let fileSidebarDragPendingWidth = null;
+let fileSidebarDragMoveHandler = null;
+let fileSidebarDragUpHandler = null;
 
 const clamp = (value, min, max) => Math.min(max, Math.max(min, value));
 const TERMINAL_MIN_HEIGHT = 120;
@@ -761,9 +859,9 @@ const TERMINAL_HIDE_THRESHOLD = 56;
 const TERMINAL_MAX_SNAP_GAP = 20;
 const GESTURE_NAV_STORAGE_KEY = "yc-doc.gesture-nav.v1";
 const VIEW_HEADER_COLLAPSE_STORAGE_KEY = "yc-doc.view-header-collapse.v1";
-const EDIT_HEADER_MIN_HEIGHT = 72;
-const EDIT_HEADER_MAX_HEIGHT = 220;
-const EDIT_HEADER_HIDE_THRESHOLD = 22;
+const STORAGE_TREE_STORAGE_KEY = "yc-doc.storage-tree.v1";
+const STORAGE_EXPANDED_STORAGE_KEY = "yc-doc.storage-expanded.v1";
+const STORAGE_SELECTED_STORAGE_KEY = "yc-doc.storage-selected.v1";
 
 const { toast, showToast } = useToast();
 
@@ -798,11 +896,190 @@ if (typeof window !== "undefined") {
   try {
     gestureNavigationEnabled.value = localStorage.getItem(GESTURE_NAV_STORAGE_KEY) === "1";
     collapseHeaderInView.value = localStorage.getItem(VIEW_HEADER_COLLAPSE_STORAGE_KEY) === "1";
+    if (!isDesktopStorage) {
+      const rawTree = localStorage.getItem(STORAGE_TREE_STORAGE_KEY);
+      const parsedTree = rawTree ? JSON.parse(rawTree) : null;
+      if (parsedTree && typeof parsedTree === "object") {
+        storageTree.value = parsedTree;
+      }
+    }
+    const rawExpanded = localStorage.getItem(STORAGE_EXPANDED_STORAGE_KEY);
+    const parsedExpanded = rawExpanded ? JSON.parse(rawExpanded) : null;
+    if (parsedExpanded && typeof parsedExpanded === "object") {
+      storageFolderExpandedMap.value = parsedExpanded;
+    }
+    const selectedId = String(localStorage.getItem(STORAGE_SELECTED_STORAGE_KEY) || "").trim();
+    if (selectedId) {
+      selectedStorageNodeId.value = selectedId;
+    }
   } catch {
     gestureNavigationEnabled.value = false;
     collapseHeaderInView.value = false;
+    storageTree.value = null;
+    storageFolderExpandedMap.value = { [STORAGE_ROOT_ID]: true };
+    selectedStorageNodeId.value = STORAGE_ROOT_ID;
   }
 }
+
+const makeStorageNodeId = (prefix) => `${prefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+
+const createDefaultStorageTree = () => ({
+  id: STORAGE_ROOT_ID,
+  type: "folder",
+  name: "Local Storage",
+  relPath: "",
+  absPath: "",
+  children: [
+    {
+      id: makeStorageNodeId("file"),
+      type: "file",
+      name: "未命名.md",
+      relPath: "未命名.md",
+      absPath: "",
+      children: []
+    }
+  ]
+});
+
+const cloneStorageTree = (source) => JSON.parse(JSON.stringify(source));
+
+const normalizeStorageNode = (source, fallbackId, fallbackName) => {
+  const raw = source && typeof source === "object" ? source : {};
+  const type = raw.type === "file" ? "file" : "folder";
+  const id = String(raw.id || fallbackId || makeStorageNodeId(type));
+  const relPath = String(raw.relPath || "");
+  const absPath = String(raw.absPath || "");
+  const name = String(raw.name || fallbackName || (type === "folder" ? "新建文件夹" : "未命名.md")).trim()
+    || (type === "folder" ? "新建文件夹" : "未命名.md");
+  if (type === "file") {
+    return { id, type, name, relPath, absPath, children: [] };
+  }
+  const children = Array.isArray(raw.children)
+    ? raw.children.map((item, index) => normalizeStorageNode(item, `${id}-${index}`, "未命名"))
+    : [];
+  return { id, type, name, relPath, absPath, children };
+};
+
+const ensureStorageTree = (source) => {
+  const fallback = createDefaultStorageTree();
+  if (!source || typeof source !== "object") {
+    return fallback;
+  }
+  const root = normalizeStorageNode(source, STORAGE_ROOT_ID, "Local Storage");
+  root.id = STORAGE_ROOT_ID;
+  root.type = "folder";
+  root.name = root.name || "Local Storage";
+  root.relPath = "";
+  root.children = Array.isArray(root.children) ? root.children : [];
+  if (!root.children.length) {
+    root.children.push({
+      id: makeStorageNodeId("file"),
+      type: "file",
+      name: "未命名.md",
+      relPath: "未命名.md",
+      absPath: "",
+      children: []
+    });
+  }
+  return root;
+};
+
+storageTree.value = ensureStorageTree(storageTree.value);
+if (isDesktopStorage) {
+  storageTree.value = {
+    id: STORAGE_ROOT_ID,
+    type: "folder",
+    name: "存储根目录",
+    relPath: "",
+    absPath: "",
+    children: []
+  };
+}
+
+const normalizeDesktopStorageNode = (source, isRoot = false) => {
+  const raw = source && typeof source === "object" ? source : {};
+  const type = raw.type === "file" ? "file" : "folder";
+  const relPath = String(raw.relPath || "");
+  const absPath = String(raw.absPath || "");
+  const id = isRoot ? STORAGE_ROOT_ID : (relPath || makeStorageNodeId(type));
+  const name = String(raw.name || (isRoot ? "存储根目录" : (type === "folder" ? "新建文件夹" : "未命名.md")));
+  const children = Array.isArray(raw.children)
+    ? raw.children.map((item) => normalizeDesktopStorageNode(item, false))
+    : [];
+  return {
+    id,
+    type,
+    name,
+    relPath,
+    absPath,
+    children
+  };
+};
+
+const loadDesktopStorageTree = async () => {
+  if (!isDesktopStorage) {
+    return;
+  }
+  storageLoading.value = true;
+  try {
+    const rootResult = await desktopDataBridge.getWorkspaceRoot();
+    if (rootResult?.ok && rootResult.rootPath) {
+      storageRootPath.value = String(rootResult.rootPath);
+    }
+
+    const treeResult = await desktopDataBridge.readWorkspaceTree();
+    if (!(treeResult?.ok && treeResult.tree)) {
+      throw new Error(String(treeResult?.error || "read_tree_failed"));
+    }
+
+    storageTree.value = normalizeDesktopStorageNode(treeResult.tree, true);
+    if (treeResult.rootPath) {
+      storageRootPath.value = String(treeResult.rootPath);
+    }
+    ensureSelectedStorageNodeValid();
+  } catch (error) {
+    showToast(`读取存储目录失败: ${String(error?.message || error || "unknown_error")}`);
+    storageTree.value = ensureStorageTree(storageTree.value);
+  } finally {
+    storageLoading.value = false;
+  }
+};
+
+const findStorageNodeInTree = (node, targetId, parentId = "") => {
+  if (!node || !targetId) {
+    return null;
+  }
+  if (node.id === targetId) {
+    return { node, parentId };
+  }
+  if (node.type !== "folder" || !Array.isArray(node.children)) {
+    return null;
+  }
+  for (const child of node.children) {
+    const found = findStorageNodeInTree(child, targetId, node.id);
+    if (found) {
+      return found;
+    }
+  }
+  return null;
+};
+
+const compareStorageNodes = (a, b) => {
+  if (a.type !== b.type) {
+    return a.type === "folder" ? -1 : 1;
+  }
+  return String(a.name || "").localeCompare(String(b.name || ""), "zh-CN");
+};
+
+const fileSidebarPanelWidth = computed(() => {
+  if (isFileSidebarHidden.value) {
+    return 0;
+  }
+  if (isFileSidebarCollapsed.value) {
+    return FILE_SIDEBAR_COLLAPSED_WIDTH;
+  }
+  return fileSidebarWidth.value;
+});
 
 const sidebarPanelWidth = computed(() => {
   if (isSidebarHidden.value) {
@@ -814,25 +1091,290 @@ const sidebarPanelWidth = computed(() => {
   return sidebarWidth.value;
 });
 
-const editHeaderStyle = computed(() => {
-  const collapsed = isEditMode.value ? editHeaderHidden.value : collapseHeaderInView.value;
-  if (collapsed) {
-    return {
-      height: "0px",
-      minHeight: "0px",
-      paddingTop: "0px",
-      paddingBottom: "0px",
-      borderBottomWidth: "0px",
-      overflow: "hidden"
-    };
+const viewHeaderStyle = computed(() => {
+  if (!collapseHeaderInView.value) {
+    return { overflow: "visible" };
   }
-  const h = clamp(Math.round(editHeaderHeight.value), EDIT_HEADER_MIN_HEIGHT, EDIT_HEADER_MAX_HEIGHT);
   return {
-    height: `${h}px`,
-    minHeight: `${h}px`,
-    overflow: "visible"
+    height: "0px",
+    minHeight: "0px",
+    paddingTop: "0px",
+    paddingBottom: "0px",
+    borderBottomWidth: "0px",
+    overflow: "hidden"
   };
 });
+
+const storageLocationText = computed(() => {
+  if (isDesktopStorage) {
+    return storageRootPath.value || "正在读取真实目录...";
+  }
+  return "浏览器本地存储";
+});
+
+const storageStats = computed(() => {
+  if (storageLoading.value) {
+    return "加载中...";
+  }
+  let folderCount = 0;
+  let fileCount = 0;
+  const walk = (node) => {
+    if (!node) {
+      return;
+    }
+    if (node.type === "folder") {
+      folderCount += 1;
+      if (Array.isArray(node.children)) {
+        for (const child of node.children) {
+          walk(child);
+        }
+      }
+      return;
+    }
+    fileCount += 1;
+  };
+  walk(storageTree.value);
+  return `${Math.max(0, folderCount - 1)} 文件夹 / ${fileCount} 文件`;
+});
+
+const isStorageFolderExpanded = (id) => storageFolderExpandedMap.value[id] !== false;
+
+const visibleStorageNodes = computed(() => {
+  const list = [];
+  const walk = (node, depth) => {
+    if (!node) {
+      return;
+    }
+    list.push({
+      id: node.id,
+      type: node.type,
+      name: node.name,
+      relPath: node.relPath || "",
+      depth
+    });
+    if (node.type !== "folder" || !isStorageFolderExpanded(node.id)) {
+      return;
+    }
+    const ordered = [...(Array.isArray(node.children) ? node.children : [])].sort(compareStorageNodes);
+    for (const child of ordered) {
+      walk(child, depth + 1);
+    }
+  };
+  walk(storageTree.value, 0);
+  return list;
+});
+
+const persistStorageState = () => {
+  if (typeof window === "undefined") {
+    return;
+  }
+  try {
+    if (!isDesktopStorage) {
+      localStorage.setItem(STORAGE_TREE_STORAGE_KEY, JSON.stringify(storageTree.value));
+    }
+    localStorage.setItem(STORAGE_EXPANDED_STORAGE_KEY, JSON.stringify(storageFolderExpandedMap.value));
+    localStorage.setItem(STORAGE_SELECTED_STORAGE_KEY, selectedStorageNodeId.value);
+  } catch {
+    // ignore storage failure
+  }
+};
+
+const ensureSelectedStorageNodeValid = () => {
+  const current = String(selectedStorageNodeId.value || "");
+  if (findStorageNodeInTree(storageTree.value, current)) {
+    return;
+  }
+  selectedStorageNodeId.value = STORAGE_ROOT_ID;
+};
+
+const selectStorageNode = (id) => {
+  const targetId = String(id || "").trim();
+  if (!targetId) {
+    return;
+  }
+  selectedStorageNodeId.value = targetId;
+  const matched = findStorageNodeInTree(storageTree.value, targetId);
+  if (matched?.node?.type === "folder") {
+    storageFolderExpandedMap.value = {
+      ...storageFolderExpandedMap.value,
+      [targetId]: true
+    };
+  }
+  persistStorageState();
+};
+
+const toggleStorageFolder = (id) => {
+  const targetId = String(id || "").trim();
+  if (!targetId) {
+    return;
+  }
+  storageFolderExpandedMap.value = {
+    ...storageFolderExpandedMap.value,
+    [targetId]: !isStorageFolderExpanded(targetId)
+  };
+  persistStorageState();
+};
+
+const resolveStorageTargetFolderId = () => {
+  const matched = findStorageNodeInTree(storageTree.value, selectedStorageNodeId.value);
+  if (!matched) {
+    return STORAGE_ROOT_ID;
+  }
+  if (matched.node.type === "folder") {
+    return matched.node.id;
+  }
+  return matched.parentId || STORAGE_ROOT_ID;
+};
+
+const resolveStorageTargetFolderRelPath = () => {
+  const matched = findStorageNodeInTree(storageTree.value, selectedStorageNodeId.value);
+  if (!matched) {
+    return "";
+  }
+  if (matched.node.type === "folder") {
+    return String(matched.node.relPath || "");
+  }
+  const parent = findStorageNodeInTree(storageTree.value, matched.parentId || STORAGE_ROOT_ID);
+  return String(parent?.node?.relPath || "");
+};
+
+const askStorageName = (title, fallbackName) => {
+  if (typeof window === "undefined" || typeof window.prompt !== "function") {
+    return fallbackName;
+  }
+  const value = window.prompt(title, fallbackName);
+  return String(value || "").trim();
+};
+
+const createStorageNodeAt = (folderId, node) => {
+  const draft = cloneStorageTree(storageTree.value);
+  const matched = findStorageNodeInTree(draft, folderId);
+  if (!matched || matched.node.type !== "folder") {
+    return false;
+  }
+  const children = Array.isArray(matched.node.children) ? matched.node.children : [];
+  children.push(node);
+  matched.node.children = children;
+  storageTree.value = draft;
+  return true;
+};
+
+const createStorageFile = async () => {
+  const rawName = askStorageName("请输入文件名", "未命名.md");
+  if (!rawName) {
+    return;
+  }
+  const name = rawName.includes(".") ? rawName : `${rawName}.md`;
+
+  if (isDesktopStorage) {
+    try {
+      const result = await desktopDataBridge.createWorkspaceFile({
+        parentRelPath: resolveStorageTargetFolderRelPath(),
+        name
+      });
+      if (!result?.ok) {
+        throw new Error(String(result?.error || "create_file_failed"));
+      }
+      await loadDesktopStorageTree();
+      selectedStorageNodeId.value = String(result.relPath || selectedStorageNodeId.value);
+      persistStorageState();
+      showToast(`已创建文件: ${result.name || name}`);
+      return;
+    } catch (error) {
+      showToast(`创建文件失败: ${String(error?.message || error || "unknown_error")}`);
+      return;
+    }
+  }
+
+  const folderId = resolveStorageTargetFolderId();
+  const parentMatch = findStorageNodeInTree(storageTree.value, folderId);
+  const parentRel = String(parentMatch?.node?.relPath || "");
+  const fileNode = {
+    id: makeStorageNodeId("file"),
+    type: "file",
+    name,
+    relPath: parentRel ? `${parentRel}/${name}` : name,
+    absPath: "",
+    children: []
+  };
+  if (!createStorageNodeAt(folderId, fileNode)) {
+    showToast("创建文件失败");
+    return;
+  }
+  storageFolderExpandedMap.value = {
+    ...storageFolderExpandedMap.value,
+    [folderId]: true
+  };
+  selectedStorageNodeId.value = fileNode.id;
+  persistStorageState();
+};
+
+const createStorageFolder = async () => {
+  const name = askStorageName("请输入文件夹名", "新建文件夹");
+  if (!name) {
+    return;
+  }
+
+  if (isDesktopStorage) {
+    try {
+      const result = await desktopDataBridge.createWorkspaceFolder({
+        parentRelPath: resolveStorageTargetFolderRelPath(),
+        name
+      });
+      if (!result?.ok) {
+        throw new Error(String(result?.error || "create_folder_failed"));
+      }
+      await loadDesktopStorageTree();
+      selectedStorageNodeId.value = String(result.relPath || selectedStorageNodeId.value);
+      persistStorageState();
+      showToast(`已创建文件夹: ${result.name || name}`);
+      return;
+    } catch (error) {
+      showToast(`创建文件夹失败: ${String(error?.message || error || "unknown_error")}`);
+      return;
+    }
+  }
+
+  const folderId = resolveStorageTargetFolderId();
+  const parentMatch = findStorageNodeInTree(storageTree.value, folderId);
+  const parentRel = String(parentMatch?.node?.relPath || "");
+  const folderNode = {
+    id: makeStorageNodeId("folder"),
+    type: "folder",
+    name,
+    relPath: parentRel ? `${parentRel}/${name}` : name,
+    absPath: "",
+    children: []
+  };
+  if (!createStorageNodeAt(folderId, folderNode)) {
+    showToast("创建文件夹失败");
+    return;
+  }
+  storageFolderExpandedMap.value = {
+    ...storageFolderExpandedMap.value,
+    [folderId]: true,
+    [folderNode.id]: true
+  };
+  selectedStorageNodeId.value = folderNode.id;
+  persistStorageState();
+};
+
+const openStorageRootDir = async () => {
+  if (!isDesktopStorage || !desktopDataBridge?.openWorkspaceDir) {
+    showToast("当前环境不支持打开真实目录");
+    return;
+  }
+  try {
+    const result = await desktopDataBridge.openWorkspaceDir();
+    if (!result?.ok) {
+      throw new Error(String(result?.error || "open_workspace_failed"));
+    }
+  } catch (error) {
+    showToast(`打开目录失败: ${String(error?.message || error || "unknown_error")}`);
+  }
+};
+
+ensureSelectedStorageNodeValid();
 
 const measureContentReadProgress = () => {
   const el = contentScrollRef.value;
@@ -887,14 +1429,6 @@ const handlePreviewNavClick = (event) => {
   }
 };
 
-const closeSettingsPanel = () => {
-  settingsPanelOpen.value = false;
-};
-
-const toggleSettingsPanel = () => {
-  settingsPanelOpen.value = !settingsPanelOpen.value;
-};
-
 const sidebarChapterProgress = computed(() => {
   const total = steps.value.length;
   if (!total || currentStepIndex.value < 0) {
@@ -916,7 +1450,15 @@ const stepProgressForIndex = (index) => {
 };
 
 const toggleSidebarCollapse = () => {
-  isSidebarHidden.value = false;
+  if (isSidebarHidden.value) {
+    isSidebarHidden.value = false;
+    isSidebarCollapsed.value = false;
+    sidebarWidth.value = clamp(sidebarWidth.value, SIDEBAR_MIN_WIDTH, SIDEBAR_MAX_WIDTH);
+    nextTick(() => {
+      refreshContentProgress();
+    });
+    return;
+  }
   if (isSidebarCollapsed.value) {
     isSidebarCollapsed.value = false;
     sidebarWidth.value = clamp(sidebarWidth.value, SIDEBAR_MIN_WIDTH, SIDEBAR_MAX_WIDTH);
@@ -997,7 +1539,7 @@ const startSidebarResizeDrag = (event) => {
 
   const onMove = (ev) => {
     const dx = ev.clientX - startX;
-    queueSidebarDragWidth(startW + dx);
+    queueSidebarDragWidth(startW - dx);
   };
 
   const onUp = () => {
@@ -1019,53 +1561,114 @@ const startSidebarResizeDrag = (event) => {
   window.addEventListener("mouseup", onUp);
 };
 
-const applyEditHeaderHeight = (rawHeight) => {
-  const height = Number(rawHeight) || 0;
-  if (height <= EDIT_HEADER_HIDE_THRESHOLD) {
-    editHeaderHidden.value = true;
+const toggleFileSidebarCollapse = () => {
+  if (isFileSidebarHidden.value) {
+    isFileSidebarHidden.value = false;
+    isFileSidebarCollapsed.value = false;
+    fileSidebarWidth.value = clamp(fileSidebarWidth.value, FILE_SIDEBAR_MIN_WIDTH, FILE_SIDEBAR_MAX_WIDTH);
+    nextTick(() => {
+      refreshContentProgress();
+    });
     return;
   }
-  editHeaderHidden.value = false;
-  editHeaderHeight.value = clamp(Math.round(height), EDIT_HEADER_MIN_HEIGHT, EDIT_HEADER_MAX_HEIGHT);
+  if (isFileSidebarCollapsed.value) {
+    isFileSidebarCollapsed.value = false;
+    fileSidebarWidth.value = clamp(fileSidebarWidth.value, FILE_SIDEBAR_MIN_WIDTH, FILE_SIDEBAR_MAX_WIDTH);
+  } else {
+    isFileSidebarCollapsed.value = true;
+  }
+  nextTick(() => {
+    refreshContentProgress();
+  });
 };
 
-const startEditHeaderResize = (event) => {
-  if (!isEditMode.value) {
+const applyFileSidebarDragWidth = (rawWidth) => {
+  const width = Number(rawWidth) || 0;
+  if (width <= FILE_SIDEBAR_HIDE_SNAP) {
+    isFileSidebarHidden.value = true;
+    isFileSidebarCollapsed.value = false;
     return;
   }
-  event.preventDefault();
 
-  const startY = event.clientY;
-  const startH = editHeaderHidden.value ? 0 : editHeaderHeight.value;
+  isFileSidebarHidden.value = false;
+  if (width <= FILE_SIDEBAR_COLLAPSE_SNAP) {
+    isFileSidebarCollapsed.value = true;
+    return;
+  }
+
+  isFileSidebarCollapsed.value = false;
+  fileSidebarWidth.value = clamp(Math.round(width), FILE_SIDEBAR_MIN_WIDTH, FILE_SIDEBAR_MAX_WIDTH);
+};
+
+const queueFileSidebarDragWidth = (rawWidth) => {
+  fileSidebarDragPendingWidth = rawWidth;
+  if (fileSidebarDragRaf) {
+    return;
+  }
+  fileSidebarDragRaf = window.requestAnimationFrame(() => {
+    fileSidebarDragRaf = 0;
+    if (fileSidebarDragPendingWidth == null) {
+      return;
+    }
+    const pending = fileSidebarDragPendingWidth;
+    fileSidebarDragPendingWidth = null;
+    applyFileSidebarDragWidth(pending);
+  });
+};
+
+const finishFileSidebarDrag = () => {
+  if (fileSidebarDragRaf) {
+    window.cancelAnimationFrame(fileSidebarDragRaf);
+    fileSidebarDragRaf = 0;
+  }
+  if (fileSidebarDragPendingWidth != null) {
+    applyFileSidebarDragWidth(fileSidebarDragPendingWidth);
+    fileSidebarDragPendingWidth = null;
+  }
+  if (!isFileSidebarHidden.value && !isFileSidebarCollapsed.value) {
+    fileSidebarWidth.value = clamp(fileSidebarWidth.value, FILE_SIDEBAR_MIN_WIDTH, FILE_SIDEBAR_MAX_WIDTH);
+  }
+};
+
+const startFileSidebarResizeDrag = (event) => {
+  event.preventDefault();
+  isFileSidebarDragging.value = true;
+  const startX = event.clientX;
+  const startW = isFileSidebarHidden.value
+    ? 0
+    : (isFileSidebarCollapsed.value ? FILE_SIDEBAR_COLLAPSED_WIDTH : fileSidebarWidth.value);
+
   document.body.style.userSelect = "none";
 
-  if (editHeaderDragMoveHandler) {
-    window.removeEventListener("mousemove", editHeaderDragMoveHandler);
-    editHeaderDragMoveHandler = null;
+  if (fileSidebarDragMoveHandler) {
+    window.removeEventListener("mousemove", fileSidebarDragMoveHandler);
+    fileSidebarDragMoveHandler = null;
   }
-  if (editHeaderDragUpHandler) {
-    window.removeEventListener("mouseup", editHeaderDragUpHandler);
-    editHeaderDragUpHandler = null;
+  if (fileSidebarDragUpHandler) {
+    window.removeEventListener("mouseup", fileSidebarDragUpHandler);
+    fileSidebarDragUpHandler = null;
   }
 
   const onMove = (ev) => {
-    const dy = ev.clientY - startY;
-    applyEditHeaderHeight(startH + dy);
+    const dx = ev.clientX - startX;
+    queueFileSidebarDragWidth(startW + dx);
   };
 
   const onUp = () => {
+    isFileSidebarDragging.value = false;
     document.body.style.userSelect = "";
     window.removeEventListener("mousemove", onMove);
     window.removeEventListener("mouseup", onUp);
-    editHeaderDragMoveHandler = null;
-    editHeaderDragUpHandler = null;
+    fileSidebarDragMoveHandler = null;
+    fileSidebarDragUpHandler = null;
+    finishFileSidebarDrag();
     nextTick(() => {
       refreshContentProgress();
     });
   };
 
-  editHeaderDragMoveHandler = onMove;
-  editHeaderDragUpHandler = onUp;
+  fileSidebarDragMoveHandler = onMove;
+  fileSidebarDragUpHandler = onUp;
   window.addEventListener("mousemove", onMove);
   window.addEventListener("mouseup", onUp);
 };
@@ -1518,6 +2121,51 @@ const syncDesktopFullscreenState = async () => {
   desktopFullscreen.value = Boolean(await desktopWindowBridge.isFullscreen());
 };
 
+const syncDesktopMaximizeState = async () => {
+  if (!desktopWindowBridge?.isMaximized) {
+    windowIsMaximized.value = false;
+    return;
+  }
+  try {
+    windowIsMaximized.value = Boolean(await desktopWindowBridge.isMaximized());
+  } catch {
+    windowIsMaximized.value = false;
+  }
+};
+
+const handleWindowMinimize = () => {
+  if (isDesktopWindowControls && desktopWindowBridge?.minimize) {
+    void desktopWindowBridge.minimize();
+    return;
+  }
+  minimizeTerminalPanel();
+};
+
+const handleWindowToggleMaximize = async () => {
+  if (isDesktopWindowControls && desktopWindowBridge?.toggleMaximize) {
+    try {
+      const result = await desktopWindowBridge.toggleMaximize();
+      if (typeof result?.maximized === "boolean") {
+        windowIsMaximized.value = result.maximized;
+      } else {
+        await syncDesktopMaximizeState();
+      }
+    } catch {
+      await syncDesktopMaximizeState();
+    }
+    return;
+  }
+  toggleTerminalMaximize();
+};
+
+const handleWindowClose = () => {
+  if (isDesktopWindowControls && desktopWindowBridge?.close) {
+    void desktopWindowBridge.close();
+    return;
+  }
+  closeTerminal();
+};
+
 const xtermLightTheme = {
   background: "#ffffff",
   foreground: "#0f172a",
@@ -1951,6 +2599,20 @@ watch(collapseHeaderInView, (enabled) => {
   }
 });
 
+watch(storageTree, () => {
+  ensureSelectedStorageNodeValid();
+  persistStorageState();
+}, { deep: true });
+
+watch(storageFolderExpandedMap, () => {
+  persistStorageState();
+}, { deep: true });
+
+watch(selectedStorageNodeId, () => {
+  ensureSelectedStorageNodeValid();
+  persistStorageState();
+});
+
 watch([terminalPanelHeight, terminalMaximized], () => {
   if (!isDesktopPty.value || !terminalOpen.value || terminalTab.value !== "terminal") {
     return;
@@ -1979,13 +2641,11 @@ const toggleDark = () => {
 };
 
 const toggleMode = () => {
-  closeSettingsPanel();
   const nextMode = isEditMode.value ? "view" : "edit";
   mode.value = nextMode;
-  if (isDesktopPty.value && desktopWindowBridge?.setFullscreen) {
-    const shouldFullscreen = nextMode === "view";
-    void desktopWindowBridge.setFullscreen(shouldFullscreen).then(() => {
-      desktopFullscreen.value = shouldFullscreen;
+  if (desktopWindowBridge?.setFullscreen) {
+    void desktopWindowBridge.setFullscreen(true).then(() => {
+      desktopFullscreen.value = true;
       nextTick(() => {
         void syncDesktopTerminalSize();
       });
@@ -2061,6 +2721,15 @@ const closeTerminal = () => {
   closeDesktopTabContextMenu();
   terminalOpen.value = false;
   terminalMaximized.value = false;
+};
+
+const minimizeTerminalPanel = () => {
+  if (!terminalOpen.value) {
+    openTerminalPanel(terminalTab.value);
+  }
+  terminalOpen.value = true;
+  terminalMaximized.value = false;
+  terminalPanelHeight.value = TERMINAL_MIN_HEIGHT;
 };
 
 const toggleTerminalMaximize = () => {
@@ -2154,23 +2823,9 @@ const onKeydown = (event) => {
   const tag = document.activeElement?.tagName?.toLowerCase() || "";
   const typing = tag === "input" || tag === "textarea" || document.activeElement?.isContentEditable;
 
-  if (event.key === "Escape" && settingsPanelOpen.value) {
-    event.preventDefault();
-    closeSettingsPanel();
-    return;
-  }
   if (event.key === "Escape" && !isEditMode.value) {
     event.preventDefault();
     toggleMode();
-    return;
-  }
-  if (event.key === "Escape" && desktopFullscreen.value) {
-    event.preventDefault();
-    if (desktopWindowBridge?.setFullscreen) {
-      void desktopWindowBridge.setFullscreen(false).then(() => {
-        desktopFullscreen.value = false;
-      });
-    }
     return;
   }
   if (event.key === "Escape" && terminalOpen.value) {
@@ -2187,13 +2842,6 @@ const onKeydown = (event) => {
 
 const onGlobalPointerDown = (event) => {
   const target = event.target;
-  if (
-    settingsPanelOpen.value &&
-    !(target instanceof Element && target.closest(".app-settings-popover"))
-  ) {
-    closeSettingsPanel();
-  }
-
   if (!desktopTabMenu.value.open) {
     return;
   }
@@ -2217,14 +2865,20 @@ onMounted(() => {
   window.addEventListener("blur", closeDesktopTabContextMenu);
   window.addEventListener("blur", releasePasteShortcutLocks);
   window.addEventListener("resize", refreshContentProgress);
+  if (isDesktopStorage) {
+    void loadDesktopStorageTree();
+  }
   if (isDesktopPty.value) {
     terminalTab.value = "terminal";
+  }
+  if (desktopWindowBridge?.setFullscreen) {
     void syncDesktopFullscreenState();
-    if (desktopWindowBridge?.setFullscreen) {
-      void desktopWindowBridge.setFullscreen(mode.value === "view").then(() => {
-        desktopFullscreen.value = mode.value === "view";
-      });
-    }
+    void desktopWindowBridge.setFullscreen(true).then(() => {
+      desktopFullscreen.value = true;
+    });
+  }
+  if (isDesktopWindowControls) {
+    void syncDesktopMaximizeState();
   }
   nextTick(() => {
     refreshContentProgress();
@@ -2233,6 +2887,7 @@ onMounted(() => {
 
 onBeforeUnmount(() => {
   isSidebarDragging.value = false;
+  isFileSidebarDragging.value = false;
   cancelDesktopRenameDialog();
   disposeDesktopTerminal();
   disposeTerminal();
@@ -2244,15 +2899,16 @@ onBeforeUnmount(() => {
     window.removeEventListener("mouseup", sidebarDragUpHandler);
     sidebarDragUpHandler = null;
   }
-  if (editHeaderDragMoveHandler) {
-    window.removeEventListener("mousemove", editHeaderDragMoveHandler);
-    editHeaderDragMoveHandler = null;
+  if (fileSidebarDragMoveHandler) {
+    window.removeEventListener("mousemove", fileSidebarDragMoveHandler);
+    fileSidebarDragMoveHandler = null;
   }
-  if (editHeaderDragUpHandler) {
-    window.removeEventListener("mouseup", editHeaderDragUpHandler);
-    editHeaderDragUpHandler = null;
+  if (fileSidebarDragUpHandler) {
+    window.removeEventListener("mouseup", fileSidebarDragUpHandler);
+    fileSidebarDragUpHandler = null;
   }
   finishSidebarDrag();
+  finishFileSidebarDrag();
   document.body.style.userSelect = "";
   if (terminalResizeSyncTimer) {
     clearTimeout(terminalResizeSyncTimer);

@@ -35,6 +35,10 @@ contextBridge.exposeInMainWorld("desktopPty", {
 contextBridge.exposeInMainWorld("desktopWindow", {
   setFullscreen: (enabled) => ipcRenderer.invoke("desktop:window:set-fullscreen", { enabled: Boolean(enabled) }),
   isFullscreen: () => ipcRenderer.invoke("desktop:window:is-fullscreen"),
+  minimize: () => ipcRenderer.invoke("desktop:window:minimize"),
+  toggleMaximize: () => ipcRenderer.invoke("desktop:window:toggle-maximize"),
+  isMaximized: () => ipcRenderer.invoke("desktop:window:is-maximized"),
+  close: () => ipcRenderer.invoke("desktop:window:close"),
   getImageDir: () => ipcRenderer.invoke("desktop:assets:get-image-dir"),
   openImageDir: () => ipcRenderer.invoke("desktop:assets:open-image-dir"),
   pickImage: () => ipcRenderer.invoke("desktop:assets:pick-image")
@@ -43,5 +47,10 @@ contextBridge.exposeInMainWorld("desktopWindow", {
 contextBridge.exposeInMainWorld("desktopData", {
   getStepsPath: () => ipcRenderer.invoke("desktop:data:get-steps-path"),
   loadSteps: () => ipcRenderer.invoke("desktop:data:load-steps"),
-  saveSteps: (payload = {}) => ipcRenderer.invoke("desktop:data:save-steps", payload)
+  saveSteps: (payload = {}) => ipcRenderer.invoke("desktop:data:save-steps", payload),
+  getWorkspaceRoot: () => ipcRenderer.invoke("desktop:data:get-workspace-root"),
+  readWorkspaceTree: () => ipcRenderer.invoke("desktop:data:read-workspace-tree"),
+  createWorkspaceFile: (payload = {}) => ipcRenderer.invoke("desktop:data:create-workspace-file", payload),
+  createWorkspaceFolder: (payload = {}) => ipcRenderer.invoke("desktop:data:create-workspace-folder", payload),
+  openWorkspaceDir: () => ipcRenderer.invoke("desktop:data:open-workspace-dir")
 });
