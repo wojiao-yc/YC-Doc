@@ -234,7 +234,7 @@
       >
         <div class="mx-auto relative w-full px-10 py-10" :class="isEditMode ? 'max-w-6xl' : 'max-w-none'">
           <transition name="fade" mode="out-in">
-            <div :key="currentId" class="flex flex-col">
+            <div :key="contentPaneKey" class="flex flex-col">
               <div
                 v-if="!isEditMode"
                 class="mb-10 w-full relative mx-auto"
@@ -286,10 +286,12 @@
                     </div>
                   </div>
                   <textarea
-                    v-model="activeStep.content"
+                    ref="editorTextareaRef"
+                    v-model="documentMarkdown"
                     class="flex-1 w-full p-6 font-mono text-sm leading-relaxed bg-transparent resize-none focus:outline-none"
                     :class="isDark ? 'text-slate-100' : 'text-gray-800'"
                     spellcheck="false"
+                    @blur="flushPendingMarkdownSave()"
                   ></textarea>
                 </div>
 
@@ -319,7 +321,7 @@
                     </div>
                   </div>
 
-                  <div class="flex-1 p-6 overflow-y-auto relative">
+                  <div ref="editPreviewScrollRef" class="flex-1 p-6 overflow-y-auto relative">
                     <div class="mx-auto relative" :style="displayStyle">
                       <div data-preview="1" :class="isDark ? 'md-dark' : 'md-light'" v-html="renderedMarkdown"></div>
                       <div class="absolute top-0 -right-3 bottom-0 w-3 cursor-ew-resize" @mousedown="startDisplayResize">
@@ -641,7 +643,7 @@
         <div
           v-for="(step, index) in steps"
           :key="step.id"
-          @click="currentId = step.id"
+          @click="handleStepSelection(step.id, index)"
           :title="isInspectorSidebarCollapsed ? stepDisplayTitle(step, index) : ''"
           :draggable="isEditMode"
           @dragstart="onDragStart($event, index, isEditMode)"
@@ -832,6 +834,8 @@ const terminalMaximized = ref(false);
 const terminalTab = ref("terminal");
 const mainRef = ref(null);
 const contentScrollRef = ref(null);
+const editorTextareaRef = ref(null);
+const editPreviewScrollRef = ref(null);
 const terminalViewportRef = ref(null);
 const terminalSplitWrapRef = ref(null);
 const currentContentReadProgress = ref(0);
@@ -849,6 +853,7 @@ const storageLoading = ref(false);
 const storageFolderExpandedMap = ref({ [STORAGE_ROOT_ID]: true });
 const selectedStorageNodeId = ref(STORAGE_ROOT_ID);
 const activeMarkdownRelPath = ref("");
+const documentMarkdown = ref("");
 const markdownHydrating = ref(false);
 const windowIsMaximized = ref(false);
 const SIDEBAR_COLLAPSED_WIDTH = 72;
@@ -948,6 +953,8 @@ let fileSidebarDragMoveHandler = null;
 let fileSidebarDragUpHandler = null;
 let desktopWindowMaximizeOff = null;
 let markdownSaveTimer = null;
+let pendingDocumentMarkdownFromSteps = null;
+let pendingStepsFromDocumentMarkdown = false;
 
 const clamp = (value, min, max) => Math.min(max, Math.max(min, value));
 const TERMINAL_MIN_HEIGHT = 120;
@@ -971,12 +978,16 @@ const {
   currentStepIndex,
   isFirstStep,
   isLastStep,
-  next,
-  prev,
+  next: baseNext,
+  prev: basePrev,
   onDragStart,
   onDragOver,
   onDrop
 } = useSteps(showToast);
+
+const previewMarkdownState = computed(() => ({
+  content: isEditMode.value ? documentMarkdown.value : String(activeStep.value?.content || "")
+}));
 
 const {
   sidebarWidth,
@@ -1031,25 +1042,32 @@ const stepPreviewText = (step) => {
   return lines[0] || "空白内容";
 };
 
-const parseMarkdownToSteps = (rawMarkdown) => {
+const extractMarkdownSections = (rawMarkdown) => {
   const text = normalizeMarkdownText(rawMarkdown);
   const lines = text.split("\n");
   const sections = [];
   let fenceChar = "";
   let pendingPrefixLines = [];
   let currentSection = null;
+  let offset = 0;
 
-  const flushSection = () => {
+  const pushSection = (endIndex) => {
     if (!currentSection) {
       return;
     }
     sections.push({
       title: currentSection.title,
-      content: trimOuterBlankLines(currentSection.lines.join("\n"))
+      content: trimOuterBlankLines(currentSection.lines.join("\n")),
+      startIndex: currentSection.startIndex,
+      endIndex
     });
   };
 
-  for (const line of lines) {
+  for (let index = 0; index < lines.length; index += 1) {
+    const line = lines[index];
+    const lineStart = offset;
+    const hasNewline = index < lines.length - 1;
+    const lineEnd = lineStart + line.length + (hasNewline ? 1 : 0);
     const fenceMatch = line.match(/^(```|~~~)/);
     if (fenceMatch) {
       const nextFenceChar = fenceMatch[1][0];
@@ -1058,23 +1076,44 @@ const parseMarkdownToSteps = (rawMarkdown) => {
 
     const headingMatch = !fenceChar ? line.match(/^#\s+(.+?)\s*$/) : null;
     if (headingMatch) {
-      flushSection();
+      pushSection(lineStart);
+      const prefixStart = pendingPrefixLines[0]?.startIndex;
       currentSection = {
         title: String(headingMatch[1] || "").trim(),
-        lines: sections.length === 0 ? [...pendingPrefixLines] : []
+        lines: sections.length === 0 ? pendingPrefixLines.map((item) => item.line) : [],
+        startIndex: sections.length === 0 && Number.isFinite(prefixStart) ? prefixStart : lineStart
       };
       pendingPrefixLines = [];
+      offset = lineEnd;
       continue;
     }
 
+    const lineRecord = { line, startIndex: lineStart };
     if (currentSection) {
       currentSection.lines.push(line);
     } else {
-      pendingPrefixLines.push(line);
+      pendingPrefixLines.push(lineRecord);
     }
+    offset = lineEnd;
   }
 
-  flushSection();
+  pushSection(text.length);
+
+  if (!sections.length) {
+    return [{
+      title: "",
+      content: trimOuterBlankLines(text),
+      startIndex: 0,
+      endIndex: text.length
+    }];
+  }
+
+  return sections;
+};
+
+const parseMarkdownToSteps = (rawMarkdown) => {
+  const text = normalizeMarkdownText(rawMarkdown);
+  const sections = extractMarkdownSections(text);
 
   if (!sections.length) {
     const single = trimOuterBlankLines(text);
@@ -1135,6 +1174,99 @@ const serializeStepsToMarkdown = (sourceSteps) => {
   return `${chunks.join("\n\n").trim()}\n`;
 };
 
+const syncDocumentMarkdownFromSteps = (sourceSteps = steps.value) => {
+  const nextMarkdown = serializeStepsToMarkdown(sourceSteps);
+  if (documentMarkdown.value === nextMarkdown) {
+    return;
+  }
+  pendingDocumentMarkdownFromSteps = nextMarkdown;
+  documentMarkdown.value = nextMarkdown;
+};
+
+const syncStepsFromDocumentMarkdown = (rawMarkdown, preserveIndex = currentStepIndex.value) => {
+  const parsed = parseMarkdownToSteps(rawMarkdown);
+  const targetIndex = clamp(Number(preserveIndex) || 0, 0, Math.max(0, parsed.length - 1));
+  pendingStepsFromDocumentMarkdown = true;
+  steps.value = parsed;
+  currentId.value = parsed[targetIndex]?.id ?? parsed[0]?.id ?? 1;
+};
+
+documentMarkdown.value = serializeStepsToMarkdown(steps.value);
+const markdownSections = computed(() => extractMarkdownSections(documentMarkdown.value));
+const contentPaneKey = computed(() => (isEditMode.value ? mode.value : `${mode.value}:${currentId.value}`));
+
+const scrollEditorToStep = async (index) => {
+  await nextTick();
+  const textarea = editorTextareaRef.value;
+  const target = markdownSections.value[Math.max(0, Math.min(index, markdownSections.value.length - 1))];
+  if (!textarea || !target) {
+    return;
+  }
+  if (typeof textarea.setSelectionRange === "function") {
+    textarea.setSelectionRange(target.startIndex, target.startIndex);
+  }
+  if (typeof textarea.focus === "function") {
+    textarea.focus();
+  }
+};
+
+const scrollEditPreviewToStep = async (index) => {
+  await nextTick();
+  const host = editPreviewScrollRef.value;
+  if (!host) {
+    return;
+  }
+  const headings = Array.from(host.querySelectorAll("h1"));
+  if (!headings.length) {
+    host.scrollTop = 0;
+    return;
+  }
+  const target = headings[Math.max(0, Math.min(index, headings.length - 1))];
+  host.scrollTo({
+    top: Math.max(0, target.offsetTop - 12),
+    behavior: "auto"
+  });
+};
+
+const focusStepInEditMode = async (index) => {
+  await Promise.all([
+    scrollEditorToStep(index),
+    scrollEditPreviewToStep(index)
+  ]);
+};
+
+const handleStepSelection = async (stepId, index) => {
+  currentId.value = stepId;
+  if (!isEditMode.value) {
+    return;
+  }
+  await focusStepInEditMode(index);
+};
+
+const next = async () => {
+  const nextIndex = currentStepIndex.value + 1;
+  if (nextIndex >= steps.value.length) {
+    return;
+  }
+  baseNext();
+  if (!isEditMode.value) {
+    return;
+  }
+  await focusStepInEditMode(nextIndex);
+};
+
+const prev = async () => {
+  const previousIndex = currentStepIndex.value - 1;
+  if (previousIndex < 0) {
+    return;
+  }
+  basePrev();
+  if (!isEditMode.value) {
+    return;
+  }
+  await focusStepInEditMode(previousIndex);
+};
+
 const addStep = () => {
   const list = Array.isArray(steps.value) ? steps.value : [];
   if (!list.length) {
@@ -1143,6 +1275,7 @@ const addStep = () => {
       title: defaultStepTitle(0)
     }];
     currentId.value = steps.value[0].id;
+    void focusStepInEditMode(0);
     return;
   }
 
@@ -1152,6 +1285,7 @@ const addStep = () => {
       title: defaultStepTitle(0)
     }];
     currentId.value = steps.value[0].id;
+    void focusStepInEditMode(0);
     return;
   }
 
@@ -1174,12 +1308,13 @@ const addStep = () => {
   };
   steps.value = [...steps.value, nextStep];
   currentId.value = nextId;
+  void focusStepInEditMode(nextIndex);
 };
 
 const removeStep = () => {
   const list = Array.isArray(steps.value) ? [...steps.value] : [];
   if (!list.length) {
-    resetBlankEditorState();
+    resetBlankEditorState({ preserveActiveFile: true });
     return;
   }
   const idx = list.findIndex((step) => step.id === currentId.value);
@@ -1187,12 +1322,14 @@ const removeStep = () => {
     return;
   }
   if (list.length === 1) {
-    resetBlankEditorState();
+    resetBlankEditorState({ preserveActiveFile: true });
     return;
   }
   list.splice(idx, 1);
   steps.value = list;
-  currentId.value = list[Math.max(0, idx - 1)]?.id ?? list[0]?.id ?? 1;
+  const nextIndex = Math.max(0, idx - 1);
+  currentId.value = list[nextIndex]?.id ?? list[0]?.id ?? 1;
+  void focusStepInEditMode(nextIndex);
 };
 
 const writeActiveMarkdownNow = async (targetRelPath = activeMarkdownRelPath.value) => {
@@ -1201,7 +1338,7 @@ const writeActiveMarkdownNow = async (targetRelPath = activeMarkdownRelPath.valu
     return;
   }
   try {
-    const content = serializeStepsToMarkdown(steps.value);
+    const content = String(documentMarkdown.value || "");
     const result = await desktopDataBridge.writeWorkspaceFile({
       relPath,
       content
@@ -1227,6 +1364,31 @@ const scheduleActiveMarkdownSave = () => {
   }, MARKDOWN_SAVE_DELAY_MS);
 };
 
+const flushPendingMarkdownSave = async (targetRelPath = activeMarkdownRelPath.value) => {
+  const relPath = String(targetRelPath || "").trim();
+  if (!relPath || markdownHydrating.value) {
+    return;
+  }
+  if (markdownSaveTimer) {
+    clearTimeout(markdownSaveTimer);
+    markdownSaveTimer = null;
+  }
+  await writeActiveMarkdownNow(relPath);
+};
+
+const persistActiveMarkdownBeforeSwitch = async (targetRelPath = "") => {
+  const currentRelPath = String(activeMarkdownRelPath.value || "").trim();
+  const nextRelPath = String(targetRelPath || "").trim();
+  if (!currentRelPath) {
+    clearScheduledMarkdownSave();
+    return;
+  }
+  if (!markdownSaveTimer && currentRelPath === nextRelPath) {
+    return;
+  }
+  await flushPendingMarkdownSave(currentRelPath);
+};
+
 const loadStepsFromMarkdownFile = async (relPath, showSuccessToast = false) => {
   if (!isDesktopStorage || !canWorkspaceFileIO) {
     return;
@@ -1235,7 +1397,10 @@ const loadStepsFromMarkdownFile = async (relPath, showSuccessToast = false) => {
   if (!targetRelPath) {
     return;
   }
+  await persistActiveMarkdownBeforeSwitch(targetRelPath);
   markdownHydrating.value = true;
+  pendingDocumentMarkdownFromSteps = null;
+  pendingStepsFromDocumentMarkdown = false;
   try {
     const result = await desktopDataBridge.readWorkspaceFile({
       relPath: targetRelPath
@@ -1253,7 +1418,9 @@ const loadStepsFromMarkdownFile = async (relPath, showSuccessToast = false) => {
       showToast(`Markdown 文件过大，已跳过: ${targetRelPath}`);
       return;
     }
-    const parsed = parseMarkdownToSteps(result.content || "");
+    const rawMarkdown = normalizeMarkdownText(result.content || "");
+    const parsed = parseMarkdownToSteps(rawMarkdown);
+    documentMarkdown.value = rawMarkdown;
     steps.value = parsed;
     currentId.value = parsed[0]?.id ?? 1;
     activeMarkdownRelPath.value = targetRelPath;
@@ -1468,8 +1635,13 @@ const clearScheduledMarkdownSave = () => {
   markdownSaveTimer = null;
 };
 
-const resetBlankEditorState = () => {
-  activeMarkdownRelPath.value = "";
+const resetBlankEditorState = ({ preserveActiveFile = false } = {}) => {
+  if (!preserveActiveFile) {
+    activeMarkdownRelPath.value = "";
+  }
+  pendingStepsFromDocumentMarkdown = false;
+  pendingDocumentMarkdownFromSteps = "";
+  documentMarkdown.value = "";
   steps.value = createBlankSteps();
   currentId.value = steps.value[0]?.id ?? 1;
 };
@@ -1666,7 +1838,7 @@ const ensureSelectedStorageNodeValid = () => {
   selectedStorageNodeId.value = STORAGE_ROOT_ID;
 };
 
-const selectStorageNode = (id) => {
+const selectStorageNode = async (id) => {
   const targetId = String(id || "").trim();
   if (!targetId) {
     return;
@@ -1678,16 +1850,19 @@ const selectStorageNode = (id) => {
       ...storageFolderExpandedMap.value,
       [targetId]: true
     };
+    await persistActiveMarkdownBeforeSwitch();
     resetBlankEditorState();
   } else if (matched?.node?.type === "file" && isMarkdownFileName(matched.node.name)) {
     if (isMarkdownFileTooLarge(matched.node.size)) {
       showToast(`Markdown 文件过大，无法载入: ${matched.node.name} (${formatBytes(matched.node.size)})`);
+      await persistActiveMarkdownBeforeSwitch();
       resetBlankEditorState();
       persistStorageState();
       return;
     }
-    void loadStepsFromMarkdownFile(String(matched.node.relPath || ""), true);
+    await loadStepsFromMarkdownFile(String(matched.node.relPath || ""), true);
   } else {
+    await persistActiveMarkdownBeforeSwitch();
     resetBlankEditorState();
   }
   persistStorageState();
@@ -2407,7 +2582,7 @@ const startFileSidebarResizeDrag = (event) => {
   window.addEventListener("mouseup", onUp);
 };
 
-const { renderedMarkdown } = useMarkdown(activeStep, [isDark, mode, currentId], showToast);
+const { renderedMarkdown } = useMarkdown(previewMarkdownState, [isDark, mode, currentId], showToast);
 
 const {
   terminalOpen,
@@ -2854,6 +3029,23 @@ const syncDesktopFullscreenState = async () => {
     return;
   }
   desktopFullscreen.value = Boolean(await desktopWindowBridge.isFullscreen());
+};
+
+const applyDesktopFullscreenForMode = async (nextMode) => {
+  if (!desktopWindowBridge?.setFullscreen) {
+    desktopFullscreen.value = false;
+    return;
+  }
+  try {
+    const result = await desktopWindowBridge.setFullscreen(nextMode === "view");
+    if (typeof result?.fullscreen === "boolean") {
+      desktopFullscreen.value = result.fullscreen;
+      return;
+    }
+  } catch {
+    // fall back to explicit state sync
+  }
+  await syncDesktopFullscreenState();
 };
 
 const syncDesktopMaximizeState = async () => {
@@ -3393,7 +3585,28 @@ watch(selectedStorageNodeId, () => {
   persistStorageState();
 });
 
+watch(documentMarkdown, (value) => {
+  if (markdownHydrating.value) {
+    return;
+  }
+  if (pendingDocumentMarkdownFromSteps !== null && value === pendingDocumentMarkdownFromSteps) {
+    pendingDocumentMarkdownFromSteps = null;
+    return;
+  }
+  pendingDocumentMarkdownFromSteps = null;
+  syncStepsFromDocumentMarkdown(value);
+  if (!activeMarkdownRelPath.value) {
+    return;
+  }
+  scheduleActiveMarkdownSave();
+});
+
 watch(steps, () => {
+  if (pendingStepsFromDocumentMarkdown) {
+    pendingStepsFromDocumentMarkdown = false;
+  } else {
+    syncDocumentMarkdownFromSteps();
+  }
   if (!activeMarkdownRelPath.value || markdownHydrating.value) {
     return;
   }
@@ -3401,23 +3614,15 @@ watch(steps, () => {
 }, { deep: true });
 
 watch(currentId, () => {
-  if (!activeMarkdownRelPath.value || markdownHydrating.value) {
-    return;
+  if (pendingStepsFromDocumentMarkdown) {
+    pendingStepsFromDocumentMarkdown = false;
   }
-  scheduleActiveMarkdownSave();
 });
 
-watch(activeMarkdownRelPath, (_next, prev) => {
-  const previousRelPath = String(prev || "").trim();
-  if (markdownSaveTimer && previousRelPath && !markdownHydrating.value) {
-    void writeActiveMarkdownNow(previousRelPath);
-  }
+watch(activeMarkdownRelPath, () => {
   if (markdownSaveTimer) {
     clearTimeout(markdownSaveTimer);
     markdownSaveTimer = null;
-    if (activeMarkdownRelPath.value && !markdownHydrating.value) {
-      void writeActiveMarkdownNow(activeMarkdownRelPath.value);
-    }
   }
 });
 
@@ -3448,9 +3653,13 @@ const toggleDark = () => {
   isDark.value = !isDark.value;
 };
 
-const toggleMode = () => {
+const toggleMode = async () => {
   const nextMode = isEditMode.value ? "view" : "edit";
+  if (nextMode === "view") {
+    await flushPendingMarkdownSave();
+  }
   mode.value = nextMode;
+  await applyDesktopFullscreenForMode(nextMode);
   nextTick(() => {
     void syncDesktopTerminalSize();
   });
@@ -3461,9 +3670,9 @@ const appendMarkdownImage = (url) => {
   if (!safeUrl) {
     return;
   }
-  const current = String(activeStep.value?.content || "");
+  const current = String(documentMarkdown.value || "");
   const suffix = current.endsWith("\n") ? "\n" : "\n\n";
-  activeStep.value.content = `${current}${suffix}![image](${safeUrl})\n`;
+  documentMarkdown.value = `${current}${suffix}![image](${safeUrl})\n`;
 };
 
 const insertImageToMarkdown = async () => {
@@ -3695,6 +3904,9 @@ onBeforeUnmount(() => {
   isFileSidebarDragging.value = false;
   cancelDesktopRenameDialog();
   cancelStorageRenameDialog();
+  if (activeMarkdownRelPath.value && !markdownHydrating.value) {
+    void flushPendingMarkdownSave(activeMarkdownRelPath.value);
+  }
   disposeDesktopTerminal();
   disposeTerminal();
   if (sidebarDragMoveHandler) {
