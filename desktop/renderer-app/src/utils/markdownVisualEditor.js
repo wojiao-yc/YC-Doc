@@ -4,6 +4,41 @@ import { escapeHtml } from "./escapeHtml";
 const normalizeMarkdownText = (value) => String(value || "").replace(/\r\n/g, "\n");
 const trimOuterBlankLines = (value) => String(value || "").replace(/^\n+/, "").replace(/\n+$/, "");
 
+export const normalizeLooseAtxHeadings = (markdown) => {
+  const lines = normalizeMarkdownText(markdown).split("\n");
+  let fenceChar = "";
+
+  return lines.map((line) => {
+    const fenceMatch = line.match(/^(```|~~~)/);
+    if (fenceMatch) {
+      const nextFenceChar = fenceMatch[1][0];
+      fenceChar = fenceChar === nextFenceChar ? "" : (fenceChar || nextFenceChar);
+      return line;
+    }
+    if (fenceChar) {
+      return line;
+    }
+
+    const headingMatch = line.match(/^(#{1,6})(.*)$/);
+    if (!headingMatch) {
+      return line;
+    }
+
+    const marker = String(headingMatch[1] || "");
+    const tail = String(headingMatch[2] || "");
+    if (tail.startsWith("#")) {
+      return line;
+    }
+    if (!tail.trim()) {
+      return `${marker} `;
+    }
+    if (/^\s/.test(tail)) {
+      return line;
+    }
+    return `${marker} ${tail}`;
+  }).join("\n");
+};
+
 const BLOCK_TAGS = new Set([
   "P",
   "DIV",
@@ -186,7 +221,7 @@ const serializeBlockNodes = (nodes) => {
     if (/^H[1-6]$/.test(tag)) {
       const level = Number(tag.slice(1));
       const content = trimOuterBlankLines(serializeInlineNodes(Array.from(node.childNodes || [])));
-      markdown = `${"#".repeat(level)} ${content}`.trim();
+      markdown = `${"#".repeat(level)}${content}`.trim();
     } else if (tag === "P") {
       markdown = trimOuterBlankLines(serializeInlineNodes(Array.from(node.childNodes || [])));
     } else if (tag === "PRE") {
@@ -343,7 +378,7 @@ const createEditableRenderer = () => {
 };
 
 export const renderMarkdownToEditableHtml = (markdown) => {
-  const html = String(marked.parse(normalizeMarkdownText(markdown), {
+  const html = String(marked.parse(normalizeLooseAtxHeadings(markdown), {
     breaks: true,
     gfm: true,
     renderer: createEditableRenderer()

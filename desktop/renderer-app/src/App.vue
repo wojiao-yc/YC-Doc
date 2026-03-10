@@ -916,6 +916,7 @@ import { FitAddon } from "@xterm/addon-fit";
 import { Terminal as XTermTerminal } from "xterm";
 import ToastMessage from "./components/ToastMessage.vue";
 import { useMarkdown } from "./composables/useMarkdown";
+import { useMarkdownDocument } from "./composables/useMarkdownDocument";
 import { useResizable } from "./composables/useResizable";
 import { useSteps } from "./composables/useSteps";
 import { useTerminal } from "./composables/useTerminal";
@@ -957,8 +958,6 @@ const storageRootPath = ref("");
 const storageLoading = ref(false);
 const storageFolderExpandedMap = ref({ [STORAGE_ROOT_ID]: true });
 const selectedStorageNodeId = ref(STORAGE_ROOT_ID);
-const activeMarkdownRelPath = ref("");
-const documentMarkdown = ref("");
 const isVisualEditorEmpty = ref(true);
 const visualEditorCommandMenu = ref({
   open: false,
@@ -967,7 +966,6 @@ const visualEditorCommandMenu = ref({
   query: "",
   activeIndex: 0
 });
-const markdownHydrating = ref(false);
 const windowIsMaximized = ref(false);
 const SIDEBAR_COLLAPSED_WIDTH = 72;
 const SIDEBAR_MIN_WIDTH = 240;
@@ -1065,15 +1063,14 @@ let fileSidebarDragPendingWidth = null;
 let fileSidebarDragMoveHandler = null;
 let fileSidebarDragUpHandler = null;
 let desktopWindowMaximizeOff = null;
-let markdownSaveTimer = null;
-let pendingDocumentMarkdownFromSteps = null;
-let pendingStepsFromDocumentMarkdown = false;
 let visualEditorHydrating = false;
 let visualEditorFocused = false;
+let visualEditorActiveBlock = null;
 let visualEditorActiveTableCell = null;
 let visualEditorCommandAnchorBlock = null;
 
 const clamp = (value, min, max) => Math.min(max, Math.max(min, value));
+const normalizeMarkdownText = (value) => String(value || "").replace(/\r\n/g, "\n");
 const TERMINAL_MIN_HEIGHT = 120;
 const TERMINAL_HIDE_THRESHOLD = 56;
 const TERMINAL_MAX_SNAP_GAP = 20;
@@ -1083,8 +1080,6 @@ const VIEW_STEPS_SIDEBAR_COLLAPSE_STORAGE_KEY = "yc-doc.view-steps-sidebar-colla
 const STORAGE_TREE_STORAGE_KEY = "yc-doc.storage-tree.v1";
 const STORAGE_EXPANDED_STORAGE_KEY = "yc-doc.storage-expanded.v1";
 const STORAGE_SELECTED_STORAGE_KEY = "yc-doc.storage-selected.v1";
-const MARKDOWN_SAVE_DELAY_MS = 320;
-const MAX_MARKDOWN_FILE_BYTES = 20 * 1024 * 1024;
 
 const { toast, showToast } = useToast();
 
@@ -1117,13 +1112,6 @@ const adjustVisualEditorWidth = (delta) => {
   const maxWidth = typeof window === "undefined" ? 2200 : Math.min(2200, window.innerWidth - 80);
   displayWidth.value = clamp(displayWidth.value + Number(delta || 0), 520, Math.max(520, maxWidth));
 };
-
-const createBlankStep = (id = 1) => ({
-  id,
-  title: "",
-  subtitle: "",
-  content: ""
-});
 
 const VISUAL_EDITOR_BLOCK_TAGS = new Set([
   "P",
@@ -1162,6 +1150,18 @@ const VISUAL_EDITOR_COMMANDS = Object.freeze([
     keywords: ["h2", "heading", "subtitle", "标题", "二级"]
   },
   {
+    id: "heading-3",
+    label: "H3 标题",
+    description: "插入三级标题",
+    keywords: ["h3", "heading", "标题", "三级"]
+  },
+  {
+    id: "heading-4",
+    label: "H4 标题",
+    description: "插入四级标题",
+    keywords: ["h4", "heading", "标题", "四级"]
+  },
+  {
     id: "bullet-list",
     label: "无序列表",
     description: "插入项目符号列表",
@@ -1178,6 +1178,36 @@ const VISUAL_EDITOR_COMMANDS = Object.freeze([
     label: "引用",
     description: "插入引用块",
     keywords: ["quote", "blockquote", "引用"]
+  },
+  {
+    id: "bold",
+    label: "粗体",
+    description: "插入粗体格式",
+    keywords: ["bold", "strong", "粗体", "加粗"]
+  },
+  {
+    id: "italic",
+    label: "斜体",
+    description: "插入斜体格式",
+    keywords: ["italic", "em", "斜体"]
+  },
+  {
+    id: "inline-code",
+    label: "行内代码",
+    description: "插入行内代码",
+    keywords: ["code", "inline", "行内", "代码"]
+  },
+  {
+    id: "strike",
+    label: "删除线",
+    description: "插入删除线",
+    keywords: ["strike", "del", "删除线"]
+  },
+  {
+    id: "link",
+    label: "链接",
+    description: "插入链接",
+    keywords: ["link", "url", "链接"]
   },
   {
     id: "code-block",
@@ -1205,204 +1235,6 @@ const VISUAL_EDITOR_COMMANDS = Object.freeze([
   }
 ]);
 
-const createBlankSteps = () => [createBlankStep(1)];
-const normalizeMarkdownText = (value) => String(value || "").replace(/\r\n/g, "\n");
-const trimOuterBlankLines = (value) => String(value || "").replace(/^\n+/, "").replace(/\n+$/, "");
-const isBlankStep = (step) =>
-  !String(step?.title || "").trim()
-  && !String(step?.subtitle || "").trim()
-  && !String(step?.content || "").trim();
-
-const isSingleBlankStepList = (list) =>
-  Array.isArray(list)
-  && list.length === 1
-  && isBlankStep(list[0]);
-
-const defaultStepTitle = (index) => `步骤 ${index + 1}`;
-
-const stepDisplayTitle = (step, index = 0) => {
-  const title = String(step?.title || "").trim();
-  if (title) {
-    return title;
-  }
-  const content = String(step?.content || "").trim();
-  if ((steps.value?.length || 0) <= 1) {
-    return content ? "文档" : "空白文档";
-  }
-  return defaultStepTitle(index);
-};
-
-const stepPreviewText = (step) => {
-  const lines = normalizeMarkdownText(step?.content || "")
-    .split("\n")
-    .map((line) => line.trim())
-    .filter(Boolean);
-  return lines[0] || "空白内容";
-};
-
-const extractMarkdownSections = (rawMarkdown) => {
-  const text = normalizeMarkdownText(rawMarkdown);
-  const lines = text.split("\n");
-  const sections = [];
-  let fenceChar = "";
-  let pendingPrefixLines = [];
-  let currentSection = null;
-  let offset = 0;
-
-  const pushSection = (endIndex) => {
-    if (!currentSection) {
-      return;
-    }
-    sections.push({
-      title: currentSection.title,
-      content: trimOuterBlankLines(currentSection.lines.join("\n")),
-      startIndex: currentSection.startIndex,
-      endIndex
-    });
-  };
-
-  for (let index = 0; index < lines.length; index += 1) {
-    const line = lines[index];
-    const lineStart = offset;
-    const hasNewline = index < lines.length - 1;
-    const lineEnd = lineStart + line.length + (hasNewline ? 1 : 0);
-    const fenceMatch = line.match(/^(```|~~~)/);
-    if (fenceMatch) {
-      const nextFenceChar = fenceMatch[1][0];
-      fenceChar = fenceChar === nextFenceChar ? "" : (fenceChar || nextFenceChar);
-    }
-
-    const headingMatch = !fenceChar ? line.match(/^#\s+(.+?)\s*$/) : null;
-    if (headingMatch) {
-      pushSection(lineStart);
-      const prefixStart = pendingPrefixLines[0]?.startIndex;
-      currentSection = {
-        title: String(headingMatch[1] || "").trim(),
-        lines: sections.length === 0 ? pendingPrefixLines.map((item) => item.line) : [],
-        startIndex: sections.length === 0 && Number.isFinite(prefixStart) ? prefixStart : lineStart
-      };
-      pendingPrefixLines = [];
-      offset = lineEnd;
-      continue;
-    }
-
-    const lineRecord = { line, startIndex: lineStart };
-    if (currentSection) {
-      currentSection.lines.push(line);
-    } else {
-      pendingPrefixLines.push(lineRecord);
-    }
-    offset = lineEnd;
-  }
-
-  pushSection(text.length);
-
-  if (!sections.length) {
-    return [{
-      title: "",
-      content: trimOuterBlankLines(text),
-      startIndex: 0,
-      endIndex: text.length
-    }];
-  }
-
-  return sections;
-};
-
-const parseMarkdownToSteps = (rawMarkdown) => {
-  const text = normalizeMarkdownText(rawMarkdown);
-  const sections = extractMarkdownSections(text);
-
-  if (!sections.length) {
-    const single = trimOuterBlankLines(text);
-    if (!single) {
-      return createBlankSteps();
-    }
-    return [{
-      id: 1,
-      title: "",
-      subtitle: "",
-      content: single
-    }];
-  }
-
-  return sections.map((section, index) => ({
-    id: index + 1,
-    title: String(section.title || "").trim(),
-    subtitle: "",
-    content: String(section.content || "")
-  }));
-};
-
-const formatBytes = (value) => {
-  const bytes = Math.max(0, Number(value || 0));
-  if (!bytes) {
-    return "0 B";
-  }
-  if (bytes < 1024) {
-    return `${bytes} B`;
-  }
-  if (bytes < 1024 * 1024) {
-    return `${(bytes / 1024).toFixed(1)} KB`;
-  }
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-};
-
-const isMarkdownFileName = (name) => String(name || "").toLowerCase().endsWith(".md");
-
-const isMarkdownFileTooLarge = (size) => {
-  const bytes = Number(size);
-  return Number.isFinite(bytes) && bytes > MAX_MARKDOWN_FILE_BYTES;
-};
-
-const serializeStepsToMarkdown = (sourceSteps) => {
-  const normalizedSteps = Array.isArray(sourceSteps) ? sourceSteps : [];
-  if (!normalizedSteps.length || isSingleBlankStepList(normalizedSteps)) {
-    return "";
-  }
-  if (normalizedSteps.length === 1 && !String(normalizedSteps[0]?.title || "").trim()) {
-    const rawContent = trimOuterBlankLines(normalizeMarkdownText(normalizedSteps[0]?.content || ""));
-    return rawContent ? `${rawContent}\n` : "";
-  }
-  const chunks = normalizedSteps.map((step, index) => {
-    const title = String(step?.title || "").trim() || defaultStepTitle(index);
-    const content = trimOuterBlankLines(normalizeMarkdownText(step?.content || ""));
-    return content ? `# ${title}\n\n${content}` : `# ${title}`;
-  });
-  return `${chunks.join("\n\n").trim()}\n`;
-};
-
-const syncDocumentMarkdownFromSteps = (sourceSteps = steps.value) => {
-  const nextMarkdown = serializeStepsToMarkdown(sourceSteps);
-  if (documentMarkdown.value === nextMarkdown) {
-    return;
-  }
-  pendingDocumentMarkdownFromSteps = nextMarkdown;
-  documentMarkdown.value = nextMarkdown;
-};
-
-const applyExternalMarkdownChange = async (nextMarkdown, { focusIndex = null } = {}) => {
-  documentMarkdown.value = normalizeMarkdownText(nextMarkdown);
-  await nextTick();
-  await syncVisualEditorFromMarkdown(true);
-  if (Number.isFinite(focusIndex)) {
-    const safeIndex = clamp(Number(focusIndex) || 0, 0, Math.max(0, steps.value.length - 1));
-    currentId.value = steps.value[safeIndex]?.id ?? steps.value[0]?.id ?? 1;
-    if (isEditMode.value) {
-      await focusStepInEditMode(safeIndex);
-    }
-  }
-};
-
-const syncStepsFromDocumentMarkdown = (rawMarkdown, preserveIndex = currentStepIndex.value) => {
-  const parsed = parseMarkdownToSteps(rawMarkdown);
-  const targetIndex = clamp(Number(preserveIndex) || 0, 0, Math.max(0, parsed.length - 1));
-  pendingStepsFromDocumentMarkdown = true;
-  steps.value = parsed;
-  currentId.value = parsed[targetIndex]?.id ?? parsed[0]?.id ?? 1;
-};
-
-documentMarkdown.value = serializeStepsToMarkdown(steps.value);
 const contentPaneKey = computed(() => (isEditMode.value ? mode.value : `${mode.value}:${currentId.value}`));
 const filterVisualEditorCommands = (rawQuery = "") => {
   const query = String(rawQuery || "").trim().toLowerCase();
@@ -1501,7 +1333,9 @@ const updateVisualEditorTableSelectionState = () => {
 };
 
 const getVisualEditorPlainText = (block) =>
-  normalizeMarkdownText(block?.textContent || "").replace(/\u00a0/g, " ");
+  normalizeMarkdownText(block?.textContent || "")
+    .replace(/\u00a0/g, " ")
+    .replace(/\u200b/g, "");
 
 const resolveVisualEditorCommandTrigger = () => {
   const block = findVisualEditorBlockElement(resolveVisualEditorSelectionNode());
@@ -1626,6 +1460,16 @@ const findVisualEditorBlockElement = (sourceNode) => {
   return editor.firstElementChild instanceof HTMLElement ? editor.firstElementChild : null;
 };
 
+const setVisualEditorActiveBlock = (block) => {
+  if (visualEditorActiveBlock instanceof HTMLElement && visualEditorActiveBlock !== block) {
+    visualEditorActiveBlock.removeAttribute("data-block-active");
+  }
+  visualEditorActiveBlock = block instanceof HTMLElement ? block : null;
+  if (visualEditorActiveBlock) {
+    visualEditorActiveBlock.setAttribute("data-block-active", "1");
+  }
+};
+
 const resolveVisualEditorStepTarget = (index) => {
   const editor = visualEditorRef.value;
   if (!editor) {
@@ -1678,6 +1522,8 @@ const updateCurrentStepFromVisualEditorSelection = () => {
     return;
   }
   const anchor = resolveVisualEditorSelectionNode();
+  const activeBlock = anchor ? findVisualEditorBlockElement(anchor) : null;
+  setVisualEditorActiveBlock(activeBlock);
   updateVisualEditorTableSelectionState();
   if (!anchor) {
     return;
@@ -1706,6 +1552,7 @@ const syncVisualEditorFromMarkdown = async (force = false) => {
   }
   visualEditorHydrating = true;
   closeVisualEditorCommandMenu();
+  setVisualEditorActiveBlock(null);
   setVisualEditorActiveTableCell(null);
   editor.innerHTML = nextHtml;
   normalizeVisualEditorTableCells();
@@ -1749,6 +1596,41 @@ const focusStepInEditMode = async (index) => {
   await scrollEditorToStep(index);
 };
 
+const {
+  activeMarkdownRelPath,
+  appendMarkdownImage,
+  clearScheduledMarkdownSave,
+  documentMarkdown,
+  flushPendingMarkdownSave,
+  formatBytes,
+  isMarkdownFileName,
+  isMarkdownFileTooLarge,
+  isSingleBlankStepList,
+  loadStepsFromMarkdownFile,
+  markdownHydrating,
+  parseMarkdownToSteps,
+  persistActiveMarkdownBeforeSwitch,
+  removeStep,
+  resetBlankEditorState,
+  serializeStepsToMarkdown,
+  stepDisplayTitle,
+  stepPreviewText,
+  writeActiveMarkdownNow,
+  addStep
+} = useMarkdownDocument({
+  steps,
+  currentId,
+  currentStepIndex,
+  isEditMode,
+  desktopDataBridge,
+  isDesktopStorage,
+  canWorkspaceFileIO,
+  visualEditorRef,
+  showToast,
+  syncVisualEditorFromMarkdown,
+  focusStepInEditMode
+});
+
 const hasVisualEditorSelection = () => {
   if (typeof window === "undefined" || !visualEditorRef.value) {
     return false;
@@ -1766,6 +1648,117 @@ const getVisualEditorSelectedText = () => {
     return "";
   }
   return String(window.getSelection?.()?.toString?.() || "");
+};
+
+const VISUAL_EDITOR_INLINE_PLACEHOLDER = "\u200b";
+const VISUAL_EDITOR_INLINE_TAGS = new Set(["EM", "I", "STRONG", "B", "CODE", "DEL", "S", "STRIKE"]);
+
+const findVisualEditorInlineFormatElement = (sourceNode) =>
+  findClosestVisualEditorElement(sourceNode, (element) => VISUAL_EDITOR_INLINE_TAGS.has(element.tagName));
+
+const isVisualEditorInlineElementEffectivelyEmpty = (element) =>
+  Boolean(element)
+  && !String(element.textContent || "").replace(/\u200b/g, "").trim()
+  && !element.querySelector?.("img, br");
+
+const isVisualEditorInlineMarkerOnlyContentOfBlock = (block, inlineElement) => {
+  if (!(block instanceof HTMLElement) || !(inlineElement instanceof HTMLElement) || !block.contains(inlineElement)) {
+    return false;
+  }
+  let seenMarker = false;
+  for (const child of Array.from(block.childNodes || [])) {
+    if (child === inlineElement) {
+      seenMarker = true;
+      continue;
+    }
+    const text = child.nodeType === Node.TEXT_NODE
+      ? String(child.textContent || "").replace(/\u200b/g, "").trim()
+      : "";
+    if (!seenMarker) {
+      if (child.nodeType === Node.TEXT_NODE && !text) {
+        continue;
+      }
+      return false;
+    }
+    if (child.nodeType === Node.TEXT_NODE && !text) {
+      continue;
+    }
+    return false;
+  }
+  return seenMarker;
+};
+
+const insertVisualEditorInlineFormat = (tagName) => {
+  const editor = visualEditorRef.value;
+  const selection = window.getSelection?.();
+  if (!editor || !selection || selection.rangeCount <= 0) {
+    return false;
+  }
+
+  const range = selection.getRangeAt(0);
+  if (!editor.contains(range.commonAncestorContainer)) {
+    return false;
+  }
+
+  const inline = document.createElement(String(tagName || "").toLowerCase());
+  const collapsed = range.collapsed;
+  if (collapsed) {
+    inline.appendChild(document.createTextNode(VISUAL_EDITOR_INLINE_PLACEHOLDER));
+  } else {
+    const content = range.extractContents();
+    if (content.childNodes.length) {
+      inline.appendChild(content);
+    } else {
+      inline.appendChild(document.createTextNode(VISUAL_EDITOR_INLINE_PLACEHOLDER));
+    }
+  }
+
+  range.insertNode(inline);
+  selection.removeAllRanges();
+  const nextRange = document.createRange();
+  nextRange.selectNodeContents(inline);
+  nextRange.collapse(collapsed);
+  selection.addRange(nextRange);
+  focusVisualEditor();
+  syncMarkdownFromVisualEditor();
+  return true;
+};
+
+const upgradeVisualEditorInlineFormat = (element, tagName) => {
+  if (!(element instanceof HTMLElement)) {
+    return false;
+  }
+  const replacement = document.createElement(String(tagName || "").toLowerCase());
+  while (element.firstChild) {
+    replacement.appendChild(element.firstChild);
+  }
+  element.replaceWith(replacement);
+  focusVisualEditor();
+  placeCaretAtNodeBoundary(replacement, true);
+  syncMarkdownFromVisualEditor();
+  return true;
+};
+
+const removeVisualEditorInlineFormatElement = (element) => {
+  if (!(element instanceof HTMLElement) || !element.parentNode || typeof window === "undefined") {
+    return false;
+  }
+  const anchor = document.createElement("span");
+  anchor.setAttribute("data-inline-caret-anchor", "1");
+  element.before(anchor);
+  element.remove();
+  const selection = window.getSelection?.();
+  if (selection) {
+    const range = document.createRange();
+    range.setStartAfter(anchor);
+    range.collapse(true);
+    selection.removeAllRanges();
+    selection.addRange(range);
+  }
+  anchor.remove();
+  focusVisualEditor();
+  syncMarkdownFromVisualEditor();
+  return true;
 };
 
 const insertVisualEditorHtml = (html) => {
@@ -1833,6 +1826,45 @@ const toggleVisualEditorInlineCode = () => {
   const selectedText = getVisualEditorSelectedText();
   const content = escapeHtml(selectedText || "code");
   insertVisualEditorHtml(`<code>${content}</code>`);
+};
+
+const handleVisualEditorInlineSyntax = (event) => {
+  if (event.defaultPrevented || event.metaKey || event.ctrlKey || event.altKey) {
+    return false;
+  }
+
+  const key = String(event.key || "");
+  if (!["*", "`", "~"].includes(key)) {
+    return false;
+  }
+
+  const selectionNode = resolveVisualEditorSelectionNode();
+  const block = findVisualEditorBlockElement(selectionNode);
+  if (!(block instanceof HTMLElement) || block.tagName === "PRE") {
+    return false;
+  }
+
+  const inlineElement = findVisualEditorInlineFormatElement(selectionNode);
+  if (key === "*" && inlineElement instanceof HTMLElement && ["EM", "I"].includes(inlineElement.tagName) && isVisualEditorInlineElementEffectivelyEmpty(inlineElement)) {
+    event.preventDefault();
+    upgradeVisualEditorInlineFormat(inlineElement, "strong");
+    return true;
+  }
+  if (inlineElement instanceof HTMLElement && !isVisualEditorInlineElementEffectivelyEmpty(inlineElement)) {
+    return false;
+  }
+
+  event.preventDefault();
+  if (key === "*") {
+    return insertVisualEditorInlineFormat("em");
+  }
+  if (key === "`") {
+    return insertVisualEditorInlineFormat("code");
+  }
+  if (key === "~") {
+    return insertVisualEditorInlineFormat("del");
+  }
+  return false;
 };
 
 const insertVisualEditorCodeFence = () => {
@@ -1948,6 +1980,55 @@ const createVisualEditorEmptyParagraph = () => {
   const paragraph = document.createElement("p");
   paragraph.appendChild(document.createElement("br"));
   return paragraph;
+};
+
+const resolveVisualEditorEditableBlock = () => {
+  const editor = visualEditorRef.value;
+  const selectionNode = resolveVisualEditorSelectionNode();
+  if (!editor || !selectionNode) {
+    return null;
+  }
+  if (selectionNode.nodeType === Node.TEXT_NODE && selectionNode.parentNode === editor) {
+    const paragraph = document.createElement("p");
+    const text = String(selectionNode.textContent || "");
+    if (text) {
+      paragraph.textContent = text;
+    } else {
+      paragraph.appendChild(document.createElement("br"));
+    }
+    selectionNode.replaceWith(paragraph);
+    focusVisualEditor();
+    placeCaretAtNodeBoundary(paragraph, false);
+    return paragraph;
+  }
+  return findVisualEditorBlockElement(selectionNode);
+};
+
+const applyVisualEditorLiveHeadingSyntax = () => {
+  const block = resolveVisualEditorEditableBlock();
+  if (!(block instanceof HTMLElement) || !["P", "DIV"].includes(block.tagName)) {
+    return false;
+  }
+
+  const rawText = getVisualEditorPlainText(block);
+  const headingMatch = rawText.match(/^(#{1,6})\s*(.*)$/);
+  if (!headingMatch) {
+    return false;
+  }
+
+  const level = clamp(headingMatch[1].length, 1, 6);
+  const heading = document.createElement(`h${level}`);
+  const content = String(headingMatch[2] || "");
+  if (content) {
+    heading.textContent = content;
+  } else {
+    heading.appendChild(document.createElement("br"));
+  }
+  block.replaceWith(heading);
+  focusVisualEditor();
+  placeCaretAtNodeBoundary(heading, false);
+  syncMarkdownFromVisualEditor();
+  return true;
 };
 
 const createVisualEditorHeading = (level) => {
@@ -2228,8 +2309,14 @@ const applyVisualEditorCommand = async (commandId) => {
     return;
   }
 
-  if (commandId === "heading-1" || commandId === "heading-2") {
-    const heading = createVisualEditorHeading(commandId === "heading-1" ? 1 : 2);
+  if (["heading-1", "heading-2", "heading-3", "heading-4"].includes(commandId)) {
+    const headingLevelMap = {
+      "heading-1": 1,
+      "heading-2": 2,
+      "heading-3": 3,
+      "heading-4": 4
+    };
+    const heading = createVisualEditorHeading(headingLevelMap[commandId] || 1);
     if (anchorBlock) {
       anchorBlock.replaceWith(heading);
     } else {
@@ -2238,6 +2325,31 @@ const applyVisualEditorCommand = async (commandId) => {
     focusVisualEditor();
     placeCaretAtNodeBoundary(heading, true);
     syncMarkdownFromVisualEditor();
+    return;
+  }
+
+  if (commandId === "bold") {
+    runVisualEditorCommand("bold");
+    return;
+  }
+
+  if (commandId === "italic") {
+    runVisualEditorCommand("italic");
+    return;
+  }
+
+  if (commandId === "inline-code") {
+    toggleVisualEditorInlineCode();
+    return;
+  }
+
+  if (commandId === "strike") {
+    runVisualEditorCommand("strikeThrough");
+    return;
+  }
+
+  if (commandId === "link") {
+    toggleVisualEditorLink();
     return;
   }
 
@@ -2308,7 +2420,7 @@ const applyVisualEditorShortcut = () => {
     return false;
   }
 
-  const rawText = normalizeMarkdownText(block.textContent || "").replace(/\u00a0/g, " ");
+  const rawText = getVisualEditorPlainText(block);
   if (!rawText.trim()) {
     return false;
   }
@@ -2428,7 +2540,7 @@ const shouldTreatPastedTextAsMarkdown = (text) => {
   if (content.includes("\n")) {
     return true;
   }
-  return /(^|\n)\s*(#{1,6}\s|[-*+]\s|\d+\.\s|>\s|```|\|.*\||!\[.*\]\(|\[.*\]\(.*\)|(?:[-*_]){3,}\s*$)/m.test(content);
+  return /(^|\n)\s*(#{1,6}|[-*+]\s|\d+\.\s|>\s|```|\|.*\||!\[.*\]\(|\[.*\]\(.*\)|(?:[-*_]){3,}\s*$)/m.test(content);
 };
 
 const onVisualEditorPaste = (event) => {
@@ -2443,7 +2555,7 @@ const onVisualEditorPaste = (event) => {
 const onVisualEditorFocus = () => {
   visualEditorFocused = true;
   updateVisualEditorEmptyState();
-  updateVisualEditorTableSelectionState();
+  updateCurrentStepFromVisualEditorSelection();
 };
 
 const onVisualEditorBlur = async () => {
@@ -2451,12 +2563,17 @@ const onVisualEditorBlur = async () => {
     discardVisualEditorCommandTriggerBlock({ restoreFocus: false });
   }
   visualEditorFocused = false;
+  setVisualEditorActiveBlock(null);
+  setVisualEditorActiveTableCell(null);
   syncMarkdownFromVisualEditor();
   await flushPendingMarkdownSave();
   await syncVisualEditorFromMarkdown(true);
 };
 
 const onVisualEditorInput = () => {
+  if (applyVisualEditorLiveHeadingSyntax()) {
+    return;
+  }
   syncVisualEditorCommandMenuFromSelection();
   syncMarkdownFromVisualEditor();
   if (visualEditorCommandMenu.value.open) {
@@ -2505,13 +2622,47 @@ const onVisualEditorKeydown = (event) => {
   if ((event.metaKey || event.ctrlKey) && handleVisualEditorShortcut(event)) {
     return;
   }
-
   const selectionNode = resolveVisualEditorSelectionNode();
   const block = findVisualEditorBlockElement(selectionNode);
+  if (!event.metaKey && !event.ctrlKey && !event.altKey && event.key === "#" && block instanceof HTMLElement && /^H[1-6]$/.test(block.tagName) && !getVisualEditorPlainText(block).trim()) {
+    event.preventDefault();
+    const nextLevel = clamp(Number(block.tagName.slice(1)) + 1, 1, 6);
+    if (nextLevel !== Number(block.tagName.slice(1))) {
+      const heading = createVisualEditorHeading(nextLevel);
+      block.replaceWith(heading);
+      focusVisualEditor();
+      placeCaretAtNodeBoundary(heading, true);
+      syncMarkdownFromVisualEditor();
+    }
+    return;
+  }
+  if (handleVisualEditorInlineSyntax(event)) {
+    return;
+  }
   const tableCell = findVisualEditorTableCell(selectionNode);
+  const inlineElement = findVisualEditorInlineFormatElement(selectionNode);
   const listItem = block instanceof HTMLElement && block.tagName === "LI"
     ? block
     : (block instanceof HTMLElement ? block.closest("li") : null);
+  if (
+    event.key === " "
+    && block instanceof HTMLElement
+    && inlineElement instanceof HTMLElement
+    && ["EM", "I"].includes(inlineElement.tagName)
+    && isVisualEditorInlineElementEffectivelyEmpty(inlineElement)
+    && isVisualEditorInlineMarkerOnlyContentOfBlock(block, inlineElement)
+  ) {
+    event.preventDefault();
+    const list = document.createElement("ul");
+    const item = document.createElement("li");
+    item.appendChild(document.createElement("br"));
+    list.appendChild(item);
+    block.replaceWith(list);
+    focusVisualEditor();
+    placeCaretAtNodeBoundary(item, true);
+    syncMarkdownFromVisualEditor();
+    return;
+  }
   if (event.key === "Tab") {
     event.preventDefault();
     if (tableCell instanceof HTMLElement) {
@@ -2543,7 +2694,7 @@ const onVisualEditorKeydown = (event) => {
   }
 
   if (event.key === "Enter" && !event.shiftKey && listItem instanceof HTMLElement) {
-    const text = normalizeMarkdownText(listItem.textContent || "").replace(/\u00a0/g, " ").trim();
+    const text = getVisualEditorPlainText(listItem).trim();
     if (!text) {
       event.preventDefault();
       liftVisualEditorEmptyListItem(listItem);
@@ -2551,8 +2702,14 @@ const onVisualEditorKeydown = (event) => {
     }
   }
 
+  if (event.key === "Backspace" && inlineElement instanceof HTMLElement && isVisualEditorInlineElementEffectivelyEmpty(inlineElement)) {
+    event.preventDefault();
+    removeVisualEditorInlineFormatElement(inlineElement);
+    return;
+  }
+
   if (event.key === "Backspace" && block instanceof HTMLElement) {
-    const text = normalizeMarkdownText(block.textContent || "").replace(/\u00a0/g, " ").trim();
+    const text = getVisualEditorPlainText(block).trim();
     if (!text && (/^H[1-6]$/.test(block.tagName) || block.tagName === "BLOCKQUOTE")) {
       event.preventDefault();
       replaceVisualEditorBlockWithParagraph(block);
@@ -2561,7 +2718,7 @@ const onVisualEditorKeydown = (event) => {
   }
 
   if (event.key === "Backspace" && listItem instanceof HTMLElement) {
-    const text = normalizeMarkdownText(listItem.textContent || "").replace(/\u00a0/g, " ").trim();
+    const text = getVisualEditorPlainText(listItem).trim();
     if (!text) {
       event.preventDefault();
       liftVisualEditorEmptyListItem(listItem);
@@ -2629,143 +2786,6 @@ const prev = async () => {
     return;
   }
   await focusStepInEditMode(previousIndex);
-};
-
-const addStep = async () => {
-  const list = parseMarkdownToSteps(documentMarkdown.value);
-  if (!list.length || isSingleBlankStepList(list)) {
-    await applyExternalMarkdownChange(`# ${defaultStepTitle(0)}\n`, { focusIndex: 0 });
-    return;
-  }
-
-  const insertIndex = clamp(currentStepIndex.value + 1, 0, list.length);
-  const nextSteps = list.map((step) => ({ ...step }));
-  nextSteps.splice(insertIndex, 0, {
-    id: 0,
-    title: defaultStepTitle(insertIndex),
-    subtitle: "",
-    content: ""
-  });
-  await applyExternalMarkdownChange(serializeStepsToMarkdown(nextSteps), { focusIndex: insertIndex });
-};
-
-const removeStep = async () => {
-  const list = parseMarkdownToSteps(documentMarkdown.value);
-  if (!list.length || isSingleBlankStepList(list)) {
-    await applyExternalMarkdownChange("", { focusIndex: 0 });
-    return;
-  }
-  const idx = clamp(currentStepIndex.value, 0, Math.max(0, list.length - 1));
-  if (list.length === 1) {
-    await applyExternalMarkdownChange("", { focusIndex: 0 });
-    return;
-  }
-  const nextSteps = list.map((step) => ({ ...step }));
-  nextSteps.splice(idx, 1);
-  const nextIndex = Math.max(0, idx - 1);
-  await applyExternalMarkdownChange(serializeStepsToMarkdown(nextSteps), { focusIndex: nextIndex });
-};
-
-const writeActiveMarkdownNow = async (targetRelPath = activeMarkdownRelPath.value) => {
-  const relPath = String(targetRelPath || "").trim();
-  if (!isDesktopStorage || !canWorkspaceFileIO || !relPath || markdownHydrating.value) {
-    return;
-  }
-  try {
-    const content = String(documentMarkdown.value || "");
-    const result = await desktopDataBridge.writeWorkspaceFile({
-      relPath,
-      content
-    });
-    if (!result?.ok) {
-      throw new Error(String(result?.error || "write_workspace_file_failed"));
-    }
-  } catch (error) {
-    showToast(`保存 Markdown 失败: ${String(error?.message || error || "unknown_error")}`);
-  }
-};
-
-const scheduleActiveMarkdownSave = () => {
-  if (!activeMarkdownRelPath.value || markdownHydrating.value) {
-    return;
-  }
-  if (markdownSaveTimer) {
-    clearTimeout(markdownSaveTimer);
-  }
-  markdownSaveTimer = setTimeout(() => {
-    markdownSaveTimer = null;
-    void writeActiveMarkdownNow();
-  }, MARKDOWN_SAVE_DELAY_MS);
-};
-
-const flushPendingMarkdownSave = async (targetRelPath = activeMarkdownRelPath.value) => {
-  const relPath = String(targetRelPath || "").trim();
-  if (!relPath || markdownHydrating.value) {
-    return;
-  }
-  if (markdownSaveTimer) {
-    clearTimeout(markdownSaveTimer);
-    markdownSaveTimer = null;
-  }
-  await writeActiveMarkdownNow(relPath);
-};
-
-const persistActiveMarkdownBeforeSwitch = async (targetRelPath = "") => {
-  const currentRelPath = String(activeMarkdownRelPath.value || "").trim();
-  const nextRelPath = String(targetRelPath || "").trim();
-  if (!currentRelPath) {
-    clearScheduledMarkdownSave();
-    return;
-  }
-  if (!markdownSaveTimer && currentRelPath === nextRelPath) {
-    return;
-  }
-  await flushPendingMarkdownSave(currentRelPath);
-};
-
-const loadStepsFromMarkdownFile = async (relPath, showSuccessToast = false) => {
-  if (!isDesktopStorage || !canWorkspaceFileIO) {
-    return;
-  }
-  const targetRelPath = String(relPath || "").trim();
-  if (!targetRelPath) {
-    return;
-  }
-  await persistActiveMarkdownBeforeSwitch(targetRelPath);
-  markdownHydrating.value = true;
-  pendingDocumentMarkdownFromSteps = null;
-  pendingStepsFromDocumentMarkdown = false;
-  try {
-    const result = await desktopDataBridge.readWorkspaceFile({
-      relPath: targetRelPath
-    });
-    if (!result?.ok) {
-      if (result?.error === "workspace_file_too_large") {
-        const actual = formatBytes(result?.size);
-        const limit = formatBytes(result?.limitBytes || MAX_MARKDOWN_FILE_BYTES);
-        showToast(`Markdown 文件过大，已跳过: ${targetRelPath} (${actual} > ${limit})`);
-        return;
-      }
-      throw new Error(String(result?.error || "read_workspace_file_failed"));
-    }
-    if (isMarkdownFileTooLarge(result?.size) || String(result.content || "").length > MAX_MARKDOWN_FILE_BYTES) {
-      showToast(`Markdown 文件过大，已跳过: ${targetRelPath}`);
-      return;
-    }
-    const rawMarkdown = normalizeMarkdownText(result.content || "");
-    const parsed = parseMarkdownToSteps(rawMarkdown);
-    documentMarkdown.value = rawMarkdown;
-    steps.value = parsed;
-    currentId.value = parsed[0]?.id ?? 1;
-    activeMarkdownRelPath.value = targetRelPath;
-    if (showSuccessToast) {
-      showToast(`已载入 Markdown: ${targetRelPath}`);
-    }
-  } catch (error) {
-    showToast(`载入 Markdown 失败: ${String(error?.message || error || "unknown_error")}`);
-  } finally {
-    markdownHydrating.value = false;
-  }
 };
 
 if (typeof window !== "undefined") {
@@ -2959,25 +2979,6 @@ const findStorageNodeInTree = (node, targetId, parentId = "") => {
     }
   }
   return null;
-};
-
-const clearScheduledMarkdownSave = () => {
-  if (!markdownSaveTimer) {
-    return;
-  }
-  clearTimeout(markdownSaveTimer);
-  markdownSaveTimer = null;
-};
-
-const resetBlankEditorState = ({ preserveActiveFile = false } = {}) => {
-  if (!preserveActiveFile) {
-    activeMarkdownRelPath.value = "";
-  }
-  pendingStepsFromDocumentMarkdown = false;
-  pendingDocumentMarkdownFromSteps = "";
-  documentMarkdown.value = "";
-  steps.value = createBlankSteps();
-  currentId.value = steps.value[0]?.id ?? 1;
 };
 
 const isRelPathAffectedByNode = (fileRelPath, nodeRelPath, nodeType) => {
@@ -4925,50 +4926,6 @@ watch(selectedStorageNodeId, () => {
   persistStorageState();
 });
 
-watch(documentMarkdown, (value) => {
-  if (markdownHydrating.value) {
-    void syncVisualEditorFromMarkdown(true);
-    return;
-  }
-  if (pendingDocumentMarkdownFromSteps !== null && value === pendingDocumentMarkdownFromSteps) {
-    pendingDocumentMarkdownFromSteps = null;
-    void syncVisualEditorFromMarkdown(true);
-    return;
-  }
-  pendingDocumentMarkdownFromSteps = null;
-  syncStepsFromDocumentMarkdown(value);
-  void syncVisualEditorFromMarkdown();
-  if (!activeMarkdownRelPath.value) {
-    return;
-  }
-  scheduleActiveMarkdownSave();
-});
-
-watch(steps, () => {
-  if (pendingStepsFromDocumentMarkdown) {
-    pendingStepsFromDocumentMarkdown = false;
-  } else {
-    syncDocumentMarkdownFromSteps();
-  }
-  if (!activeMarkdownRelPath.value || markdownHydrating.value) {
-    return;
-  }
-  scheduleActiveMarkdownSave();
-}, { deep: true });
-
-watch(currentId, () => {
-  if (pendingStepsFromDocumentMarkdown) {
-    pendingStepsFromDocumentMarkdown = false;
-  }
-});
-
-watch(activeMarkdownRelPath, () => {
-  if (markdownSaveTimer) {
-    clearTimeout(markdownSaveTimer);
-    markdownSaveTimer = null;
-  }
-});
-
 watch([terminalPanelHeight, terminalMaximized], () => {
   if (!isDesktopPty.value || !terminalOpen.value || terminalTab.value !== "terminal") {
     return;
@@ -5008,20 +4965,6 @@ const toggleMode = async () => {
   });
 };
 
-const appendMarkdownImage = (url) => {
-  const safeUrl = String(url || "").trim();
-  if (!safeUrl) {
-    return;
-  }
-  if (isEditMode.value && visualEditorRef.value) {
-    insertVisualEditorImage(safeUrl);
-    return;
-  }
-  const current = String(documentMarkdown.value || "");
-  const suffix = current.endsWith("\n") ? "\n" : "\n\n";
-  documentMarkdown.value = `${current}${suffix}![image](${safeUrl})\n`;
-};
-
 const insertImageToMarkdown = async () => {
   if (isDesktopPty.value && desktopWindowBridge?.pickImage) {
     try {
@@ -5030,7 +4973,9 @@ const insertImageToMarkdown = async () => {
         return;
       }
       if (picked.ok && picked.markdownUrl) {
-        appendMarkdownImage(picked.markdownUrl);
+        if (!appendMarkdownImage(picked.markdownUrl)) {
+          insertVisualEditorImage(picked.markdownUrl);
+        }
         showToast("已插入图片");
         return;
       }
@@ -5289,10 +5234,6 @@ onBeforeUnmount(() => {
   if (terminalResizeSyncTimer) {
     clearTimeout(terminalResizeSyncTimer);
     terminalResizeSyncTimer = null;
-  }
-  if (markdownSaveTimer) {
-    clearTimeout(markdownSaveTimer);
-    markdownSaveTimer = null;
   }
   terminalDragSizing = false;
   window.removeEventListener("keydown", onKeydown);

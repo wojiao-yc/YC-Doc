@@ -2,7 +2,7 @@ import { computed, nextTick, onBeforeUnmount, onMounted, watch } from "vue";
 import { marked } from "marked";
 import { copyText } from "../utils/clipboard";
 import { escapeHtml } from "../utils/escapeHtml";
-import { normalizeImageHref } from "../utils/markdownVisualEditor";
+import { normalizeImageHref, normalizeLooseAtxHeadings } from "../utils/markdownVisualEditor";
 import { highlightAllUnder, highlightCode } from "../utils/prism";
 
 export const useMarkdown = (activeStep, deps, showToast) => {
@@ -57,7 +57,7 @@ export const useMarkdown = (activeStep, deps, showToast) => {
     return `<img src="${safeSrc}" alt="${safeAlt}" loading="lazy"${safeTitle} />`;
   };
 
-  const renderedMarkdown = computed(() => marked.parse(activeStep.value?.content || "", {
+  const renderedMarkdown = computed(() => marked.parse(normalizeLooseAtxHeadings(activeStep.value?.content || ""), {
     breaks: true,
     gfm: true,
     renderer

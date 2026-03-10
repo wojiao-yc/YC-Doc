@@ -292,6 +292,168 @@ body {
   cursor: default;
 }
 
+.visual-editor h1[data-block-active="1"],
+.visual-editor h2[data-block-active="1"],
+.visual-editor h3[data-block-active="1"],
+.visual-editor h4[data-block-active="1"],
+.visual-editor h5[data-block-active="1"],
+.visual-editor h6[data-block-active="1"] {
+  position: relative;
+}
+
+.visual-editor h1[data-block-active="1"] {
+  padding-left: 0.82em;
+}
+
+.visual-editor h2[data-block-active="1"] {
+  padding-left: 1.34em;
+}
+
+.visual-editor h3[data-block-active="1"] {
+  padding-left: 1.86em;
+}
+
+.visual-editor h4[data-block-active="1"] {
+  padding-left: 2.38em;
+}
+
+.visual-editor h5[data-block-active="1"] {
+  padding-left: 2.9em;
+}
+
+.visual-editor h6[data-block-active="1"] {
+  padding-left: 3.42em;
+}
+
+.visual-editor h1[data-block-active="1"]::before,
+.visual-editor h2[data-block-active="1"]::before,
+.visual-editor h3[data-block-active="1"]::before,
+.visual-editor h4[data-block-active="1"]::before,
+.visual-editor h5[data-block-active="1"]::before,
+.visual-editor h6[data-block-active="1"]::before {
+  position: absolute;
+  left: 0;
+  top: 0;
+  color: #cbd5e1;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+}
+
+.dark-ui .visual-editor h1[data-block-active="1"]::before,
+.dark-ui .visual-editor h2[data-block-active="1"]::before,
+.dark-ui .visual-editor h3[data-block-active="1"]::before,
+.dark-ui .visual-editor h4[data-block-active="1"]::before,
+.dark-ui .visual-editor h5[data-block-active="1"]::before,
+.dark-ui .visual-editor h6[data-block-active="1"]::before {
+  color: #64748b;
+}
+
+.visual-editor h1[data-block-active="1"]::before {
+  content: "#";
+}
+
+.visual-editor h2[data-block-active="1"]::before {
+  content: "##";
+}
+
+.visual-editor h3[data-block-active="1"]::before {
+  content: "###";
+}
+
+.visual-editor h4[data-block-active="1"]::before {
+  content: "####";
+}
+
+.visual-editor h5[data-block-active="1"]::before {
+  content: "#####";
+}
+
+.visual-editor h6[data-block-active="1"]::before {
+  content: "######";
+}
+
+.visual-editor [data-block-active="1"] em,
+.visual-editor [data-block-active="1"] i,
+.visual-editor [data-block-active="1"] strong,
+.visual-editor [data-block-active="1"] b,
+.visual-editor [data-block-active="1"] code,
+.visual-editor [data-block-active="1"] del,
+.visual-editor [data-block-active="1"] s,
+.visual-editor [data-block-active="1"] strike {
+  position: relative;
+}
+
+.visual-editor [data-block-active="1"] em::before,
+.visual-editor [data-block-active="1"] em::after,
+.visual-editor [data-block-active="1"] i::before,
+.visual-editor [data-block-active="1"] i::after,
+.visual-editor [data-block-active="1"] strong::before,
+.visual-editor [data-block-active="1"] strong::after,
+.visual-editor [data-block-active="1"] b::before,
+.visual-editor [data-block-active="1"] b::after,
+.visual-editor [data-block-active="1"] code::before,
+.visual-editor [data-block-active="1"] code::after,
+.visual-editor [data-block-active="1"] del::before,
+.visual-editor [data-block-active="1"] del::after,
+.visual-editor [data-block-active="1"] s::before,
+.visual-editor [data-block-active="1"] s::after,
+.visual-editor [data-block-active="1"] strike::before,
+.visual-editor [data-block-active="1"] strike::after {
+  color: #cbd5e1;
+  font-style: normal;
+  font-weight: 500;
+  text-decoration: none;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+}
+
+.dark-ui .visual-editor [data-block-active="1"] em::before,
+.dark-ui .visual-editor [data-block-active="1"] em::after,
+.dark-ui .visual-editor [data-block-active="1"] i::before,
+.dark-ui .visual-editor [data-block-active="1"] i::after,
+.dark-ui .visual-editor [data-block-active="1"] strong::before,
+.dark-ui .visual-editor [data-block-active="1"] strong::after,
+.dark-ui .visual-editor [data-block-active="1"] b::before,
+.dark-ui .visual-editor [data-block-active="1"] b::after,
+.dark-ui .visual-editor [data-block-active="1"] code::before,
+.dark-ui .visual-editor [data-block-active="1"] code::after,
+.dark-ui .visual-editor [data-block-active="1"] del::before,
+.dark-ui .visual-editor [data-block-active="1"] del::after,
+.dark-ui .visual-editor [data-block-active="1"] s::before,
+.dark-ui .visual-editor [data-block-active="1"] s::after,
+.dark-ui .visual-editor [data-block-active="1"] strike::before,
+.dark-ui .visual-editor [data-block-active="1"] strike::after {
+  color: #64748b;
+}
+
+.visual-editor [data-block-active="1"] em::before,
+.visual-editor [data-block-active="1"] em::after,
+.visual-editor [data-block-active="1"] i::before,
+.visual-editor [data-block-active="1"] i::after {
+  content: "*";
+}
+
+.visual-editor [data-block-active="1"] strong::before,
+.visual-editor [data-block-active="1"] strong::after,
+.visual-editor [data-block-active="1"] b::before,
+.visual-editor [data-block-active="1"] b::after {
+  content: "**";
+}
+
+.visual-editor [data-block-active="1"] code::before,
+.visual-editor [data-block-active="1"] code::after {
+  content: "`";
+}
+
+.visual-editor [data-block-active="1"] del::before,
+.visual-editor [data-block-active="1"] del::after,
+.visual-editor [data-block-active="1"] s::before,
+.visual-editor [data-block-active="1"] s::after,
+.visual-editor [data-block-active="1"] strike::before,
+.visual-editor [data-block-active="1"] strike::after {
+  content: "~~";
+}
+
 .visual-editor ul,
 .md-light ul,
 .md-dark ul {
@@ -411,11 +573,14 @@ body {
   position: absolute;
   z-index: 50;
   width: min(320px, calc(100% - 24px));
+  max-height: min(420px, calc(100vh - 140px));
   border-radius: 18px;
   border: 1px solid rgba(226, 232, 240, 0.95);
   background: rgba(255, 255, 255, 0.98);
   box-shadow: 0 22px 40px rgba(15, 23, 42, 0.16);
-  overflow: hidden;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
   backdrop-filter: blur(16px);
 }
 
@@ -428,8 +593,8 @@ body {
 .visual-editor-command-menu__header,
 .visual-editor-command-menu__footer,
 .visual-editor-command-menu__empty {
-  padding: 10px 14px;
-  font-size: 12px;
+  padding: 8px 12px;
+  font-size: 11px;
 }
 
 .visual-editor-command-menu__header {
@@ -452,7 +617,7 @@ body {
   flex-direction: column;
   align-items: flex-start;
   gap: 2px;
-  padding: 11px 14px;
+  padding: 9px 12px;
   text-align: left;
   background: transparent;
   border: 0;
@@ -471,7 +636,7 @@ body {
 }
 
 .visual-editor-command-menu__item-title {
-  font-size: 14px;
+  font-size: 12px;
   font-weight: 600;
   color: #0f172a;
 }
@@ -481,7 +646,7 @@ body {
 }
 
 .visual-editor-command-menu__item-desc {
-  font-size: 12px;
+  font-size: 11px;
   color: #64748b;
 }
 
