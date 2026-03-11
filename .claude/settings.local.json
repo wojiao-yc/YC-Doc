@@ -1,0 +1,7 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(cd D:\\\\python\\\\project\\\\Homepage\\\\YC-Doc:*)"
+    ]
+  }
+}

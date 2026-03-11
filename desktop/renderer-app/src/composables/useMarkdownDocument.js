@@ -26,9 +26,7 @@ export const useMarkdownDocument = ({
   desktopDataBridge,
   isDesktopStorage,
   canWorkspaceFileIO,
-  visualEditorRef,
   showToast,
-  syncVisualEditorFromMarkdown,
   focusStepInEditMode
 }) => {
   const activeMarkdownRelPath = ref("");
@@ -98,7 +96,7 @@ export const useMarkdownDocument = ({
         fenceChar = fenceChar === nextFenceChar ? "" : (fenceChar || nextFenceChar);
       }
 
-      const headingMatch = !fenceChar ? line.match(/^#\s*(.*?)\s*$/) : null;
+      const headingMatch = !fenceChar ? line.match(/^#\s+(.*?)\s*$/) : null;
       if (headingMatch) {
         pushSection(lineStart);
         const prefixStart = pendingPrefixLines[0]?.startIndex;
@@ -193,7 +191,7 @@ export const useMarkdownDocument = ({
     const chunks = normalizedSteps.map((step, index) => {
       const title = String(step?.title || "").trim() || defaultStepTitle(index);
       const content = trimOuterBlankLines(normalizeMarkdownText(step?.content || ""));
-      return content ? `#${title}\n\n${content}` : `#${title}`;
+      return content ? `# ${title}\n\n${content}` : `# ${title}`;
     });
     return `${chunks.join("\n\n").trim()}\n`;
   };
@@ -210,7 +208,6 @@ export const useMarkdownDocument = ({
   const applyExternalMarkdownChange = async (nextMarkdown, { focusIndex = null } = {}) => {
     documentMarkdown.value = normalizeMarkdownText(nextMarkdown);
     await nextTick();
-    await syncVisualEditorFromMarkdown(true);
     if (Number.isFinite(focusIndex)) {
       const safeIndex = clamp(Number(focusIndex) || 0, 0, Math.max(0, steps.value.length - 1));
       currentId.value = steps.value[safeIndex]?.id ?? steps.value[0]?.id ?? 1;
@@ -351,13 +348,9 @@ export const useMarkdownDocument = ({
     if (!safeUrl) {
       return;
     }
-    if (isEditMode.value && visualEditorRef.value) {
-      return false;
-    }
     const current = String(documentMarkdown.value || "");
     const suffix = current.endsWith("\n") ? "\n" : "\n\n";
     documentMarkdown.value = `${current}${suffix}![image](${safeUrl})\n`;
-    return true;
   };
 
   const addStep = async () => {
@@ -399,17 +392,14 @@ export const useMarkdownDocument = ({
 
   watch(documentMarkdown, (value) => {
     if (markdownHydrating.value) {
-      void syncVisualEditorFromMarkdown(true);
       return;
     }
     if (pendingDocumentMarkdownFromSteps !== null && value === pendingDocumentMarkdownFromSteps) {
       pendingDocumentMarkdownFromSteps = null;
-      void syncVisualEditorFromMarkdown(true);
       return;
     }
     pendingDocumentMarkdownFromSteps = null;
     syncStepsFromDocumentMarkdown(value);
-    void syncVisualEditorFromMarkdown();
     if (!activeMarkdownRelPath.value) {
       return;
     }
@@ -447,6 +437,7 @@ export const useMarkdownDocument = ({
     appendMarkdownImage,
     clearScheduledMarkdownSave,
     documentMarkdown,
+    extractMarkdownSections,
     flushPendingMarkdownSave,
     formatBytes,
     isMarkdownFileName,

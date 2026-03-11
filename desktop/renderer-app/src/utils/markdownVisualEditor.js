@@ -3,41 +3,25 @@ import { escapeHtml } from "./escapeHtml";
 
 const normalizeMarkdownText = (value) => String(value || "").replace(/\r\n/g, "\n");
 const trimOuterBlankLines = (value) => String(value || "").replace(/^\n+/, "").replace(/\n+$/, "");
-
-export const normalizeLooseAtxHeadings = (markdown) => {
-  const lines = normalizeMarkdownText(markdown).split("\n");
-  let fenceChar = "";
-
-  return lines.map((line) => {
-    const fenceMatch = line.match(/^(```|~~~)/);
-    if (fenceMatch) {
-      const nextFenceChar = fenceMatch[1][0];
-      fenceChar = fenceChar === nextFenceChar ? "" : (fenceChar || nextFenceChar);
-      return line;
-    }
-    if (fenceChar) {
-      return line;
-    }
-
-    const headingMatch = line.match(/^(#{1,6})(.*)$/);
-    if (!headingMatch) {
-      return line;
-    }
-
-    const marker = String(headingMatch[1] || "");
-    const tail = String(headingMatch[2] || "");
-    if (tail.startsWith("#")) {
-      return line;
-    }
-    if (!tail.trim()) {
-      return `${marker} `;
-    }
-    if (/^\s/.test(tail)) {
-      return line;
-    }
-    return `${marker} ${tail}`;
-  }).join("\n");
+const readSourceUnitMarkdown = (node) =>
+  normalizeMarkdownText(
+    String(
+      typeof node?.innerText === "string"
+        ? node.innerText
+        : (node?.textContent || "")
+    )
+  )
+    .replace(/\u00a0/g, " ")
+    .replace(/\u200b/g, "");
+const getStoredMarkdown = (node) => normalizeMarkdownText(String(node?.getAttribute?.("data-md-raw") || ""));
+const buildMarkdownAttr = (raw) => {
+  const markdown = normalizeMarkdownText(raw);
+  return markdown ? ` data-md-raw="${escapeHtml(markdown)}"` : "";
 };
+const MARKED_OPTIONS = Object.freeze({
+  breaks: true,
+  gfm: true
+});
 
 const BLOCK_TAGS = new Set([
   "P",
@@ -98,6 +82,320 @@ const serializeTable = (tableNode) => {
   return lines.join("\n");
 };
 
+export const normalizeImageHref = (value) => {
+  const raw = String(value || "").trim();
+  if (!raw) {
+    return "";
+  }
+  const isDesktop = typeof window !== "undefined" && Boolean(window.desktopPty?.isDesktop);
+
+  const toDesktopImageUrl = (absolutePath) => {
+    const full = String(absolutePath || "").trim();
+    if (!full) {
+      return "";
+    }
+    if (!isDesktop) {
+      const unixPath = full.replace(/\\/g, "/");
+      return `file:///${encodeURI(unixPath)}`;
+    }
+    return `ycdoc-file://local/${encodeURIComponent(full)}`;
+  };
+
+  if (/^[a-zA-Z]:[\\/]/.test(raw)) {
+    return toDesktopImageUrl(raw);
+  }
+
+  if (/^\\\\/.test(raw)) {
+    return `file:${encodeURI(raw.replace(/\\/g, "/"))}`;
+  }
+
+  if (/^(https?:|data:|blob:|file:|app:)/i.test(raw)) {
+    if (/^file:/i.test(raw)) {
+      try {
+        const decodedRaw = decodeURI(raw);
+        if (isDesktop) {
+          const parsed = new URL(decodedRaw);
+          let localPath = decodeURIComponent(parsed.pathname || "");
+          if (/^\/[a-zA-Z]:\//.test(localPath)) {
+            localPath = localPath.slice(1);
+          }
+          localPath = localPath.replace(/\//g, "\\");
+          return toDesktopImageUrl(localPath);
+        }
+        return encodeURI(decodedRaw);
+      } catch {
+        return encodeURI(raw);
+      }
+    }
+    return raw;
+  }
+
+  if (raw.includes("\\") && !raw.includes("://")) {
+    return raw.replace(/\\/g, "/");
+  }
+
+  return raw;
+};
+
+const attachMarkdownAttrToHtml = (html, raw) => {
+  const content = String(html || "").trim();
+  const markdown = normalizeMarkdownText(raw);
+  if (!content || !markdown || typeof document === "undefined") {
+    return content;
+  }
+  const temp = document.createElement("div");
+  temp.innerHTML = content;
+  if (temp.childNodes.length === 1 && temp.firstElementChild instanceof HTMLElement) {
+    temp.firstElementChild.setAttribute("data-md-raw", markdown);
+    return temp.innerHTML.trim();
+  }
+  return content;
+};
+
+const buildLinkMarkdown = (label, href, title) => {
+  const safeHref = String(href || "").trim();
+  if (!safeHref) {
+    return String(label || "");
+  }
+  const safeLabel = String(label || safeHref);
+  const titleSuffix = title ? ` "${String(title)}"` : "";
+  return `[${safeLabel}](${safeHref}${titleSuffix})`;
+};
+
+const buildImageMarkdown = (alt, src, title) => {
+  const safeSrc = String(src || "").trim();
+  if (!safeSrc) {
+    return "";
+  }
+  const titleSuffix = title ? ` "${String(title)}"` : "";
+  return `![${String(alt || "")}](${safeSrc}${titleSuffix})`;
+};
+
+const findLooseInlineMarkdownMatch = (source, startIndex = 0) => {
+  const text = String(source || "");
+  const patterns = [
+    { type: "strong", regex: /\*\*([^\s*\n](?:[^\n]*?[^\s*\n])?)\*\*/g },
+    { type: "del", regex: /~~([^\s~\n](?:[^\n]*?[^\s~\n])?)~~/g },
+    { type: "code", regex: /`([^`\n]+?)`/g },
+    { type: "em", regex: /\*([^\s*\n](?:[^*\n]*?[^\s*\n])?)\*/g }
+  ];
+
+  let bestMatch = null;
+
+  patterns.forEach(({ type, regex }) => {
+    regex.lastIndex = Math.max(0, Number(startIndex || 0));
+    const match = regex.exec(text);
+    if (!match?.[0]) {
+      return;
+    }
+    if (!bestMatch || match.index < bestMatch.index) {
+      bestMatch = {
+        type,
+        index: match.index,
+        raw: match[0],
+        inner: match[1] || ""
+      };
+    }
+  });
+
+  return bestMatch;
+};
+
+const renderLooseInlineTextMarkdown = (value) => {
+  const source = String(value || "");
+  if (!source) {
+    return "";
+  }
+
+  let output = "";
+  let cursor = 0;
+
+  while (cursor < source.length) {
+    const match = findLooseInlineMarkdownMatch(source, cursor);
+    if (!match) {
+      output += escapeHtml(source.slice(cursor));
+      break;
+    }
+
+    if (match.index > cursor) {
+      output += escapeHtml(source.slice(cursor, match.index));
+    }
+
+    if (match.type === "code") {
+      output += `<code${buildMarkdownAttr(match.raw)}>${escapeHtml(match.inner)}</code>`;
+    } else if (match.type === "strong") {
+      output += `<strong${buildMarkdownAttr(match.raw)}>${renderLooseInlineTextMarkdown(match.inner)}</strong>`;
+    } else if (match.type === "del") {
+      output += `<del${buildMarkdownAttr(match.raw)}>${renderLooseInlineTextMarkdown(match.inner)}</del>`;
+    } else if (match.type === "em") {
+      output += `<em${buildMarkdownAttr(match.raw)}>${renderLooseInlineTextMarkdown(match.inner)}</em>`;
+    } else {
+      output += escapeHtml(match.raw);
+    }
+
+    cursor = match.index + match.raw.length;
+  }
+
+  return output;
+};
+
+const renderFallbackBlockTokenToHtml = (token) =>
+  attachMarkdownAttrToHtml(String(marked.parser([token], MARKED_OPTIONS) || "").trim(), token?.raw || "");
+
+const renderInlineTokensToHtml = (tokens) =>
+  (Array.isArray(tokens) ? tokens : []).map((token) => {
+    if (!token || typeof token !== "object") {
+      return "";
+    }
+
+    if (token.type === "escape") {
+      return escapeHtml(String(token.text || ""));
+    }
+
+    if (token.type === "text") {
+      return renderLooseInlineTextMarkdown(String(token.text || ""));
+    }
+
+    if (token.type === "html") {
+      return String(token.raw || token.text || "");
+    }
+
+    if (token.type === "strong") {
+      return `<strong${buildMarkdownAttr(token.raw)}>${renderInlineTokensToHtml(token.tokens || [])}</strong>`;
+    }
+
+    if (token.type === "em") {
+      return `<em${buildMarkdownAttr(token.raw)}>${renderInlineTokensToHtml(token.tokens || [])}</em>`;
+    }
+
+    if (token.type === "del") {
+      return `<del${buildMarkdownAttr(token.raw)}>${renderInlineTokensToHtml(token.tokens || [])}</del>`;
+    }
+
+    if (token.type === "codespan") {
+      return `<code${buildMarkdownAttr(token.raw)}>${escapeHtml(String(token.text || ""))}</code>`;
+    }
+
+    if (token.type === "br") {
+      return `<br${buildMarkdownAttr(token.raw)} />`;
+    }
+
+    if (token.type === "link") {
+      const href = String(token.href || "").trim();
+      const label = renderInlineTokensToHtml(token.tokens || []);
+      if (!href) {
+        return label;
+      }
+      const safeHref = escapeHtml(href);
+      const safeTitle = token.title ? ` title="${escapeHtml(String(token.title))}"` : "";
+      const markdownAttr = token.raw
+        ? buildMarkdownAttr(token.raw)
+        : buildMarkdownAttr(buildLinkMarkdown(String(token.text || ""), href, token.title));
+      return `<a href="${safeHref}" data-md-href="${safeHref}"${markdownAttr}${safeTitle}>${label}</a>`;
+    }
+
+    if (token.type === "image") {
+      const rawSrc = String(token.href || "").trim();
+      const normalized = normalizeImageHref(rawSrc);
+      if (!normalized) {
+        return "";
+      }
+      const safeSrc = escapeHtml(normalized);
+      const safeRawSrc = escapeHtml(rawSrc);
+      const safeAlt = escapeHtml(String(token.text || ""));
+      const safeTitle = token.title ? ` title="${escapeHtml(String(token.title))}"` : "";
+      const markdownAttr = token.raw
+        ? buildMarkdownAttr(token.raw)
+        : buildMarkdownAttr(buildImageMarkdown(token.text, rawSrc, token.title));
+      return `<img src="${safeSrc}" alt="${safeAlt}" data-md-src="${safeRawSrc}"${markdownAttr} loading="lazy"${safeTitle} />`;
+    }
+
+    return escapeHtml(String(token.raw || token.text || ""));
+  }).join("");
+
+const renderListItemTokensToHtml = (tokens, { loose = false } = {}) =>
+  (Array.isArray(tokens) ? tokens : []).map((token) => {
+    if (!token || typeof token !== "object") {
+      return "";
+    }
+
+    if (token.type === "space") {
+      return "";
+    }
+
+    if (token.type === "text") {
+      const content = renderInlineTokensToHtml(token.tokens || [{ type: "text", text: token.text || "", raw: token.raw || "" }]);
+      return loose ? `<p${buildMarkdownAttr(token.raw)}>${content || "<br />"}</p>` : (content || "<br />");
+    }
+
+    if (token.type === "paragraph") {
+      const content = renderInlineTokensToHtml(token.tokens || []);
+      return loose ? `<p${buildMarkdownAttr(token.raw)}>${content || "<br />"}</p>` : (content || "<br />");
+    }
+
+    return renderFallbackBlockTokenToHtml(token);
+  }).join("");
+
+const renderBlockTokensToHtml = (tokens) =>
+  (Array.isArray(tokens) ? tokens : []).map((token) => {
+    if (!token || typeof token !== "object") {
+      return "";
+    }
+
+    if (token.type === "space") {
+      return "";
+    }
+
+    if (token.type === "heading") {
+      const depth = Math.max(1, Math.min(6, Number(token.depth || 1)));
+      const content = renderInlineTokensToHtml(token.tokens || []);
+      return `<h${depth}${buildMarkdownAttr(token.raw)}>${content || "<br />"}</h${depth}>`;
+    }
+
+    if (token.type === "paragraph") {
+      const content = renderInlineTokensToHtml(token.tokens || []);
+      return `<p${buildMarkdownAttr(token.raw)}>${content || "<br />"}</p>`;
+    }
+
+    if (token.type === "text") {
+      const content = renderInlineTokensToHtml(token.tokens || [{ type: "text", text: token.text || "", raw: token.raw || "" }]);
+      return `<p${buildMarkdownAttr(token.raw)}>${content || "<br />"}</p>`;
+    }
+
+    if (token.type === "blockquote") {
+      const content = renderBlockTokensToHtml(token.tokens || []);
+      return `<blockquote${buildMarkdownAttr(token.raw)}>${content || "<p><br /></p>"}</blockquote>`;
+    }
+
+    if (token.type === "list") {
+      const tagName = token.ordered ? "ol" : "ul";
+      const body = (Array.isArray(token.items) ? token.items : []).map((item) => {
+        const checkbox = item?.task
+          ? `<input ${item.checked ? 'checked="" ' : ""}disabled="" type="checkbox"> `
+          : "";
+        const content = renderListItemTokensToHtml(item?.tokens || [], { loose: Boolean(item?.loose || token.loose) });
+        return `<li${buildMarkdownAttr(item?.raw)}>${checkbox}${content || "<br />"}</li>`;
+      }).join("");
+      return `<${tagName}${buildMarkdownAttr(token.raw)}>${body}</${tagName}>`;
+    }
+
+    if (token.type === "hr") {
+      return `<hr${buildMarkdownAttr(token.raw || "---")} />`;
+    }
+
+    if (token.type === "code") {
+      const text = normalizeMarkdownText(String(token.text || "")).replace(/\n$/, "");
+      const lang = String(token.lang || "").trim();
+      const safeLang = escapeHtml(lang);
+      const safeCode = escapeHtml(text);
+      const langAttr = safeLang ? ` data-code-lang="${safeLang}"` : "";
+      const classAttr = safeLang ? ` class="language-${safeLang}"` : "";
+      return `<pre${buildMarkdownAttr(token.raw)}${langAttr}><code${classAttr}>${safeCode}</code></pre>`;
+    }
+
+    return renderFallbackBlockTokenToHtml(token);
+  }).join("");
+
 const serializeImageNode = (node) => {
   const src = String(node.getAttribute("data-md-src") || node.getAttribute("src") || "").trim();
   if (!src) {
@@ -121,6 +419,14 @@ const serializeInlineNodes = (nodes) =>
       }
 
       const tag = node.tagName.toUpperCase();
+
+      if (node.getAttribute?.("data-md-source-inline") === "1") {
+        return readSourceUnitMarkdown(node);
+      }
+      if (node.hasAttribute?.("data-md-raw")) {
+        return getStoredMarkdown(node);
+      }
+
       const children = serializeInlineNodes(Array.from(node.childNodes || []));
 
       if (tag === "BR") {
@@ -153,6 +459,9 @@ const serializeInlineNodes = (nodes) =>
     .join("");
 
 const serializeList = (listNode, depth = 0) => {
+  if (listNode?.hasAttribute?.("data-md-raw")) {
+    return trimOuterBlankLines(getStoredMarkdown(listNode));
+  }
   const ordered = listNode.tagName === "OL";
   const lines = [];
 
@@ -211,17 +520,28 @@ const serializeBlockNodes = (nodes) => {
       return;
     }
 
-    if (node.getAttribute?.("data-md-transient")) {
-      return;
-    }
-
     const tag = node.tagName.toUpperCase();
     let markdown = "";
+
+    if (node.getAttribute?.("data-md-source-unit") === "1") {
+      markdown = trimOuterBlankLines(readSourceUnitMarkdown(node));
+      if (markdown) {
+        chunks.push(markdown);
+      }
+      return;
+    }
+    if (["P", "H1", "H2", "H3", "H4", "H5", "H6", "PRE", "UL", "OL", "BLOCKQUOTE", "TABLE", "HR"].includes(tag) && node.hasAttribute?.("data-md-raw")) {
+      markdown = trimOuterBlankLines(getStoredMarkdown(node));
+      if (markdown) {
+        chunks.push(markdown);
+      }
+      return;
+    }
 
     if (/^H[1-6]$/.test(tag)) {
       const level = Number(tag.slice(1));
       const content = trimOuterBlankLines(serializeInlineNodes(Array.from(node.childNodes || [])));
-      markdown = `${"#".repeat(level)}${content}`.trim();
+      markdown = `${"#".repeat(level)} ${content}`;
     } else if (tag === "P") {
       markdown = trimOuterBlankLines(serializeInlineNodes(Array.from(node.childNodes || [])));
     } else if (tag === "PRE") {
@@ -263,128 +583,14 @@ const serializeBlockNodes = (nodes) => {
   return chunks.join("\n\n");
 };
 
-export const normalizeImageHref = (value) => {
-  const raw = String(value || "").trim();
-  if (!raw) {
-    return "";
-  }
-  const isDesktop = typeof window !== "undefined" && Boolean(window.desktopPty?.isDesktop);
-
-  const toDesktopImageUrl = (absolutePath) => {
-    const full = String(absolutePath || "").trim();
-    if (!full) {
-      return "";
-    }
-    if (!isDesktop) {
-      const unixPath = full.replace(/\\/g, "/");
-      return `file:///${encodeURI(unixPath)}`;
-    }
-    return `ycdoc-file://local/${encodeURIComponent(full)}`;
-  };
-
-  if (/^[a-zA-Z]:[\\/]/.test(raw)) {
-    return toDesktopImageUrl(raw);
-  }
-
-  if (/^\\\\/.test(raw)) {
-    return `file:${encodeURI(raw.replace(/\\/g, "/"))}`;
-  }
-
-  if (/^(https?:|data:|blob:|file:|app:)/i.test(raw)) {
-    if (/^file:/i.test(raw)) {
-      try {
-        const decodedRaw = decodeURI(raw);
-        if (isDesktop) {
-          const parsed = new URL(decodedRaw);
-          let localPath = decodeURIComponent(parsed.pathname || "");
-          if (/^\/[a-zA-Z]:\//.test(localPath)) {
-            localPath = localPath.slice(1);
-          }
-          localPath = localPath.replace(/\//g, "\\");
-          return toDesktopImageUrl(localPath);
-        }
-        return encodeURI(decodedRaw);
-      } catch {
-        return encodeURI(raw);
-      }
-    }
-    return raw;
-  }
-
-  if (raw.includes("\\") && !raw.includes("://")) {
-    return raw.replace(/\\/g, "/");
-  }
-
-  return raw;
-};
-
-const createEditableRenderer = () => {
-  const renderer = new marked.Renderer();
-
-  renderer.code = (code, infostring) => {
-    const lang = ((infostring || "").match(/\S*/)?.[0] || "").trim();
-    const safeLang = escapeHtml(lang);
-    const safeCode = escapeHtml(normalizeMarkdownText(code || "").replace(/\n$/, ""));
-    const langAttr = safeLang ? ` data-code-lang="${safeLang}"` : "";
-    const classAttr = safeLang ? ` class="language-${safeLang}"` : "";
-    return `<pre data-md-block="code"${langAttr}><code${classAttr}>${safeCode}</code></pre>`;
-  };
-
-  renderer.image = (href, title, text) => {
-    let src = href;
-    let imgTitle = title;
-    let alt = text;
-
-    if (href && typeof href === "object") {
-      src = href.href;
-      imgTitle = href.title;
-      alt = href.text;
-    }
-
-    const rawSrc = String(src || "").trim();
-    const normalized = normalizeImageHref(rawSrc);
-    if (!normalized) {
-      return "";
-    }
-
-    const safeSrc = escapeHtml(normalized);
-    const safeRawSrc = escapeHtml(rawSrc);
-    const safeAlt = escapeHtml(String(alt || ""));
-    const safeTitle = imgTitle ? ` title="${escapeHtml(String(imgTitle))}"` : "";
-    return `<img src="${safeSrc}" alt="${safeAlt}" data-md-src="${safeRawSrc}" loading="lazy"${safeTitle} />`;
-  };
-
-  renderer.link = (href, title, text) => {
-    let rawHref = href;
-    let linkTitle = title;
-    let label = text;
-
-    if (href && typeof href === "object") {
-      rawHref = href.href;
-      linkTitle = href.title;
-      label = href.text;
-    }
-
-    const safeHref = escapeHtml(String(rawHref || "").trim());
-    const safeLabel = String(label || "");
-    const safeTitle = linkTitle ? ` title="${escapeHtml(String(linkTitle))}"` : "";
-    if (!safeHref) {
-      return safeLabel;
-    }
-    return `<a href="${safeHref}" data-md-href="${safeHref}"${safeTitle}>${safeLabel}</a>`;
-  };
-
-  return renderer;
-};
-
 export const renderMarkdownToEditableHtml = (markdown) => {
-  const html = String(marked.parse(normalizeLooseAtxHeadings(markdown), {
-    breaks: true,
-    gfm: true,
-    renderer: createEditableRenderer()
-  }) || "").trim();
+  const tokens = marked.lexer(normalizeMarkdownText(markdown), MARKED_OPTIONS);
+  const html = renderBlockTokensToHtml(tokens).trim();
   return html || "<p><br /></p>";
 };
+
+export const renderInlineMarkdownToHtml = (markdown) =>
+  renderInlineTokensToHtml(marked.Lexer.lexInline(normalizeMarkdownText(markdown), MARKED_OPTIONS)).trim();
 
 export const serializeRichEditorToMarkdown = (rootNode) => {
   if (!rootNode) {
