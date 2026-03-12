@@ -15,9 +15,6 @@ const lightTheme = EditorView.theme({
   ".cm-selectionBackground, ::selection": {
     backgroundColor: "#fed7aa"
   },
-  ".cm-activeLine": {
-    backgroundColor: "#fff7ed"
-  },
   ".cm-gutters": {
     border: "none",
     backgroundColor: "transparent",
@@ -39,9 +36,6 @@ const darkTheme = EditorView.theme(
     },
     ".cm-selectionBackground, ::selection": {
       backgroundColor: "#7c2d12"
-    },
-    ".cm-activeLine": {
-      backgroundColor: "#111827"
     },
     ".cm-gutters": {
       border: "none",

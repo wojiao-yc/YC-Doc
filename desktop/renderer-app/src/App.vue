@@ -345,6 +345,8 @@
                       ref="markdownEditorRef"
                       :model-value="documentMarkdown"
                       :dark="isDark"
+                      :presentation-blocks="semanticBlocks"
+                      :current-block-id="currentSemanticBlockId"
                       @selection-change="handleEditorSelectionChange"
                       @update:model-value="updateMarkdown"
                     />
@@ -993,7 +995,7 @@ const {
 } = useResizable();
 
 const adjustVisualEditorWidth = (delta) => {
-  const maxWidth = typeof window === "undefined" ? 2200 : Math.min(2200, window.innerWidth - 80);
+  const maxWidth = typeof window === "undefined" ? 1160 : Math.min(1160, window.innerWidth - 80);
   displayWidth.value = clamp(displayWidth.value + Number(delta || 0), 520, Math.max(520, maxWidth));
 };
 
@@ -1064,6 +1066,7 @@ const handleEditorSelectionChange = (selection) => {
 };
 
 const {
+  blocks: semanticBlocks,
   outline: semanticOutline,
   currentBlock: currentSemanticBlock
 } = useSemanticStore({
@@ -1073,8 +1076,15 @@ const {
   currentBlockStrategy: "anchor"
 });
 
+const activeSemanticBlock = computed(() => {
+  const current = currentSemanticBlock.value;
+  return current?.block || current?.prevBlock || current?.nextBlock || null;
+});
+
+const currentSemanticBlockId = computed(() => String(activeSemanticBlock.value?.id || ""));
+
 const currentBlockLabel = computed(() => {
-  const block = currentSemanticBlock.value?.block;
+  const block = activeSemanticBlock.value;
   if (!block) {
     return "Block none";
   }
@@ -1082,7 +1092,7 @@ const currentBlockLabel = computed(() => {
 });
 
 const currentBlockDebugTitle = computed(() => {
-  const block = currentSemanticBlock.value?.block;
+  const block = activeSemanticBlock.value;
   if (!block) {
     return "当前无块";
   }

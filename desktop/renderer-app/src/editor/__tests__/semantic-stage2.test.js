@@ -168,3 +168,26 @@ test("semantic snapshot generates heading outline with level, text and range", (
   assert.equal(snapshot.outline[0].from < snapshot.outline[0].to, true);
   assert.equal(snapshot.outline[1].from < snapshot.outline[1].to, true);
 });
+
+test("nested list items are parsed as independent blocks with increasing levels", () => {
+  const markdown = [
+    "- parent",
+    "  - child",
+    "    - grand child",
+    "- sibling"
+  ].join("\n");
+  const blocks = parseMarkdownToBlocks(markdown);
+  const listBlocks = blocks.filter((block) =>
+    block.type === "bullet_list_item" || block.type === "ordered_list_item" || block.type === "task_list_item"
+  );
+
+  assert.equal(listBlocks.length, 4);
+  assert.equal(listBlocks[0].attrs?.level, 1);
+  assert.equal(listBlocks[1].attrs?.level, 2);
+  assert.equal(listBlocks[2].attrs?.level, 3);
+  assert.equal(listBlocks[3].attrs?.level, 1);
+
+  for (let index = 1; index < listBlocks.length; index += 1) {
+    assert.equal(listBlocks[index].from >= listBlocks[index - 1].to, true);
+  }
+});

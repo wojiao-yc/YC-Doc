@@ -5,6 +5,7 @@ import { createEditorState } from "./create-state";
 import { createEditorView } from "./create-view";
 import { coreExtensions } from "../extensions/core";
 import { markdownExtensions } from "../extensions/markdown";
+import { presentationExtensions, setPresentationDataEffect } from "../extensions/presentation";
 import { createEditorThemeExtension } from "../extensions/theme";
 
 export const createMarkdownEditor = ({
@@ -34,6 +35,7 @@ export const createMarkdownEditor = ({
     extensions: [
       ...coreExtensions,
       ...markdownExtensions,
+      ...presentationExtensions,
       themeCompartment.of(createEditorThemeExtension(Boolean(dark))),
       updateListener
     ]
@@ -70,11 +72,21 @@ export const createMarkdownEditor = ({
     });
   };
 
+  const setPresentationData = ({ blocks = [], currentBlockId = "" } = {}) => {
+    view.dispatch({
+      effects: setPresentationDataEffect.of({
+        blocks: Array.isArray(blocks) ? blocks : [],
+        currentBlockId: String(currentBlockId || "")
+      })
+    });
+  };
+
   return {
     view,
     getDoc,
     setDoc,
     setDark,
+    setPresentationData,
     focus: () => view.focus(),
     openSearch: () => openSearchPanel(view),
     destroy: () => view.destroy()

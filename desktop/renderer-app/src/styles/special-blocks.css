@@ -1,0 +1,49 @@
+.yc-editor-host .cm-line.cm-block-thematic-break {
+  color: transparent;
+  background-image: linear-gradient(90deg, rgba(148, 163, 184, 0.12) 0%, rgba(148, 163, 184, 0.55) 50%, rgba(148, 163, 184, 0.12) 100%);
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: 100% 1px;
+  padding-top: 0.65rem;
+  padding-bottom: 0.65rem;
+  margin: 0.24rem 0;
+}
+
+.yc-editor-shell.is-dark .yc-editor-host .cm-line.cm-block-thematic-break {
+  background-image: linear-gradient(90deg, rgba(71, 85, 105, 0.12) 0%, rgba(71, 85, 105, 0.7) 50%, rgba(71, 85, 105, 0.12) 100%);
+}
+
+.yc-editor-host .cm-line.cm-block-image,
+.yc-editor-host .cm-line.cm-block-math-block,
+.yc-editor-host .cm-line.cm-block-table,
+.yc-editor-host .cm-line.cm-block-html-block {
+  border: 1px dashed #cbd5e1;
+  background: rgba(248, 250, 252, 0.85);
+  border-radius: 10px;
+  padding-left: 0.8rem;
+  padding-right: 0.8rem;
+}
+
+.yc-editor-shell.is-dark .yc-editor-host .cm-line.cm-block-image,
+.yc-editor-shell.is-dark .yc-editor-host .cm-line.cm-block-math-block,
+.yc-editor-shell.is-dark .yc-editor-host .cm-line.cm-block-table,
+.yc-editor-shell.is-dark .yc-editor-host .cm-line.cm-block-html-block {
+  border-color: #334155;
+  background: rgba(15, 23, 42, 0.78);
+}
+
+.yc-editor-host .cm-line.cm-block-image.cm-block-start,
+.yc-editor-host .cm-line.cm-block-math-block.cm-block-start,
+.yc-editor-host .cm-line.cm-block-table.cm-block-start,
+.yc-editor-host .cm-line.cm-block-html-block.cm-block-start {
+  padding-top: 0.35rem;
+  margin-top: 0.28rem;
+}
+
+.yc-editor-host .cm-line.cm-block-image.cm-block-end,
+.yc-editor-host .cm-line.cm-block-math-block.cm-block-end,
+.yc-editor-host .cm-line.cm-block-table.cm-block-end,
+.yc-editor-host .cm-line.cm-block-html-block.cm-block-end {
+  padding-bottom: 0.35rem;
+  margin-bottom: 0.28rem;
+}

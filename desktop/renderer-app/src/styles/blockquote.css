@@ -1,0 +1,25 @@
+.yc-editor-host .cm-line.cm-block-blockquote {
+  border-left: 3px solid #cbd5e1;
+  background: rgba(241, 245, 249, 0.78);
+  color: #334155;
+  padding-left: 0.9rem;
+}
+
+.yc-editor-shell.is-dark .yc-editor-host .cm-line.cm-block-blockquote {
+  border-left-color: #475569;
+  background: rgba(15, 23, 42, 0.9);
+  color: #cbd5e1;
+}
+
+.yc-editor-host .cm-line.cm-block-blockquote.cm-block-start {
+  border-top-left-radius: 8px;
+  border-top-right-radius: 8px;
+  padding-top: 0.18rem;
+}
+
+.yc-editor-host .cm-line.cm-block-blockquote.cm-block-end {
+  border-bottom-left-radius: 8px;
+  border-bottom-right-radius: 8px;
+  padding-bottom: 0.18rem;
+  margin-bottom: 0.18rem;
+}

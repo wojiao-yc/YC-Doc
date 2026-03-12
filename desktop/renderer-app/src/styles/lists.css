@@ -1,0 +1,41 @@
+.yc-editor-host .cm-line.cm-block-bullet-list-item,
+.yc-editor-host .cm-line.cm-block-ordered-list-item,
+.yc-editor-host .cm-line.cm-block-task-list-item {
+  --yc-list-level: 1;
+  padding-left: calc(1.1rem + (var(--yc-list-level) - 1) * 1.02rem);
+}
+
+.yc-editor-host .cm-line.cm-block-ordered-list-item {
+  font-variant-numeric: tabular-nums;
+}
+
+.yc-editor-host .cm-line.cm-block-bullet-list-item.cm-block-start,
+.yc-editor-host .cm-line.cm-block-ordered-list-item.cm-block-start,
+.yc-editor-host .cm-line.cm-block-task-list-item.cm-block-start {
+  padding-top: 0.18rem;
+}
+
+.yc-editor-host .cm-line.cm-block-bullet-list-item.cm-block-end,
+.yc-editor-host .cm-line.cm-block-ordered-list-item.cm-block-end,
+.yc-editor-host .cm-line.cm-block-task-list-item.cm-block-end {
+  padding-bottom: 0.18rem;
+}
+
+.yc-editor-host .cm-line.cm-list-level-1 { --yc-list-level: 1; }
+.yc-editor-host .cm-line.cm-list-level-2 { --yc-list-level: 2; }
+.yc-editor-host .cm-line.cm-list-level-3 { --yc-list-level: 3; }
+.yc-editor-host .cm-line.cm-list-level-4 { --yc-list-level: 4; }
+.yc-editor-host .cm-line.cm-list-level-5 { --yc-list-level: 5; }
+.yc-editor-host .cm-line.cm-list-level-6 { --yc-list-level: 6; }
+
+.yc-editor-host .cm-line.cm-block-task-list-item.cm-task-unchecked {
+  color: #334155;
+}
+
+.yc-editor-host .cm-line.cm-block-task-list-item.cm-task-checked {
+  opacity: 0.74;
+}
+
+.yc-editor-shell.is-dark .yc-editor-host .cm-line.cm-block-task-list-item.cm-task-unchecked {
+  color: #cbd5e1;
+}

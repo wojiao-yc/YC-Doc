@@ -16,6 +16,14 @@ const props = defineProps({
   modelValue: {
     type: String,
     default: ""
+  },
+  presentationBlocks: {
+    type: Array,
+    default: () => []
+  },
+  currentBlockId: {
+    type: String,
+    default: ""
   }
 });
 
@@ -33,6 +41,13 @@ const openSearch = () => {
 
 defineExpose({ focus, openSearch });
 
+const syncPresentationData = () => {
+  editorApi?.setPresentationData({
+    blocks: props.presentationBlocks,
+    currentBlockId: props.currentBlockId
+  });
+};
+
 onMounted(() => {
   const host = editorHostRef.value;
   if (!host) {
@@ -49,6 +64,7 @@ onMounted(() => {
       emit("update:modelValue", nextMarkdown);
     }
   });
+  syncPresentationData();
 });
 
 watch(
@@ -62,6 +78,20 @@ watch(
   () => props.dark,
   (nextDark) => {
     editorApi?.setDark(nextDark);
+  }
+);
+
+watch(
+  () => props.presentationBlocks,
+  () => {
+    syncPresentationData();
+  }
+);
+
+watch(
+  () => props.currentBlockId,
+  () => {
+    syncPresentationData();
   }
 );
 

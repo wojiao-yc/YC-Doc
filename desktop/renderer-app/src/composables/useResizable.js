@@ -7,6 +7,7 @@ export const useResizable = () => {
   const editSplitRef = ref(null);
 
   const DEFAULT_DISPLAY_W = 980;
+  const MAX_DOCUMENT_WIDTH = 1160;
 
   const displayStyle = computed(() => ({
     width: "100%",
@@ -69,7 +70,7 @@ export const useResizable = () => {
     document.body.style.userSelect = "none";
     const onMove = (ev) => {
       const dx = ev.clientX - startX;
-      const maxW = Math.min(2200, window.innerWidth - 80);
+      const maxW = Math.min(MAX_DOCUMENT_WIDTH, window.innerWidth - 80);
       const newW = startW + dx * 2;
       displayWidth.value = clamp(Math.round(newW), 520, Math.max(520, maxW));
     };

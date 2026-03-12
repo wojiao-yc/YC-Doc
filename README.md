@@ -78,6 +78,37 @@
 - [ ] 大文档增量解析优化（当前为全量 parse + debounce）
 - [ ] 阶段三行为规则（Enter/Backspace/Tab）接入语义层
 
+## Stage 3 文档展示层（进行中）
+
+目标: 在不改变 Markdown 真源的前提下，让编辑器整体视觉从“代码工具”转向“写作文档”。
+
+### 已落地模块
+
+- `desktop/renderer-app/src/editor/extensions/presentation.js`
+- `desktop/renderer-app/src/styles/document-layout.css`
+- `desktop/renderer-app/src/styles/typography.css`
+- `desktop/renderer-app/src/styles/headings.css`
+- `desktop/renderer-app/src/styles/lists.css`
+- `desktop/renderer-app/src/styles/blockquote.css`
+- `desktop/renderer-app/src/styles/code-block.css`
+- `desktop/renderer-app/src/styles/special-blocks.css`
+- `desktop/renderer-app/src/styles/editor-theme.css`
+
+### 当前能力（Stage 3 第一版）
+
+- [x] 页面级版式骨架（内容区留白、文档列气质）
+- [x] 正文字号/行高/段落节奏
+- [x] 标题层级系统（h1-h6）
+- [x] 列表、引用、代码块视觉层级
+- [x] 分割线/图片/数学/表格的基础块感
+- [x] current block 轻量聚焦感（基于块级行装饰）
+
+### 待继续增强
+
+- [ ] 主题变量系统进一步收敛（深浅主题 token 化）
+- [ ] 特殊块占位与后续 widget 视觉过渡打磨
+- [ ] 与阶段四“语法弱化/替换”的衔接细节验证
+
 ## 开发与构建
 
 在 `desktop` 目录执行:

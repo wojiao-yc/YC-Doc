@@ -1,0 +1,28 @@
+.yc-editor-host .cm-line.cm-block-code-block {
+  font-family: "Cascadia Mono", "JetBrains Mono", "SFMono-Regular", Menlo, Consolas, monospace;
+  font-size: 14px;
+  line-height: 1.62;
+  background: rgba(241, 245, 249, 0.95);
+  color: #0f172a;
+  padding-left: 0.95rem;
+  padding-right: 0.95rem;
+}
+
+.yc-editor-shell.is-dark .yc-editor-host .cm-line.cm-block-code-block {
+  background: rgba(15, 23, 42, 0.96);
+  color: #e2e8f0;
+}
+
+.yc-editor-host .cm-line.cm-block-code-block.cm-block-start {
+  border-top-left-radius: 10px;
+  border-top-right-radius: 10px;
+  padding-top: 0.55rem;
+  margin-top: 0.42rem;
+}
+
+.yc-editor-host .cm-line.cm-block-code-block.cm-block-end {
+  border-bottom-left-radius: 10px;
+  border-bottom-right-radius: 10px;
+  padding-bottom: 0.55rem;
+  margin-bottom: 0.5rem;
+}

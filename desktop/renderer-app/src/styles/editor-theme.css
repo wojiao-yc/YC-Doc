@@ -1,0 +1,40 @@
+.yc-editor-host .cm-focused {
+  outline: none;
+}
+
+.yc-editor-host .cm-selectionBackground {
+  border-radius: 4px;
+  background: rgba(251, 146, 60, 0.24);
+}
+
+.yc-editor-shell.is-dark .yc-editor-host .cm-selectionBackground {
+  background: rgba(251, 146, 60, 0.28);
+}
+
+.yc-editor-host .cm-cursor,
+.yc-editor-host .cm-dropCursor {
+  border-left-color: #f97316;
+}
+
+.yc-editor-shell.is-dark .yc-editor-host .cm-cursor,
+.yc-editor-shell.is-dark .yc-editor-host .cm-dropCursor {
+  border-left-color: #fb923c;
+}
+
+.yc-editor-host .cm-line.cm-block-current {
+  background-color: rgba(251, 146, 60, 0.1);
+}
+
+.yc-editor-shell.is-dark .yc-editor-host .cm-line.cm-block-current {
+  background-color: rgba(251, 146, 60, 0.14);
+}
+
+.yc-editor-host .cm-searchMatch {
+  background: rgba(251, 146, 60, 0.22);
+  outline: 1px solid rgba(251, 146, 60, 0.5);
+}
+
+.yc-editor-shell.is-dark .yc-editor-host .cm-searchMatch {
+  background: rgba(251, 146, 60, 0.26);
+  outline-color: rgba(251, 146, 60, 0.58);
+}

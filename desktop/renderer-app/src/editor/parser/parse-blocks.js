@@ -125,64 +125,28 @@ const countIndent = (lineText) => {
   return count;
 };
 
-const orderedMarkerFromLine = (lineText) => {
-  const match = String(lineText || "").match(/^(\s*)\d+([.)])\s+/);
-  return match ? match[2] : ".";
-};
-
-const bulletMarkerFromLine = (lineText) => {
-  const match = String(lineText || "").match(/^(\s*)([-+*])\s+/);
-  return match ? match[2] : "-";
-};
-
 const firstLineOf = (raw) => String(raw || "").split("\n")[0] || "";
 
-const listItemAttrs = (item, listToken, itemIndex, itemRaw) => {
-  const firstLine = firstLineOf(itemRaw);
-  const parsed = parseListLine(firstLine);
-  if (parsed) {
-    return {
-      type: parsed.type,
-      attrs: parsed.attrs || {}
-    };
+const buildLinesForRange = (markdown, from, to) => {
+  const content = markdown.slice(from, to);
+  const rawLines = content.split("\n");
+  const lines = [];
+  let cursor = from;
+
+  for (let index = 0; index < rawLines.length; index += 1) {
+    const text = rawLines[index];
+    const hasNewline = index < rawLines.length - 1;
+    const lineFrom = cursor;
+    const lineTo = lineFrom + text.length + (hasNewline ? 1 : 0);
+    lines.push({
+      text,
+      from: lineFrom,
+      to: lineTo
+    });
+    cursor = lineTo;
   }
 
-  const indent = countIndent(firstLine);
-  const text = String(item?.text || "").trim();
-
-  if (item?.task) {
-    return {
-      type: BLOCK_TYPES.TASK_LIST_ITEM,
-      attrs: {
-        indent,
-        marker: bulletMarkerFromLine(firstLine),
-        checked: Boolean(item.checked),
-        text
-      }
-    };
-  }
-
-  if (listToken?.ordered) {
-    const start = Number(listToken.start || 1);
-    return {
-      type: BLOCK_TYPES.ORDERED_LIST_ITEM,
-      attrs: {
-        indent,
-        index: start + itemIndex,
-        marker: orderedMarkerFromLine(firstLine),
-        text
-      }
-    };
-  }
-
-  return {
-    type: BLOCK_TYPES.BULLET_LIST_ITEM,
-    attrs: {
-      indent,
-      marker: bulletMarkerFromLine(firstLine),
-      text
-    }
-  };
+  return lines;
 };
 
 const tableColumnsOf = (token) => {
@@ -197,7 +161,56 @@ const tableColumnsOf = (token) => {
   return normalized.split("|").length;
 };
 
-const toListItems = (token) => (Array.isArray(token?.items) ? token.items : []);
+const extractListBlocksFromRange = (markdown, from, to) => {
+  const lines = buildLinesForRange(markdown, from, to);
+  const items = [];
+
+  let index = 0;
+  while (index < lines.length) {
+    const line = lines[index];
+    const parsed = parseListLine(line.text);
+    if (!parsed) {
+      index += 1;
+      continue;
+    }
+
+    const currentIndent = Number(parsed?.attrs?.indent || 0);
+    let endIndex = index;
+    let cursor = index + 1;
+
+    while (cursor < lines.length) {
+      const nextLine = lines[cursor];
+      if (parseListLine(nextLine.text)) {
+        break;
+      }
+
+      const trimmed = String(nextLine.text || "").trim();
+      if (!trimmed) {
+        endIndex = cursor;
+        cursor += 1;
+        continue;
+      }
+
+      if (countIndent(nextLine.text) <= currentIndent) {
+        break;
+      }
+
+      endIndex = cursor;
+      cursor += 1;
+    }
+
+    items.push({
+      type: parsed.type,
+      attrs: parsed.attrs || {},
+      from: line.from,
+      to: lines[endIndex].to
+    });
+
+    index = endIndex + 1;
+  }
+
+  return items;
+};
 
 const pushBlock = (blocks, markdown, lineStarts, type, from, to, attrs = {}) => {
   if (to <= from) {
@@ -285,15 +298,9 @@ export const parseMarkdownToBlocks = (markdownInput) => {
     if (type === "list") {
       const listRange = findRawRange(markdown, raw, cursor);
       cursor = listRange.nextCursor;
-      let itemCursor = listRange.from;
-      const items = toListItems(token);
-      for (let index = 0; index < items.length; index += 1) {
-        const item = items[index];
-        const itemRaw = String(item?.raw || "");
-        const itemRange = findRawRange(markdown, itemRaw, itemCursor, listRange.to);
-        itemCursor = itemRange.nextCursor;
-        const itemInfo = listItemAttrs(item, token, index, itemRaw);
-        pushBlock(blocks, markdown, lineStarts, itemInfo.type, itemRange.from, itemRange.to, itemInfo.attrs);
+      const listItems = extractListBlocksFromRange(markdown, listRange.from, listRange.to);
+      for (const item of listItems) {
+        pushBlock(blocks, markdown, lineStarts, item.type, item.from, item.to, item.attrs);
       }
       continue;
     }

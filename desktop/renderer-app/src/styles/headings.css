@@ -1,0 +1,44 @@
+.yc-editor-host .cm-line.cm-block-heading {
+  color: #0f172a;
+  font-weight: 700;
+  letter-spacing: 0.002em;
+}
+
+.yc-editor-shell.is-dark .yc-editor-host .cm-line.cm-block-heading {
+  color: #f8fafc;
+}
+
+.yc-editor-host .cm-line.cm-block-heading.cm-block-start {
+  padding-top: 0.85rem;
+}
+
+.yc-editor-host .cm-line.cm-block-heading.cm-block-end {
+  padding-bottom: 0.3rem;
+}
+
+.yc-editor-host .cm-line.cm-block-heading-l1 {
+  font-size: 2.03rem;
+  line-height: 1.24;
+}
+
+.yc-editor-host .cm-line.cm-block-heading-l2 {
+  font-size: 1.62rem;
+  line-height: 1.3;
+}
+
+.yc-editor-host .cm-line.cm-block-heading-l3 {
+  font-size: 1.34rem;
+  line-height: 1.36;
+}
+
+.yc-editor-host .cm-line.cm-block-heading-l4 {
+  font-size: 1.12rem;
+  line-height: 1.42;
+}
+
+.yc-editor-host .cm-line.cm-block-heading-l5,
+.yc-editor-host .cm-line.cm-block-heading-l6 {
+  font-size: 1rem;
+  line-height: 1.5;
+  font-weight: 650;
+}

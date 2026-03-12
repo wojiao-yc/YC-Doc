@@ -1,0 +1,45 @@
+:root {
+  --yc-doc-side-padding: 14px;
+  --yc-doc-top-padding: 18px;
+  --yc-doc-bottom-padding: 56px;
+  --yc-doc-bg-light: #fffefb;
+  --yc-doc-bg-dark: #0b1220;
+}
+
+.yc-editor-shell {
+  width: 100%;
+  min-height: calc(100vh - 320px);
+  border: 0;
+  border-radius: 0;
+  overflow: visible;
+  background: transparent;
+  position: relative;
+}
+
+.yc-editor-shell::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(180deg, rgba(148, 163, 184, 0.05) 0%, rgba(148, 163, 184, 0) 180px);
+}
+
+.yc-editor-shell.is-dark::before {
+  background: linear-gradient(180deg, rgba(15, 23, 42, 0.5) 0%, rgba(15, 23, 42, 0) 220px);
+}
+
+.yc-editor-host {
+  width: 100%;
+  min-height: inherit;
+}
+
+.yc-editor-host .cm-editor {
+  min-height: inherit;
+  height: 100%;
+  background: transparent;
+}
+
+.yc-editor-host .cm-scroller {
+  min-height: inherit;
+  padding: var(--yc-doc-top-padding) var(--yc-doc-side-padding) var(--yc-doc-bottom-padding);
+}
