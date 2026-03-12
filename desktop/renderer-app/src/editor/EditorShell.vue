@@ -27,7 +27,11 @@ const focus = () => {
   editorApi?.focus();
 };
 
-defineExpose({ focus });
+const openSearch = () => {
+  editorApi?.openSearch();
+};
+
+defineExpose({ focus, openSearch });
 
 onMounted(() => {
   const host = editorHostRef.value;

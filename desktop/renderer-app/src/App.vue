@@ -310,6 +310,21 @@
                     >
                       重置宽度
                     </button>
+                    <button
+                      type="button"
+                      class="px-2 py-1 text-xs rounded-lg transition-all"
+                      :class="isDark ? 'bg-orange-500/20 hover:bg-orange-500/30 text-orange-200 border border-orange-500/40' : 'bg-orange-50 hover:bg-orange-100 text-orange-700 border border-orange-200'"
+                      @mousedown.prevent
+                      @click="handleManualSaveCurrentMarkdown"
+                    >
+                      保存
+                    </button>
+                    <span class="text-xs px-2 py-1 rounded-lg"
+                      :class="saveStatusChipClass"
+                      :title="saveStatusTooltip"
+                    >
+                      {{ saveStatusLabel }}
+                    </span>
                   </div>
                 </div>
 
@@ -995,8 +1010,11 @@ const {
   documentMarkdown,
   flushPendingMarkdownSave,
   formatBytes,
+  isMarkdownDirty,
   isMarkdownFileName,
   isMarkdownFileTooLarge,
+  lastSaveError,
+  lastSavedAt,
   isSingleBlankStepList,
   loadStepsFromMarkdownFile,
   markdownHydrating,
@@ -1004,6 +1022,8 @@ const {
   persistActiveMarkdownBeforeSwitch,
   removeStep,
   resetBlankEditorState,
+  saveMarkdown,
+  saveStatus,
   updateMarkdown,
   serializeStepsToMarkdown,
   stepDisplayTitle,
@@ -1021,6 +1041,73 @@ const {
   showToast,
   focusStepInEditMode
 });
+
+const formatSaveTime = (value) => {
+  if (!value) {
+    return "";
+  }
+  try {
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) {
+      return "";
+    }
+    return date.toLocaleTimeString("zh-CN", {
+      hour12: false,
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit"
+    });
+  } catch {
+    return "";
+  }
+};
+
+const saveStatusLabel = computed(() => {
+  if (!activeMarkdownRelPath.value) {
+    return "未关联文件";
+  }
+  if (saveStatus.value === "saving") {
+    return "保存中...";
+  }
+  if (saveStatus.value === "error") {
+    return "保存失败";
+  }
+  if (isMarkdownDirty()) {
+    return "未保存";
+  }
+  const savedAt = formatSaveTime(lastSavedAt.value);
+  return savedAt ? `已保存 ${savedAt}` : "已同步";
+});
+
+const saveStatusTooltip = computed(() => {
+  if (saveStatus.value === "error" && lastSaveError.value) {
+    return `保存失败: ${lastSaveError.value}`;
+  }
+  return activeMarkdownRelPath.value || "";
+});
+
+const saveStatusChipClass = computed(() =>
+  saveStatus.value === "error"
+    ? (isDark.value ? "bg-rose-500/20 text-rose-200 border border-rose-500/40" : "bg-rose-50 text-rose-700 border border-rose-200")
+    : isMarkdownDirty()
+      ? (isDark.value ? "bg-amber-500/20 text-amber-200 border border-amber-500/40" : "bg-amber-50 text-amber-700 border border-amber-200")
+      : (isDark.value ? "bg-slate-800 text-slate-200 border border-slate-700" : "bg-gray-100 text-gray-700 border border-gray-200")
+);
+
+const handleManualSaveCurrentMarkdown = async () => {
+  if (!activeMarkdownRelPath.value) {
+    showToast("当前没有可保存的 Markdown 文件");
+    return;
+  }
+  const saved = await saveMarkdown();
+  if (saved) {
+    showToast("Markdown 已保存");
+    return;
+  }
+  if (saveStatus.value !== "error") {
+    showToast("无需保存，内容已是最新");
+  }
+};
 const handleStepSelection = async (stepId, index) => {
   currentId.value = stepId;
   if (!isEditMode.value) {
@@ -3383,8 +3470,22 @@ const onKeydown = (event) => {
     return;
   }
 
+  const key = String(event.key || "").toLowerCase();
+  const mod = event.ctrlKey || event.metaKey;
   const tag = document.activeElement?.tagName?.toLowerCase() || "";
   const typing = tag === "input" || tag === "textarea" || document.activeElement?.isContentEditable;
+
+  if (isEditMode.value && mod && key === "s") {
+    event.preventDefault();
+    void handleManualSaveCurrentMarkdown();
+    return;
+  }
+
+  if (isEditMode.value && mod && key === "f") {
+    event.preventDefault();
+    markdownEditorRef.value?.openSearch?.();
+    return;
+  }
 
   if (event.key === "Escape" && !isEditMode.value) {
     event.preventDefault();

@@ -1,4 +1,5 @@
 import { Compartment } from "@codemirror/state";
+import { openSearchPanel } from "@codemirror/search";
 import { EditorView } from "@codemirror/view";
 import { createEditorState } from "./create-state";
 import { createEditorView } from "./create-view";
@@ -60,6 +61,7 @@ export const createMarkdownEditor = ({
     setDoc,
     setDark,
     focus: () => view.focus(),
+    openSearch: () => openSearchPanel(view),
     destroy: () => view.destroy()
   };
 };

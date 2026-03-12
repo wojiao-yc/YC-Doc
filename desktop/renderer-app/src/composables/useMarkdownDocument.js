@@ -32,6 +32,9 @@ export const useMarkdownDocument = ({
   const activeMarkdownRelPath = ref("");
   const documentMarkdown = ref("");
   const markdownHydrating = ref(false);
+  const saveStatus = ref("idle");
+  const lastSavedAt = ref(0);
+  const lastSaveError = ref("");
 
   let markdownSaveTimer = null;
   let pendingDocumentMarkdownFromSteps = null;
@@ -220,6 +223,9 @@ export const useMarkdownDocument = ({
     documentMarkdown.value = normalized;
     if (markAsSaved) {
       setPathSnapshot(relPath, normalized);
+      saveStatus.value = "saved";
+      lastSavedAt.value = 0;
+      lastSaveError.value = "";
     }
     return normalized;
   };
@@ -288,6 +294,8 @@ export const useMarkdownDocument = ({
       if (!force && !isMarkdownDirty(relPath, content)) {
         return false;
       }
+      saveStatus.value = "saving";
+      lastSaveError.value = "";
       const result = await desktopDataBridge.writeWorkspaceFile({
         relPath,
         content
@@ -296,15 +304,23 @@ export const useMarkdownDocument = ({
         throw new Error(String(result?.error || "write_workspace_file_failed"));
       }
       setPathSnapshot(relPath, content);
+      lastSavedAt.value = Date.now();
+      saveStatus.value = "saved";
       return true;
     } catch (error) {
-      showToast(`保存 Markdown 失败: ${String(error?.message || error || "unknown_error")}`);
+      const errorMessage = String(error?.message || error || "unknown_error");
+      saveStatus.value = "error";
+      lastSaveError.value = errorMessage;
+      showToast(`保存 Markdown 失败: ${errorMessage}`);
       return false;
     }
   };
 
-  const saveMarkdown = async (targetRelPath = activeMarkdownRelPath.value, sourceMarkdown = documentMarkdown.value) =>
-    writeActiveMarkdownNow(targetRelPath, sourceMarkdown);
+  const saveMarkdown = async (
+    targetRelPath = activeMarkdownRelPath.value,
+    sourceMarkdown = documentMarkdown.value,
+    options = {}
+  ) => writeActiveMarkdownNow(targetRelPath, sourceMarkdown, options);
 
   const scheduleActiveMarkdownSave = () => {
     if (!activeMarkdownRelPath.value || markdownHydrating.value || !isMarkdownDirty()) {
@@ -495,6 +511,11 @@ export const useMarkdownDocument = ({
 
   watch(activeMarkdownRelPath, () => {
     clearScheduledMarkdownSave();
+    if (!activeMarkdownRelPath.value) {
+      saveStatus.value = "idle";
+      lastSavedAt.value = 0;
+      lastSaveError.value = "";
+    }
   });
 
   onBeforeUnmount(() => {
@@ -513,6 +534,8 @@ export const useMarkdownDocument = ({
     isMarkdownFileTooLarge,
     isMarkdownDirty,
     isSingleBlankStepList,
+    lastSaveError,
+    lastSavedAt,
     loadMarkdown,
     loadStepsFromMarkdownFile,
     markdownHydrating,
@@ -521,6 +544,7 @@ export const useMarkdownDocument = ({
     removeStep,
     resetBlankEditorState,
     saveMarkdown,
+    saveStatus,
     serializeStepsToMarkdown,
     stepDisplayTitle,
     stepPreviewText,
