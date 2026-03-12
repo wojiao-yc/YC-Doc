@@ -11,10 +11,18 @@ export const createMarkdownEditor = ({
   parent,
   doc = "",
   dark = false,
-  onChange = null
+  onChange = null,
+  onSelectionChange = null
 }) => {
   const themeCompartment = new Compartment();
   const updateListener = EditorView.updateListener.of((update) => {
+    if ((update.selectionSet || update.docChanged) && typeof onSelectionChange === "function") {
+      const mainSelection = update.state.selection.main;
+      onSelectionChange({
+        anchor: mainSelection.anchor,
+        head: mainSelection.head
+      }, update);
+    }
     if (!update.docChanged || typeof onChange !== "function") {
       return;
     }
@@ -32,6 +40,13 @@ export const createMarkdownEditor = ({
   });
 
   const view = createEditorView({ state, parent });
+  if (typeof onSelectionChange === "function") {
+    const mainSelection = view.state.selection.main;
+    onSelectionChange({
+      anchor: mainSelection.anchor,
+      head: mainSelection.head
+    });
+  }
 
   const getDoc = () => view.state.doc.toString();
 

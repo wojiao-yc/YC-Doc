@@ -325,6 +325,17 @@
                     >
                       {{ saveStatusLabel }}
                     </span>
+                    <span class="text-xs px-2 py-1 rounded-lg border"
+                      :class="isDark ? 'bg-slate-800 text-slate-300 border-slate-700' : 'bg-gray-100 text-gray-700 border-gray-200'"
+                      :title="currentBlockDebugTitle"
+                    >
+                      {{ currentBlockLabel }}
+                    </span>
+                    <span class="text-xs px-2 py-1 rounded-lg border"
+                      :class="isDark ? 'bg-slate-800 text-slate-300 border-slate-700' : 'bg-gray-100 text-gray-700 border-gray-200'"
+                    >
+                      Outline {{ semanticOutline.length }}
+                    </span>
                   </div>
                 </div>
 
@@ -334,6 +345,7 @@
                       ref="markdownEditorRef"
                       :model-value="documentMarkdown"
                       :dark="isDark"
+                      @selection-change="handleEditorSelectionChange"
                       @update:model-value="updateMarkdown"
                     />
                   </div>
@@ -812,6 +824,7 @@ import { FitAddon } from "@xterm/addon-fit";
 import { Terminal as XTermTerminal } from "xterm";
 import ToastMessage from "./components/ToastMessage.vue";
 import EditorShell from "./editor";
+import { useSemanticStore } from "./editor/state/semantic-store";
 import { useMarkdownDocument } from "./composables/useMarkdownDocument";
 import { useResizable } from "./composables/useResizable";
 import { useSteps } from "./composables/useSteps";
@@ -830,6 +843,7 @@ const terminalTab = ref("terminal");
 const mainRef = ref(null);
 const contentScrollRef = ref(null);
 const markdownEditorRef = ref(null);
+const editorSelection = ref({ anchor: 0, head: 0 });
 const terminalViewportRef = ref(null);
 const terminalSplitWrapRef = ref(null);
 const currentContentReadProgress = ref(0);
@@ -1040,6 +1054,41 @@ const {
   canWorkspaceFileIO,
   showToast,
   focusStepInEditMode
+});
+
+const handleEditorSelectionChange = (selection) => {
+  editorSelection.value = {
+    anchor: Number(selection?.anchor || 0),
+    head: Number(selection?.head || 0)
+  };
+};
+
+const {
+  outline: semanticOutline,
+  currentBlock: currentSemanticBlock
+} = useSemanticStore({
+  markdownRef: documentMarkdown,
+  selectionRef: editorSelection,
+  parseDelayMs: 70,
+  currentBlockStrategy: "anchor"
+});
+
+const currentBlockLabel = computed(() => {
+  const block = currentSemanticBlock.value?.block;
+  if (!block) {
+    return "Block none";
+  }
+  return `Block ${block.type}`;
+});
+
+const currentBlockDebugTitle = computed(() => {
+  const block = currentSemanticBlock.value?.block;
+  if (!block) {
+    return "当前无块";
+  }
+  const lineStart = Number(block.lineStart || 0);
+  const lineEnd = Number(block.lineEnd || lineStart);
+  return `${block.type}  L${lineStart}-${lineEnd}  [${block.from}, ${block.to})`;
 });
 
 const formatSaveTime = (value) => {

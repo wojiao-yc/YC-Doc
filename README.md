@@ -39,6 +39,45 @@
 
 1. 重启恢复同一文档的自动化或手动验收记录。
 
+## Stage 2 语义快照（进行中）
+
+目标: 建立 Markdown 真源到块级语义的统一快照层，供 current block、outline、后续 widget/行为规则复用。
+
+### 已落地模块
+
+- `desktop/renderer-app/src/editor/model/block-types.js`
+- `desktop/renderer-app/src/editor/model/block-node.js`
+- `desktop/renderer-app/src/editor/model/outline-node.js`
+- `desktop/renderer-app/src/editor/model/semantic-snapshot.js`
+- `desktop/renderer-app/src/editor/parser/parse-markdown.js`
+- `desktop/renderer-app/src/editor/parser/parse-blocks.js`
+- `desktop/renderer-app/src/editor/parser/parse-heading.js`
+- `desktop/renderer-app/src/editor/parser/parse-list.js`
+- `desktop/renderer-app/src/editor/parser/parse-image.js`
+- `desktop/renderer-app/src/editor/parser/parse-code-block.js`
+- `desktop/renderer-app/src/editor/parser/parse-math-block.js`
+- `desktop/renderer-app/src/editor/runtime/block-index.js`
+- `desktop/renderer-app/src/editor/runtime/current-block.js`
+- `desktop/renderer-app/src/editor/runtime/outline.js`
+- `desktop/renderer-app/src/editor/state/semantic-store.js`
+
+### 当前能力（Stage 2 第一版）
+
+- [x] 块类型系统与块节点结构（含 `from/to`、`lineStart/lineEnd`、`attrs`）
+- [x] 统一解析入口 `parseMarkdownToSemanticSnapshot(markdown)`
+- [x] 块级语义识别（paragraph / heading / list item / blockquote / code block / image / math block / thematic break / table / html block）
+- [x] outline 提取（heading level + text + range）
+- [x] current block lookup（基于 selection anchor）
+- [x] 文本变更触发语义快照更新（debounce）
+- [x] 选区变化触发 current block 更新（不重复全文 parse）
+
+### 待继续增强
+
+- [ ] 更严格的 CommonMark/GFM 一致性（当前为工程化第一版解析器）
+- [ ] 嵌套 list / blockquote 的树形 children 构建（当前以平铺 blocks 为主）
+- [ ] 大文档增量解析优化（当前为全量 parse + debounce）
+- [ ] 阶段三行为规则（Enter/Backspace/Tab）接入语义层
+
 ## 开发与构建
 
 在 `desktop` 目录执行:

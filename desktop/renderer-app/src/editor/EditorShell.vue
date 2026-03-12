@@ -19,7 +19,7 @@ const props = defineProps({
   }
 });
 
-const emit = defineEmits(["update:modelValue"]);
+const emit = defineEmits(["update:modelValue", "selection-change"]);
 const editorHostRef = ref(null);
 let editorApi = null;
 
@@ -42,6 +42,9 @@ onMounted(() => {
     parent: host,
     doc: props.modelValue,
     dark: props.dark,
+    onSelectionChange: (selection) => {
+      emit("selection-change", selection);
+    },
     onChange: (nextMarkdown) => {
       emit("update:modelValue", nextMarkdown);
     }
