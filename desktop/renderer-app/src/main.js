@@ -1,6 +1,7 @@
 ﻿import { createApp } from "vue";
 import App from "./App.vue";
 import "./styles/main.css";
+import "./styles/editor.css";
 import "xterm/css/xterm.css";
 import { registerSW } from "virtual:pwa-register";
 

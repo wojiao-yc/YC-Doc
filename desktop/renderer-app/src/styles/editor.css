@@ -1,0 +1,50 @@
+.yc-editor-shell {
+  width: 100%;
+  min-height: calc(100vh - 320px);
+  border: 0;
+  border-radius: 0;
+  overflow: visible;
+  background: transparent;
+}
+
+.yc-editor-shell.is-dark {
+  background: transparent;
+}
+
+.yc-editor-host {
+  width: 100%;
+  min-height: inherit;
+}
+
+.yc-editor-host .cm-editor {
+  min-height: inherit;
+  height: 100%;
+  background: transparent;
+}
+
+.yc-editor-host .cm-scroller {
+  min-height: inherit;
+  font-family: "Iowan Old Style", "Source Han Serif SC", "Noto Serif CJK SC", Georgia, serif;
+  font-size: 16px;
+  line-height: 1.9;
+}
+
+.yc-editor-host .cm-content,
+.yc-editor-host .cm-line {
+  padding-left: 0;
+  padding-right: 0;
+}
+
+.yc-editor-host .cm-content {
+  padding-top: 20px;
+  padding-bottom: 22px;
+  caret-color: #f97316;
+}
+
+.yc-editor-host .cm-focused {
+  outline: none;
+}
+
+.yc-editor-host .cm-selectionBackground {
+  border-radius: 4px;
+}

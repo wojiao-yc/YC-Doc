@@ -315,15 +315,12 @@
 
                 <div class="relative flex-1 overflow-y-auto py-2">
                   <div class="mx-auto" :style="displayStyle">
-                    <textarea
-                      ref="markdownTextareaRef"
-                      v-model="documentMarkdown"
-                      class="w-full min-h-[calc(100vh-320px)] resize-none rounded-xl border px-4 py-3 text-[15px] leading-7 transition-all focus:outline-none"
-                      :class="isDark
-                        ? 'border-slate-700 bg-slate-900 text-slate-100 focus:ring-2 focus:ring-orange-500/30'
-                        : 'border-gray-300 bg-white text-slate-900 focus:ring-2 focus:ring-orange-200'"
-                      spellcheck="false"
-                    ></textarea>
+                    <EditorShell
+                      ref="markdownEditorRef"
+                      :model-value="documentMarkdown"
+                      :dark="isDark"
+                      @update:model-value="updateMarkdown"
+                    />
                   </div>
                 </div>
               </div>
@@ -799,6 +796,7 @@ import { marked } from "marked";
 import { FitAddon } from "@xterm/addon-fit";
 import { Terminal as XTermTerminal } from "xterm";
 import ToastMessage from "./components/ToastMessage.vue";
+import EditorShell from "./editor";
 import { useMarkdownDocument } from "./composables/useMarkdownDocument";
 import { useResizable } from "./composables/useResizable";
 import { useSteps } from "./composables/useSteps";
@@ -816,7 +814,7 @@ const terminalMaximized = ref(false);
 const terminalTab = ref("terminal");
 const mainRef = ref(null);
 const contentScrollRef = ref(null);
-const markdownTextareaRef = ref(null);
+const markdownEditorRef = ref(null);
 const terminalViewportRef = ref(null);
 const terminalSplitWrapRef = ref(null);
 const currentContentReadProgress = ref(0);
@@ -985,8 +983,8 @@ async function focusStepInEditMode(index) {
     currentId.value = targetId;
   }
   await nextTick();
-  if (typeof markdownTextareaRef.value?.focus === "function") {
-    markdownTextareaRef.value.focus();
+  if (typeof markdownEditorRef.value?.focus === "function") {
+    markdownEditorRef.value.focus();
   }
 }
 
@@ -1006,6 +1004,7 @@ const {
   persistActiveMarkdownBeforeSwitch,
   removeStep,
   resetBlankEditorState,
+  updateMarkdown,
   serializeStepsToMarkdown,
   stepDisplayTitle,
   stepPreviewText,

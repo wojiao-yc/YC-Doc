@@ -1,6 +1,6 @@
 import { ref, watch, nextTick, onBeforeUnmount } from "vue";
 
-const MARKDOWN_SAVE_DELAY_MS = 320;
+const MARKDOWN_SAVE_DELAY_MS = 500;
 const MAX_MARKDOWN_FILE_BYTES = 20 * 1024 * 1024;
 
 const clamp = (value, min, max) => Math.min(max, Math.max(min, value));
@@ -36,6 +36,7 @@ export const useMarkdownDocument = ({
   let markdownSaveTimer = null;
   let pendingDocumentMarkdownFromSteps = null;
   let pendingStepsFromDocumentMarkdown = false;
+  const lastSavedMarkdownByPath = new Map();
 
   const isSingleBlankStepList = (list) =>
     Array.isArray(list)
@@ -196,6 +197,54 @@ export const useMarkdownDocument = ({
     return `${chunks.join("\n\n").trim()}\n`;
   };
 
+  const normalizeRelPath = (value) => String(value || "").trim();
+
+  const getPathSnapshot = (targetRelPath = activeMarkdownRelPath.value) => {
+    const relPath = normalizeRelPath(targetRelPath);
+    if (!relPath || !lastSavedMarkdownByPath.has(relPath)) {
+      return null;
+    }
+    return String(lastSavedMarkdownByPath.get(relPath) || "");
+  };
+
+  const setPathSnapshot = (targetRelPath, content) => {
+    const relPath = normalizeRelPath(targetRelPath);
+    if (!relPath) {
+      return;
+    }
+    lastSavedMarkdownByPath.set(relPath, normalizeMarkdownText(content));
+  };
+
+  const loadMarkdown = (text, { markAsSaved = false, relPath = activeMarkdownRelPath.value } = {}) => {
+    const normalized = normalizeMarkdownText(text);
+    documentMarkdown.value = normalized;
+    if (markAsSaved) {
+      setPathSnapshot(relPath, normalized);
+    }
+    return normalized;
+  };
+
+  const updateMarkdown = (text) => {
+    const normalized = normalizeMarkdownText(text);
+    if (documentMarkdown.value === normalized) {
+      return normalized;
+    }
+    documentMarkdown.value = normalized;
+    return normalized;
+  };
+
+  const isMarkdownDirty = (targetRelPath = activeMarkdownRelPath.value, content = documentMarkdown.value) => {
+    const relPath = normalizeRelPath(targetRelPath);
+    if (!relPath) {
+      return false;
+    }
+    const snapshot = getPathSnapshot(relPath);
+    if (snapshot === null) {
+      return true;
+    }
+    return snapshot !== normalizeMarkdownText(content);
+  };
+
   const syncDocumentMarkdownFromSteps = (sourceSteps = steps.value) => {
     const nextMarkdown = serializeStepsToMarkdown(sourceSteps);
     if (documentMarkdown.value === nextMarkdown) {
@@ -206,7 +255,7 @@ export const useMarkdownDocument = ({
   };
 
   const applyExternalMarkdownChange = async (nextMarkdown, { focusIndex = null } = {}) => {
-    documentMarkdown.value = normalizeMarkdownText(nextMarkdown);
+    updateMarkdown(nextMarkdown);
     await nextTick();
     if (Number.isFinite(focusIndex)) {
       const safeIndex = clamp(Number(focusIndex) || 0, 0, Math.max(0, steps.value.length - 1));
@@ -225,13 +274,20 @@ export const useMarkdownDocument = ({
     currentId.value = parsed[targetIndex]?.id ?? parsed[0]?.id ?? 1;
   };
 
-  const writeActiveMarkdownNow = async (targetRelPath = activeMarkdownRelPath.value) => {
-    const relPath = String(targetRelPath || "").trim();
+  const writeActiveMarkdownNow = async (
+    targetRelPath = activeMarkdownRelPath.value,
+    sourceMarkdown = documentMarkdown.value,
+    { force = false } = {}
+  ) => {
+    const relPath = normalizeRelPath(targetRelPath);
     if (!isDesktopStorage || !canWorkspaceFileIO || !relPath || markdownHydrating.value) {
-      return;
+      return false;
     }
     try {
-      const content = String(documentMarkdown.value || "");
+      const content = normalizeMarkdownText(sourceMarkdown);
+      if (!force && !isMarkdownDirty(relPath, content)) {
+        return false;
+      }
       const result = await desktopDataBridge.writeWorkspaceFile({
         relPath,
         content
@@ -239,13 +295,19 @@ export const useMarkdownDocument = ({
       if (!result?.ok) {
         throw new Error(String(result?.error || "write_workspace_file_failed"));
       }
+      setPathSnapshot(relPath, content);
+      return true;
     } catch (error) {
       showToast(`保存 Markdown 失败: ${String(error?.message || error || "unknown_error")}`);
+      return false;
     }
   };
 
+  const saveMarkdown = async (targetRelPath = activeMarkdownRelPath.value, sourceMarkdown = documentMarkdown.value) =>
+    writeActiveMarkdownNow(targetRelPath, sourceMarkdown);
+
   const scheduleActiveMarkdownSave = () => {
-    if (!activeMarkdownRelPath.value || markdownHydrating.value) {
+    if (!activeMarkdownRelPath.value || markdownHydrating.value || !isMarkdownDirty()) {
       return;
     }
     if (markdownSaveTimer) {
@@ -253,7 +315,7 @@ export const useMarkdownDocument = ({
     }
     markdownSaveTimer = setTimeout(() => {
       markdownSaveTimer = null;
-      void writeActiveMarkdownNow();
+      void saveMarkdown();
     }, MARKDOWN_SAVE_DELAY_MS);
   };
 
@@ -266,22 +328,25 @@ export const useMarkdownDocument = ({
   };
 
   const flushPendingMarkdownSave = async (targetRelPath = activeMarkdownRelPath.value) => {
-    const relPath = String(targetRelPath || "").trim();
+    const relPath = normalizeRelPath(targetRelPath);
     if (!relPath || markdownHydrating.value) {
       return;
     }
     clearScheduledMarkdownSave();
-    await writeActiveMarkdownNow(relPath);
+    await saveMarkdown(relPath);
   };
 
   const persistActiveMarkdownBeforeSwitch = async (targetRelPath = "") => {
-    const currentRelPath = String(activeMarkdownRelPath.value || "").trim();
-    const nextRelPath = String(targetRelPath || "").trim();
+    const currentRelPath = normalizeRelPath(activeMarkdownRelPath.value);
+    const nextRelPath = normalizeRelPath(targetRelPath);
     if (!currentRelPath) {
       clearScheduledMarkdownSave();
       return;
     }
-    if (!markdownSaveTimer && currentRelPath === nextRelPath) {
+    if (!markdownSaveTimer && currentRelPath === nextRelPath && !isMarkdownDirty(currentRelPath)) {
+      return;
+    }
+    if (!markdownSaveTimer && !isMarkdownDirty(currentRelPath)) {
       return;
     }
     await flushPendingMarkdownSave(currentRelPath);
@@ -291,7 +356,7 @@ export const useMarkdownDocument = ({
     if (!isDesktopStorage || !canWorkspaceFileIO) {
       return;
     }
-    const targetRelPath = String(relPath || "").trim();
+    const targetRelPath = normalizeRelPath(relPath);
     if (!targetRelPath) {
       return;
     }
@@ -318,7 +383,7 @@ export const useMarkdownDocument = ({
       }
       const rawMarkdown = normalizeMarkdownText(result.content || "");
       const parsed = parseMarkdownToSteps(rawMarkdown);
-      documentMarkdown.value = rawMarkdown;
+      loadMarkdown(rawMarkdown, { markAsSaved: true, relPath: targetRelPath });
       steps.value = parsed;
       currentId.value = parsed[0]?.id ?? 1;
       activeMarkdownRelPath.value = targetRelPath;
@@ -333,8 +398,12 @@ export const useMarkdownDocument = ({
   };
 
   const resetBlankEditorState = ({ preserveActiveFile = false } = {}) => {
+    const previousRelPath = normalizeRelPath(activeMarkdownRelPath.value);
     if (!preserveActiveFile) {
       activeMarkdownRelPath.value = "";
+      if (previousRelPath) {
+        lastSavedMarkdownByPath.delete(previousRelPath);
+      }
     }
     pendingStepsFromDocumentMarkdown = false;
     pendingDocumentMarkdownFromSteps = "";
@@ -400,7 +469,7 @@ export const useMarkdownDocument = ({
     }
     pendingDocumentMarkdownFromSteps = null;
     syncStepsFromDocumentMarkdown(value);
-    if (!activeMarkdownRelPath.value) {
+    if (!activeMarkdownRelPath.value || !isMarkdownDirty()) {
       return;
     }
     scheduleActiveMarkdownSave();
@@ -412,7 +481,7 @@ export const useMarkdownDocument = ({
     } else {
       syncDocumentMarkdownFromSteps();
     }
-    if (!activeMarkdownRelPath.value || markdownHydrating.value) {
+    if (!activeMarkdownRelPath.value || markdownHydrating.value || !isMarkdownDirty()) {
       return;
     }
     scheduleActiveMarkdownSave();
@@ -442,17 +511,21 @@ export const useMarkdownDocument = ({
     formatBytes,
     isMarkdownFileName,
     isMarkdownFileTooLarge,
+    isMarkdownDirty,
     isSingleBlankStepList,
+    loadMarkdown,
     loadStepsFromMarkdownFile,
     markdownHydrating,
     parseMarkdownToSteps,
     persistActiveMarkdownBeforeSwitch,
     removeStep,
     resetBlankEditorState,
+    saveMarkdown,
     serializeStepsToMarkdown,
     stepDisplayTitle,
     stepPreviewText,
     syncDocumentMarkdownFromSteps,
+    updateMarkdown,
     writeActiveMarkdownNow,
     addStep
   };
