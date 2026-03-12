@@ -245,7 +245,12 @@
                 @click="handlePreviewNavClick"
               >
                 <div class="mx-auto" :style="displayStyle">
-                  <div data-preview="1" :class="isDark ? 'md-dark' : 'md-light'" v-html="renderedMarkdown"></div>
+                  <div
+                    data-preview="1"
+                    class="markdown-render"
+                    :class="isDark ? 'markdown-render-dark' : 'markdown-render-light'"
+                    v-html="renderedMarkdown"
+                  ></div>
                 </div>
               </div>
 
@@ -310,23 +315,15 @@
 
                 <div class="relative flex-1 overflow-y-auto py-2">
                   <div class="mx-auto" :style="displayStyle">
-                    <div
-                      ref="visualEditorRef"
-                      class="visual-editor"
-                      :class="isDark ? 'md-dark' : 'md-light'"
-                      data-placeholder="直接编辑文档内容"
-                      :data-empty="isVisualEditorEmpty ? '1' : '0'"
-                      contenteditable="true"
+                    <textarea
+                      ref="markdownTextareaRef"
+                      v-model="documentMarkdown"
+                      class="w-full min-h-[calc(100vh-320px)] resize-none rounded-xl border px-4 py-3 text-[15px] leading-7 transition-all focus:outline-none"
+                      :class="isDark
+                        ? 'border-slate-700 bg-slate-900 text-slate-100 focus:ring-2 focus:ring-orange-500/30'
+                        : 'border-gray-300 bg-white text-slate-900 focus:ring-2 focus:ring-orange-200'"
                       spellcheck="false"
-                      @focus="onVisualEditorFocus"
-                      @blur="onVisualEditorBlur"
-                      @input="onVisualEditorInput"
-                      @keydown.capture="onVisualEditorKeydown"
-                      @keyup.capture="onVisualEditorKeyup"
-                      @paste="onVisualEditorPaste"
-                      @mouseup="updateCurrentStepFromVisualEditorSelection"
-                      @click="onVisualEditorClick"
-                    ></div>
+                    ></textarea>
                   </div>
                 </div>
               </div>
@@ -798,20 +795,15 @@
 
 <script setup>
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
+import { marked } from "marked";
 import { FitAddon } from "@xterm/addon-fit";
 import { Terminal as XTermTerminal } from "xterm";
 import ToastMessage from "./components/ToastMessage.vue";
-import { useMarkdown } from "./composables/useMarkdown";
 import { useMarkdownDocument } from "./composables/useMarkdownDocument";
 import { useResizable } from "./composables/useResizable";
 import { useSteps } from "./composables/useSteps";
 import { useTerminal } from "./composables/useTerminal";
 import { useToast } from "./composables/useToast";
-import {
-  isRichEditorEffectivelyEmpty,
-  renderMarkdownToEditableHtml,
-  serializeRichEditorToMarkdown
-} from "./utils/markdownVisualEditor";
 
 const mode = ref("edit");
 const isDark = ref(false);
@@ -824,7 +816,7 @@ const terminalMaximized = ref(false);
 const terminalTab = ref("terminal");
 const mainRef = ref(null);
 const contentScrollRef = ref(null);
-const visualEditorRef = ref(null);
+const markdownTextareaRef = ref(null);
 const terminalViewportRef = ref(null);
 const terminalSplitWrapRef = ref(null);
 const currentContentReadProgress = ref(0);
@@ -841,7 +833,6 @@ const storageRootPath = ref("");
 const storageLoading = ref(false);
 const storageFolderExpandedMap = ref({ [STORAGE_ROOT_ID]: true });
 const selectedStorageNodeId = ref(STORAGE_ROOT_ID);
-const isVisualEditorEmpty = ref(true);
 const windowIsMaximized = ref(false);
 const SIDEBAR_COLLAPSED_WIDTH = 72;
 const SIDEBAR_MIN_WIDTH = 240;
@@ -939,14 +930,8 @@ let fileSidebarDragPendingWidth = null;
 let fileSidebarDragMoveHandler = null;
 let fileSidebarDragUpHandler = null;
 let desktopWindowMaximizeOff = null;
-let visualEditorHydrating = false;
-let visualEditorFocused = false;
-let visualEditorActiveBlock = null;
-let visualEditorSourceUnit = null;
 
 const clamp = (value, min, max) => Math.min(max, Math.max(min, value));
-const normalizeMarkdownText = (value) => String(value || "").replace(/\r\n/g, "\n");
-const trimOuterBlankLines = (value) => String(value || "").replace(/^\n+/, "").replace(/\n+$/, "");
 const TERMINAL_MIN_HEIGHT = 120;
 const TERMINAL_HIDE_THRESHOLD = 56;
 const TERMINAL_MAX_SNAP_GAP = 20;
@@ -973,10 +958,6 @@ const {
   onDrop
 } = useSteps(showToast);
 
-const previewMarkdownState = computed(() => ({
-  content: isEditMode.value ? "" : String(activeStep.value?.content || "")
-}));
-
 const {
   sidebarWidth,
   displayWidth,
@@ -990,24 +971,23 @@ const adjustVisualEditorWidth = (delta) => {
 };
 
 const contentPaneKey = computed(() => (isEditMode.value ? mode.value : `${mode.value}:${currentId.value}`));
+const renderedMarkdown = computed(() => {
+  if (isEditMode.value) {
+    return "";
+  }
+  return String(marked.parse(String(activeStep.value?.content || ""), { breaks: true, gfm: true }) || "");
+});
 
 async function focusStepInEditMode(index) {
-  await syncVisualEditorFromMarkdown(true);
-  await nextTick();
-  const editor = visualEditorRef.value;
-  if (!(editor instanceof HTMLElement)) {
-    return;
-  }
-  const headings = Array.from(editor.querySelectorAll("h1"));
   const safeIndex = clamp(Number(index) || 0, 0, Math.max(0, steps.value.length - 1));
-  const target = headings[safeIndex] || editor.firstElementChild || editor;
-  if (!(target instanceof Node)) {
-    return;
+  const targetId = steps.value[safeIndex]?.id;
+  if (targetId != null && targetId !== currentId.value) {
+    currentId.value = targetId;
   }
-  target.scrollIntoView({ block: "nearest" });
-  focusVisualEditor();
-  placeCaretAtNodeBoundary(target, true);
-  updateCurrentStepFromVisualEditorSelection();
+  await nextTick();
+  if (typeof markdownTextareaRef.value?.focus === "function") {
+    markdownTextareaRef.value.focus();
+  }
 }
 
 const {
@@ -1042,835 +1022,6 @@ const {
   showToast,
   focusStepInEditMode
 });
-
-const VISUAL_EDITOR_BLOCK_TAGS = new Set([
-  "P",
-  "DIV",
-  "H1",
-  "H2",
-  "H3",
-  "H4",
-  "H5",
-  "H6",
-  "PRE",
-  "UL",
-  "OL",
-  "LI",
-  "BLOCKQUOTE",
-  "HR"
-]);
-const updateVisualEditorEmptyState = () => {
-  const editor = visualEditorRef.value;
-  isVisualEditorEmpty.value = !editor || isRichEditorEffectivelyEmpty(editor);
-};
-
-const focusVisualEditor = () => {
-  if (typeof visualEditorRef.value?.focus === "function") {
-    visualEditorRef.value.focus();
-  }
-};
-
-const placeCaretAtNodeBoundary = (node, collapseToStart = true) => {
-  if (!(node instanceof Node) || typeof window === "undefined") {
-    return;
-  }
-  const selection = window.getSelection?.();
-  if (!selection) {
-    return;
-  }
-  const range = document.createRange();
-  range.selectNodeContents(node);
-  range.collapse(collapseToStart);
-  selection.removeAllRanges();
-  selection.addRange(range);
-};
-
-const resolveVisualEditorSelectionNode = () => {
-  if (typeof window === "undefined" || !visualEditorRef.value) {
-    return null;
-  }
-  const selection = window.getSelection?.();
-  const anchor = selection?.anchorNode || null;
-  if (!anchor || !visualEditorRef.value.contains(anchor)) {
-    return null;
-  }
-  return anchor;
-};
-
-const findVisualEditorBlockElement = (sourceNode) => {
-  const editor = visualEditorRef.value;
-  if (!editor || !sourceNode) {
-    return null;
-  }
-  let current = sourceNode.nodeType === Node.ELEMENT_NODE ? sourceNode : sourceNode.parentElement;
-  while (current && current !== editor) {
-    if (current instanceof HTMLElement && VISUAL_EDITOR_BLOCK_TAGS.has(current.tagName)) {
-      return current;
-    }
-    current = current.parentElement;
-  }
-  return editor.firstElementChild instanceof HTMLElement ? editor.firstElementChild : null;
-};
-
-const setVisualEditorActiveBlock = (block) => {
-  if (visualEditorActiveBlock instanceof HTMLElement && visualEditorActiveBlock !== block) {
-    visualEditorActiveBlock.removeAttribute("data-block-active");
-  }
-  visualEditorActiveBlock = block instanceof HTMLElement ? block : null;
-  if (visualEditorActiveBlock) {
-    visualEditorActiveBlock.setAttribute("data-block-active", "1");
-  }
-};
-
-const resolveVisualEditorEditableBlock = () => {
-  const editor = visualEditorRef.value;
-  const selectionNode = resolveVisualEditorSelectionNode();
-  if (!editor || !selectionNode) {
-    return null;
-  }
-  if (selectionNode.nodeType === Node.TEXT_NODE && selectionNode.parentNode === editor) {
-    const paragraph = document.createElement("p");
-    const text = String(selectionNode.textContent || "");
-    if (text) {
-      paragraph.textContent = text;
-    } else {
-      paragraph.appendChild(document.createElement("br"));
-    }
-    selectionNode.replaceWith(paragraph);
-    focusVisualEditor();
-    placeCaretAtNodeBoundary(paragraph, false);
-    return paragraph;
-  }
-  return findVisualEditorBlockElement(selectionNode);
-};
-
-const getVisualEditorPlainText = (block) =>
-  normalizeMarkdownText(block?.textContent || "")
-    .replace(/\u00a0/g, " ")
-    .replace(/\u200b/g, "");
-
-const createVisualEditorEmptyParagraph = () => {
-  const paragraph = document.createElement("p");
-  paragraph.appendChild(document.createElement("br"));
-  return paragraph;
-};
-
-const createVisualEditorEmptyListItem = () => {
-  const item = document.createElement("li");
-  item.appendChild(document.createElement("br"));
-  return item;
-};
-
-const invalidateVisualEditorStoredMarkdown = (sourceNode) => {
-  const editor = visualEditorRef.value;
-  if (!(editor instanceof HTMLElement)) {
-    return;
-  }
-  let current = sourceNode?.nodeType === Node.ELEMENT_NODE ? sourceNode : sourceNode?.parentElement;
-  while (current && current !== editor) {
-    if (current instanceof HTMLElement && current.hasAttribute("data-md-raw")) {
-      current.removeAttribute("data-md-raw");
-    }
-    current = current.parentElement;
-  }
-};
-
-const isVisualEditorSourceUnit = (node) =>
-  node instanceof HTMLElement && node.getAttribute("data-md-source-unit") === "1";
-
-const readVisualEditorSourceMarkdown = (node) =>
-  normalizeMarkdownText(
-    String(
-      typeof node?.innerText === "string"
-        ? node.innerText
-        : (node?.textContent || "")
-    )
-  )
-    .replace(/\u00a0/g, " ")
-    .replace(/\u200b/g, "");
-
-const getVisualEditorSelectionTextOffset = (container) => {
-  if (!(container instanceof HTMLElement) || typeof window === "undefined") {
-    return null;
-  }
-  const selection = window.getSelection?.();
-  if (!selection?.rangeCount) {
-    return null;
-  }
-  const range = selection.getRangeAt(0);
-  if (!container.contains(range.startContainer)) {
-    return null;
-  }
-  const prefixRange = range.cloneRange();
-  prefixRange.selectNodeContents(container);
-  prefixRange.setEnd(range.startContainer, range.startOffset);
-  return readVisualEditorSourceMarkdown({ innerText: prefixRange.toString() }).length;
-};
-
-const placeCaretAtTextOffset = (container, offset = 0) => {
-  if (!(container instanceof HTMLElement) || typeof window === "undefined") {
-    return;
-  }
-  const selection = window.getSelection?.();
-  if (!selection) {
-    return;
-  }
-  const walker = document.createTreeWalker(container, NodeFilter.SHOW_TEXT);
-  let remaining = Math.max(0, Number(offset || 0));
-  let targetNode = null;
-  let targetOffset = 0;
-
-  while (walker.nextNode()) {
-    const current = walker.currentNode;
-    const length = String(current.textContent || "").length;
-    if (remaining <= length) {
-      targetNode = current;
-      targetOffset = remaining;
-      break;
-    }
-    remaining -= length;
-  }
-
-  if (!targetNode) {
-    if (!container.lastChild) {
-      container.appendChild(document.createTextNode(""));
-    }
-    targetNode = container.lastChild?.nodeType === Node.TEXT_NODE
-      ? container.lastChild
-      : container.appendChild(document.createTextNode(""));
-    targetOffset = String(targetNode.textContent || "").length;
-  }
-
-  const range = document.createRange();
-  range.setStart(targetNode, Math.max(0, Math.min(targetOffset, String(targetNode.textContent || "").length)));
-  range.collapse(true);
-  selection.removeAllRanges();
-  selection.addRange(range);
-};
-
-const resolveVisualEditorEditableUnit = (sourceNode) => {
-  const editor = visualEditorRef.value;
-  if (!editor) {
-    return null;
-  }
-  let current = sourceNode?.nodeType === Node.ELEMENT_NODE ? sourceNode : sourceNode?.parentElement;
-  while (current && current !== editor) {
-    if (current.parentElement === editor) {
-      return current;
-    }
-    current = current.parentElement;
-  }
-  return editor.firstElementChild instanceof HTMLElement ? editor.firstElementChild : null;
-};
-
-const serializeVisualEditorUnitToMarkdown = (unit) => {
-  if (!(unit instanceof HTMLElement)) {
-    return "";
-  }
-  const storedMarkdown = String(unit.getAttribute("data-md-raw") || "");
-  if (storedMarkdown) {
-    return trimOuterBlankLines(normalizeMarkdownText(storedMarkdown));
-  }
-  const wrapper = document.createElement("div");
-  wrapper.appendChild(unit.cloneNode(true));
-  return trimOuterBlankLines(serializeRichEditorToMarkdown(wrapper));
-};
-
-const inferVisualEditorSourceCaretOffset = (unit, markdown, renderedOffset) => {
-  const fallback = String(markdown || "").length;
-  if (!(unit instanceof HTMLElement) || !Number.isFinite(renderedOffset)) {
-    return fallback;
-  }
-  if (/^H[1-6]$/.test(unit.tagName)) {
-    return Math.min(fallback, Number(unit.tagName.slice(1)) + 1 + renderedOffset);
-  }
-  if (unit.tagName === "BLOCKQUOTE") {
-    return Math.min(fallback, 2 + renderedOffset);
-  }
-  if (unit.tagName === "UL" || unit.tagName === "OL") {
-    return Math.min(fallback, unit.tagName === "OL" ? 3 + renderedOffset : 2 + renderedOffset);
-  }
-  return Math.min(fallback, renderedOffset);
-};
-
-const createVisualEditorSourceUnit = (markdown) => {
-  const unit = document.createElement("div");
-  unit.className = "visual-editor-source-unit";
-  unit.setAttribute("data-md-source-unit", "1");
-  unit.setAttribute("data-md-source-markdown", "1");
-  if (markdown) {
-    unit.textContent = markdown;
-  } else {
-    unit.appendChild(document.createElement("br"));
-  }
-  return unit;
-};
-
-const activateVisualEditorSourceUnit = (unit) => {
-  if (!(unit instanceof HTMLElement)) {
-    return null;
-  }
-  if (isVisualEditorSourceUnit(unit)) {
-    visualEditorSourceUnit = unit;
-    return unit;
-  }
-  const markdown = serializeVisualEditorUnitToMarkdown(unit);
-  const renderedOffset = getVisualEditorSelectionTextOffset(unit);
-  const sourceUnit = createVisualEditorSourceUnit(markdown);
-  unit.replaceWith(sourceUnit);
-  visualEditorSourceUnit = sourceUnit;
-  focusVisualEditor();
-  placeCaretAtTextOffset(sourceUnit, inferVisualEditorSourceCaretOffset(unit, markdown, renderedOffset));
-  updateVisualEditorEmptyState();
-  syncMarkdownFromVisualEditor();
-  return sourceUnit;
-};
-
-const deactivateVisualEditorSourceUnit = ({ restoreFocus = false } = {}) => {
-  const sourceUnit = visualEditorSourceUnit;
-  if (!(sourceUnit instanceof HTMLElement) || !sourceUnit.isConnected) {
-    visualEditorSourceUnit = null;
-    return [];
-  }
-  const markdown = trimOuterBlankLines(readVisualEditorSourceMarkdown(sourceUnit));
-  const temp = document.createElement("div");
-  temp.innerHTML = renderMarkdownToEditableHtml(markdown);
-  const nodes = Array.from(temp.childNodes || []);
-  const nextNodes = nodes.length ? nodes : [createVisualEditorEmptyParagraph()];
-  const focusTarget = nextNodes[0] instanceof Node ? nextNodes[0] : null;
-  visualEditorSourceUnit = null;
-  sourceUnit.replaceWith(...nextNodes);
-  if (restoreFocus && focusTarget) {
-    focusVisualEditor();
-    placeCaretAtNodeBoundary(focusTarget, false);
-  }
-  updateVisualEditorEmptyState();
-  return nextNodes;
-};
-
-const shouldActivateVisualEditorSourceUnit = (unit, force = false) =>
-  Boolean(force)
-  && unit instanceof HTMLElement
-  && VISUAL_EDITOR_BLOCK_TAGS.has(unit.tagName);
-
-function syncVisualEditorSourceUnitFromSelection(force = false) {
-  if (visualEditorHydrating) {
-    return;
-  }
-  const editor = visualEditorRef.value;
-  if (!(editor instanceof HTMLElement)) {
-    return;
-  }
-  const anchor = resolveVisualEditorSelectionNode();
-  const targetUnit = anchor
-    ? resolveVisualEditorEditableUnit(anchor)
-    : (visualEditorSourceUnit || editor.firstElementChild);
-
-  if (visualEditorSourceUnit instanceof HTMLElement) {
-    if (targetUnit && (targetUnit === visualEditorSourceUnit || visualEditorSourceUnit.contains(targetUnit))) {
-      return;
-    }
-    deactivateVisualEditorSourceUnit();
-  }
-
-  const nextAnchor = resolveVisualEditorSelectionNode();
-  const nextUnit = nextAnchor
-    ? resolveVisualEditorEditableUnit(nextAnchor)
-    : (editor.firstElementChild instanceof HTMLElement ? editor.firstElementChild : null);
-
-  if (nextUnit instanceof HTMLElement && shouldActivateVisualEditorSourceUnit(nextUnit, force) && !isVisualEditorSourceUnit(nextUnit)) {
-    activateVisualEditorSourceUnit(nextUnit);
-  }
-}
-
-const isVisualEditorSelectionCollapsedAtBlockStart = (block) => {
-  if (!(block instanceof HTMLElement) || typeof window === "undefined") {
-    return false;
-  }
-  const selection = window.getSelection?.();
-  if (!selection?.rangeCount || !selection.isCollapsed) {
-    return false;
-  }
-  const range = selection.getRangeAt(0);
-  if (!block.contains(range.startContainer)) {
-    return false;
-  }
-  const prefixRange = range.cloneRange();
-  prefixRange.selectNodeContents(block);
-  prefixRange.setEnd(range.startContainer, range.startOffset);
-  const prefixText = String(prefixRange.toString() || "")
-    .replace(/\u00a0/g, " ")
-    .replace(/\u200b/g, "");
-  return !prefixText.length;
-};
-
-const replaceVisualEditorBlockTag = (block, tagName) => {
-  if (!(block instanceof HTMLElement) || !String(tagName || "").trim()) {
-    return null;
-  }
-  const nextBlock = document.createElement(String(tagName || "").toLowerCase());
-  while (block.firstChild) {
-    nextBlock.appendChild(block.firstChild);
-  }
-  if (!nextBlock.childNodes.length) {
-    nextBlock.appendChild(document.createElement("br"));
-  }
-  block.replaceWith(nextBlock);
-  return nextBlock;
-};
-
-const insertVisualEditorListItemAfter = (listItem) => {
-  if (!(listItem instanceof HTMLElement) || listItem.tagName !== "LI") {
-    return false;
-  }
-  const nextItem = createVisualEditorEmptyListItem();
-  listItem.insertAdjacentElement("afterend", nextItem);
-  focusVisualEditor();
-  placeCaretAtNodeBoundary(nextItem, true);
-  syncMarkdownFromVisualEditor();
-  return true;
-};
-
-const liftVisualEditorEmptyListItem = (listItem) => {
-  if (!(listItem instanceof HTMLElement) || listItem.tagName !== "LI") {
-    return false;
-  }
-  const list = listItem.parentElement;
-  if (!(list instanceof HTMLElement) || !["UL", "OL"].includes(list.tagName)) {
-    return false;
-  }
-  const paragraph = createVisualEditorEmptyParagraph();
-  list.insertAdjacentElement("afterend", paragraph);
-  listItem.remove();
-  if (!list.children.length) {
-    list.remove();
-  }
-  focusVisualEditor();
-  placeCaretAtNodeBoundary(paragraph, true);
-  syncMarkdownFromVisualEditor();
-  return true;
-};
-
-const insertVisualEditorQuoteParagraphAfter = (paragraph) => {
-  if (!(paragraph instanceof HTMLElement) || paragraph.tagName !== "P" || paragraph.parentElement?.tagName !== "BLOCKQUOTE") {
-    return false;
-  }
-  const nextParagraph = createVisualEditorEmptyParagraph();
-  paragraph.insertAdjacentElement("afterend", nextParagraph);
-  focusVisualEditor();
-  placeCaretAtNodeBoundary(nextParagraph, true);
-  syncMarkdownFromVisualEditor();
-  return true;
-};
-
-const exitVisualEditorQuoteParagraph = (paragraph) => {
-  if (!(paragraph instanceof HTMLElement) || paragraph.tagName !== "P" || paragraph.parentElement?.tagName !== "BLOCKQUOTE") {
-    return false;
-  }
-  const quote = paragraph.parentElement;
-  const nextParagraph = createVisualEditorEmptyParagraph();
-  quote.insertAdjacentElement("afterend", nextParagraph);
-  paragraph.remove();
-  if (!quote.children.length) {
-    quote.remove();
-  }
-  focusVisualEditor();
-  placeCaretAtNodeBoundary(nextParagraph, true);
-  syncMarkdownFromVisualEditor();
-  return true;
-};
-
-const isVisualEditorSectionHeadingUnit = (node) =>
-  node instanceof HTMLElement
-  && (
-    node.tagName === "H1"
-    || (
-      isVisualEditorSourceUnit(node)
-      && /^#\s+/.test(trimOuterBlankLines(readVisualEditorSourceMarkdown(node)))
-    )
-  );
-
-const getVisualEditorSectionIndexForNode = (sourceNode) => {
-  const editor = visualEditorRef.value;
-  if (!editor || !sourceNode) {
-    return 0;
-  }
-  const targetUnit = resolveVisualEditorEditableUnit(sourceNode);
-  if (!(targetUnit instanceof HTMLElement)) {
-    return 0;
-  }
-  const units = Array.from(editor.children).filter((node) => node instanceof HTMLElement);
-  const headingUnits = units.filter((node) => isVisualEditorSectionHeadingUnit(node));
-  if (!headingUnits.length) {
-    return 0;
-  }
-  let foundIndex = -1;
-  for (const unit of units) {
-    if (isVisualEditorSectionHeadingUnit(unit)) {
-      foundIndex += 1;
-    }
-    if (unit === targetUnit) {
-      return Math.max(0, foundIndex);
-    }
-  }
-  return 0;
-};
-
-const syncVisualEditorFromMarkdown = async (force = false) => {
-  await nextTick();
-  const editor = visualEditorRef.value;
-  if (!(editor instanceof HTMLElement)) {
-    return;
-  }
-  if (!force && visualEditorFocused) {
-    updateVisualEditorEmptyState();
-    return;
-  }
-  const nextHtml = renderMarkdownToEditableHtml(documentMarkdown.value);
-  if (!force && editor.innerHTML === nextHtml) {
-    updateVisualEditorEmptyState();
-    return;
-  }
-  visualEditorHydrating = true;
-  setVisualEditorActiveBlock(null);
-  visualEditorSourceUnit = null;
-  editor.innerHTML = nextHtml;
-  visualEditorHydrating = false;
-  updateVisualEditorEmptyState();
-};
-
-const syncMarkdownFromVisualEditor = () => {
-  const editor = visualEditorRef.value;
-  if (!(editor instanceof HTMLElement) || visualEditorHydrating) {
-    return;
-  }
-  const nextMarkdown = serializeRichEditorToMarkdown(editor);
-  updateVisualEditorEmptyState();
-  if (documentMarkdown.value !== nextMarkdown) {
-    documentMarkdown.value = nextMarkdown;
-  }
-  updateCurrentStepFromVisualEditorSelection();
-};
-
-const applyVisualEditorLiveHeadingSyntax = () => {
-  const block = resolveVisualEditorEditableBlock();
-  if (!(block instanceof HTMLElement) || !["P", "DIV"].includes(block.tagName)) {
-    return false;
-  }
-  const rawText = getVisualEditorPlainText(block);
-  const headingMatch = rawText.match(/^(#{1,6})\s+(.*)$/);
-  if (!headingMatch) {
-    return false;
-  }
-  const level = clamp(headingMatch[1].length, 1, 6);
-  const heading = document.createElement(`h${level}`);
-  const content = String(headingMatch[2] || "");
-  if (content) {
-    heading.textContent = content;
-  } else {
-    heading.appendChild(document.createElement("br"));
-  }
-  block.replaceWith(heading);
-  focusVisualEditor();
-  placeCaretAtNodeBoundary(heading, false);
-  syncMarkdownFromVisualEditor();
-  return true;
-};
-
-const applyVisualEditorShortcut = () => {
-  const block = findVisualEditorBlockElement(resolveVisualEditorSelectionNode());
-  if (!(block instanceof HTMLElement) || !["P", "DIV"].includes(block.tagName)) {
-    return false;
-  }
-  const rawText = getVisualEditorPlainText(block);
-  if (!rawText.trim()) {
-    return false;
-  }
-
-  const quoteMatch = rawText.match(/^>\s+(.*)$/);
-  if (quoteMatch) {
-    const quote = document.createElement("blockquote");
-    const paragraph = document.createElement("p");
-    const content = String(quoteMatch[1] || "");
-    if (content) {
-      paragraph.textContent = content;
-    } else {
-      paragraph.appendChild(document.createElement("br"));
-    }
-    quote.appendChild(paragraph);
-    block.replaceWith(quote);
-    focusVisualEditor();
-    placeCaretAtNodeBoundary(paragraph, false);
-    syncMarkdownFromVisualEditor();
-    return true;
-  }
-
-  const codeFenceMatch = rawText.match(/^```([a-zA-Z0-9_-]*)\s*$/);
-  if (codeFenceMatch) {
-    const codeBlock = document.createElement("pre");
-    const lang = String(codeFenceMatch[1] || "").trim();
-    if (lang) {
-      codeBlock.setAttribute("data-code-lang", lang);
-    }
-    const codeNode = document.createElement("code");
-    if (lang) {
-      codeNode.className = `language-${lang}`;
-    }
-    codeBlock.appendChild(codeNode);
-    block.replaceWith(codeBlock);
-    const paragraph = createVisualEditorEmptyParagraph();
-    codeBlock.insertAdjacentElement("afterend", paragraph);
-    focusVisualEditor();
-    placeCaretAtNodeBoundary(codeNode, true);
-    syncMarkdownFromVisualEditor();
-    return true;
-  }
-
-  const bulletMatch = rawText.match(/^[-*]\s+(.*)$/);
-  if (bulletMatch) {
-    const list = document.createElement("ul");
-    const item = document.createElement("li");
-    const content = String(bulletMatch[1] || "");
-    if (content) {
-      item.textContent = content;
-    } else {
-      item.appendChild(document.createElement("br"));
-    }
-    list.appendChild(item);
-    block.replaceWith(list);
-    focusVisualEditor();
-    placeCaretAtNodeBoundary(item, false);
-    syncMarkdownFromVisualEditor();
-    return true;
-  }
-
-  const orderedMatch = rawText.match(/^\d+\.\s+(.*)$/);
-  if (orderedMatch) {
-    const list = document.createElement("ol");
-    const item = document.createElement("li");
-    const content = String(orderedMatch[1] || "");
-    if (content) {
-      item.textContent = content;
-    } else {
-      item.appendChild(document.createElement("br"));
-    }
-    list.appendChild(item);
-    block.replaceWith(list);
-    focusVisualEditor();
-    placeCaretAtNodeBoundary(item, false);
-    syncMarkdownFromVisualEditor();
-    return true;
-  }
-
-  if (/^([-*_])(?:\s*\1){2,}\s*$/.test(rawText)) {
-    const divider = document.createElement("hr");
-    block.replaceWith(divider);
-    const paragraph = createVisualEditorEmptyParagraph();
-    divider.insertAdjacentElement("afterend", paragraph);
-    focusVisualEditor();
-    placeCaretAtNodeBoundary(paragraph, true);
-    syncMarkdownFromVisualEditor();
-    return true;
-  }
-
-  return false;
-};
-
-const shouldTreatPastedTextAsMarkdown = (text) => {
-  const content = normalizeMarkdownText(text);
-  if (!content.trim()) {
-    return false;
-  }
-  if (content.includes("\n")) {
-    return true;
-  }
-  return /(^|\n)\s*(#{1,6}\s|[-*+]\s|\d+\.\s|>\s|```|!\[.*\]\(|\[.*\]\(.*\))/m.test(content);
-};
-
-const insertVisualEditorHtml = (html) => {
-  if (typeof document === "undefined" || typeof document.execCommand !== "function") {
-    return;
-  }
-  focusVisualEditor();
-  document.execCommand("insertHTML", false, String(html || ""));
-  syncMarkdownFromVisualEditor();
-};
-
-const updateCurrentStepFromVisualEditorSelection = () => {
-  if (!isEditMode.value || markdownHydrating.value || visualEditorHydrating) {
-    return;
-  }
-  const anchor = resolveVisualEditorSelectionNode();
-  const activeBlock = anchor ? findVisualEditorBlockElement(anchor) : null;
-  setVisualEditorActiveBlock(activeBlock);
-  if (!anchor) {
-    return;
-  }
-  const targetIndex = getVisualEditorSectionIndexForNode(anchor);
-  const targetId = steps.value[targetIndex]?.id ?? steps.value[0]?.id ?? 1;
-  if (targetId !== currentId.value) {
-    currentId.value = targetId;
-  }
-};
-
-const onVisualEditorFocus = () => {
-  visualEditorFocused = true;
-  updateVisualEditorEmptyState();
-  syncVisualEditorSourceUnitFromSelection();
-  updateCurrentStepFromVisualEditorSelection();
-};
-
-const onVisualEditorBlur = async () => {
-  visualEditorFocused = false;
-  setVisualEditorActiveBlock(null);
-  deactivateVisualEditorSourceUnit();
-  syncMarkdownFromVisualEditor();
-  await flushPendingMarkdownSave();
-  await syncVisualEditorFromMarkdown(true);
-};
-
-const onVisualEditorInput = () => {
-  invalidateVisualEditorStoredMarkdown(resolveVisualEditorSelectionNode());
-  if (!(visualEditorSourceUnit instanceof HTMLElement)) {
-    if (applyVisualEditorLiveHeadingSyntax()) {
-      return;
-    }
-  }
-  syncMarkdownFromVisualEditor();
-};
-
-const onVisualEditorKeydown = (event) => {
-  if (event.defaultPrevented) {
-    return;
-  }
-  const selectionNode = resolveVisualEditorSelectionNode();
-  if (
-    event.key === "Tab"
-    && visualEditorSourceUnit instanceof HTMLElement
-    && (visualEditorSourceUnit.contains(selectionNode) || visualEditorSourceUnit === selectionNode)
-  ) {
-    event.preventDefault();
-    if (typeof document.execCommand === "function") {
-      document.execCommand("insertText", false, "  ");
-    }
-    syncMarkdownFromVisualEditor();
-    return;
-  }
-  const block = findVisualEditorBlockElement(selectionNode);
-  const listItem = block instanceof HTMLElement && block.tagName === "LI"
-    ? block
-    : (block instanceof HTMLElement ? block.closest("li") : null);
-  const quoteParagraph = block instanceof HTMLElement && block.tagName === "P" && block.parentElement?.tagName === "BLOCKQUOTE"
-    ? block
-    : null;
-
-  if (
-    !event.metaKey
-    && !event.ctrlKey
-    && !event.altKey
-    && event.key === "#"
-    && block instanceof HTMLElement
-    && /^H[1-6]$/.test(block.tagName)
-    && isVisualEditorSelectionCollapsedAtBlockStart(block)
-  ) {
-    event.preventDefault();
-    const currentLevel = Number(block.tagName.slice(1));
-    const nextLevel = clamp(currentLevel + 1, 1, 6);
-    if (nextLevel !== currentLevel) {
-      const nextHeading = replaceVisualEditorBlockTag(block, `h${nextLevel}`);
-      focusVisualEditor();
-      placeCaretAtNodeBoundary(nextHeading || block, true);
-      syncMarkdownFromVisualEditor();
-    }
-    return;
-  }
-
-  if (event.key === "Enter" && !event.shiftKey && block instanceof HTMLElement && /^H[1-6]$/.test(block.tagName)) {
-    event.preventDefault();
-    const paragraph = createVisualEditorEmptyParagraph();
-    block.insertAdjacentElement("afterend", paragraph);
-    focusVisualEditor();
-    placeCaretAtNodeBoundary(paragraph, true);
-    syncMarkdownFromVisualEditor();
-    return;
-  }
-
-  if (event.key === "Enter" && !event.shiftKey && quoteParagraph instanceof HTMLElement) {
-    event.preventDefault();
-    if (getVisualEditorPlainText(quoteParagraph).trim()) {
-      insertVisualEditorQuoteParagraphAfter(quoteParagraph);
-      return;
-    }
-    exitVisualEditorQuoteParagraph(quoteParagraph);
-    return;
-  }
-
-  if (event.key === "Enter" && !event.shiftKey && listItem instanceof HTMLElement) {
-    event.preventDefault();
-    if (getVisualEditorPlainText(listItem).trim()) {
-      insertVisualEditorListItemAfter(listItem);
-      return;
-    }
-    liftVisualEditorEmptyListItem(listItem);
-    return;
-  }
-
-  if (
-    event.key === "Backspace"
-    && block instanceof HTMLElement
-    && /^H[1-6]$/.test(block.tagName)
-    && isVisualEditorSelectionCollapsedAtBlockStart(block)
-  ) {
-    event.preventDefault();
-    const currentLevel = Number(block.tagName.slice(1));
-    const nextBlock = currentLevel > 1
-      ? replaceVisualEditorBlockTag(block, `h${currentLevel - 1}`)
-      : replaceVisualEditorBlockTag(block, "p");
-    focusVisualEditor();
-    placeCaretAtNodeBoundary(nextBlock || block, true);
-    syncMarkdownFromVisualEditor();
-  }
-};
-
-const onVisualEditorKeyup = (event) => {
-  if (event.defaultPrevented) {
-    return;
-  }
-  syncVisualEditorSourceUnitFromSelection();
-  if (!(visualEditorSourceUnit instanceof HTMLElement)) {
-    if (event.key === " " || event.key === "Enter") {
-      if (applyVisualEditorShortcut()) {
-        return;
-      }
-    }
-  }
-  syncMarkdownFromVisualEditor();
-  updateCurrentStepFromVisualEditorSelection();
-};
-
-const onVisualEditorPaste = (event) => {
-  const selectionNode = resolveVisualEditorSelectionNode();
-  if (
-    visualEditorSourceUnit instanceof HTMLElement
-    && (visualEditorSourceUnit.contains(selectionNode) || visualEditorSourceUnit === selectionNode)
-  ) {
-    return;
-  }
-  const text = String(event.clipboardData?.getData("text/plain") || "");
-  if (!shouldTreatPastedTextAsMarkdown(text)) {
-    return;
-  }
-  event.preventDefault();
-  insertVisualEditorHtml(renderMarkdownToEditableHtml(text));
-};
-
-const onVisualEditorClick = (event) => {
-  if (event.target instanceof Element && event.target.closest("a")) {
-    event.preventDefault();
-  }
-  syncVisualEditorSourceUnitFromSelection(true);
-  updateCurrentStepFromVisualEditorSelection();
-};
 const handleStepSelection = async (stepId, index) => {
   currentId.value = stepId;
   if (!isEditMode.value) {
@@ -2768,7 +1919,7 @@ const isPreviewInteractiveTarget = (target) => {
     return false;
   }
   return Boolean(
-    target.closest("a, button, input, textarea, select, label, summary, [role='button'], .code-copy")
+    target.closest("a, button, input, textarea, select, label, summary, [role='button']")
   );
 };
 
@@ -3031,8 +2182,6 @@ const startFileSidebarResizeDrag = (event) => {
   window.addEventListener("mousemove", onMove);
   window.addEventListener("mouseup", onUp);
 };
-
-const { renderedMarkdown } = useMarkdown(previewMarkdownState, [isDark, mode, currentId], showToast);
 
 const {
   terminalOpen,
@@ -3974,19 +3123,6 @@ watch(renderedMarkdown, () => {
   });
 });
 
-watch(documentMarkdown, () => {
-  if (!isEditMode.value) {
-    return;
-  }
-  void syncVisualEditorFromMarkdown();
-});
-
-watch(isEditMode, (editing) => {
-  if (editing) {
-    void syncVisualEditorFromMarkdown(true);
-  }
-});
-
 watch([terminalOpen, terminalTab], async ([open, tab]) => {
   if (!isDesktopPty.value) {
     return;
@@ -4096,7 +3232,6 @@ const insertImageToMarkdown = async () => {
       }
       if (picked.ok && picked.markdownUrl) {
         appendMarkdownImage(picked.markdownUrl);
-        await syncVisualEditorFromMarkdown(true);
         showToast("已插入图片");
         return;
       }
@@ -4307,7 +3442,6 @@ onMounted(() => {
       void syncDesktopFullscreenState();
     });
   }
-  void syncVisualEditorFromMarkdown(true);
   if (isDesktopWindowControls) {
     void syncDesktopMaximizeState();
     bindDesktopWindowMaximizeListener();
