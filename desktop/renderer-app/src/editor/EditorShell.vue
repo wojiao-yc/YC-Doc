@@ -7,6 +7,7 @@
 <script setup>
 import { onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { createMarkdownEditor } from "./core/create-editor";
+import { parseMarkdownToSemanticSnapshot } from "./parser/parse-markdown";
 
 const props = defineProps({
   dark: {
@@ -30,6 +31,7 @@ const props = defineProps({
 const emit = defineEmits(["update:modelValue", "selection-change"]);
 const editorHostRef = ref(null);
 let editorApi = null;
+let latestPresentationBlocks = Array.isArray(props.presentationBlocks) ? props.presentationBlocks : [];
 
 const focus = () => {
   editorApi?.focus();
@@ -43,7 +45,7 @@ defineExpose({ focus, openSearch });
 
 const syncPresentationData = () => {
   editorApi?.setPresentationData({
-    blocks: props.presentationBlocks,
+    blocks: latestPresentationBlocks,
     currentBlockId: props.currentBlockId
   });
 };
@@ -70,7 +72,18 @@ onMounted(() => {
 watch(
   () => props.modelValue,
   (nextValue) => {
-    editorApi?.setDoc(nextValue);
+    const nextDoc = String(nextValue ?? "");
+    if (!editorApi || editorApi.getDoc() === nextDoc) {
+      return;
+    }
+    const snapshot = parseMarkdownToSemanticSnapshot(nextDoc);
+    latestPresentationBlocks = snapshot.blocks;
+    editorApi.setDoc(nextDoc, {
+      presentationData: {
+        blocks: latestPresentationBlocks,
+        currentBlockId: props.currentBlockId
+      }
+    });
   }
 );
 
@@ -83,7 +96,8 @@ watch(
 
 watch(
   () => props.presentationBlocks,
-  () => {
+  (nextBlocks) => {
+    latestPresentationBlocks = Array.isArray(nextBlocks) ? nextBlocks : [];
     syncPresentationData();
   }
 );

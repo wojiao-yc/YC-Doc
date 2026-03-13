@@ -43,6 +43,8 @@ test("stage3 css files contain core block-presentation selectors", () => {
   assert.match(special, /\.cm-line\.cm-block-thematic-break/);
   assert.match(special, /\.cm-line\.cm-block-image/);
   assert.match(editorTheme, /\.cm-line\.cm-block-current/);
+  assert.match(editorTheme, /\.cm-inline-del/);
+  assert.match(editorTheme, /\.cm-inline-codespan/);
 });
 
 test("editor wires presentation extension and accepts semantic snapshot input", () => {
@@ -62,12 +64,16 @@ test("editor wires presentation extension and accepts semantic snapshot input", 
   assert.match(presentation, /cm-block-current/);
   assert.match(presentation, /cm-block-heading-l/);
   assert.match(presentation, /cm-list-level-/);
+  assert.match(presentation, /inlineSegments/);
+  assert.match(presentation, /Decoration\.mark/);
 
   assert.match(shell, /presentationBlocks/);
   assert.match(shell, /currentBlockId/);
+  assert.match(shell, /parseMarkdownToSemanticSnapshot/);
   assert.match(shell, /setPresentationData/);
   assert.match(app, /:presentation-blocks=\"semanticBlocks\"/);
   assert.match(app, /:current-block-id=\"currentSemanticBlockId\"/);
+  assert.match(createEditor, /presentationData/);
 
   assert.doesNotMatch(theme, /\.cm-activeLine/);
 });

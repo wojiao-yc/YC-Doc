@@ -1,5 +1,5 @@
 import { Decoration, EditorView, ViewPlugin } from "@codemirror/view";
-import { RangeSetBuilder, StateEffect, StateField } from "@codemirror/state";
+import { StateEffect, StateField } from "@codemirror/state";
 
 const safePosForLineLookup = (doc, pos) => {
   const length = Number(doc.length || 0);
@@ -25,20 +25,59 @@ const normalizePresentationData = (input = {}) => ({
 
 const clampPos = (value, length) => Math.max(0, Math.min(Number(length || 0), Number(value || 0)));
 
+const mapRange = (changes, fromInput, toInput, nextDocLength) => {
+  const fromBase = Number(fromInput || 0);
+  const toBase = Number(toInput || fromBase);
+  const mappedFrom = clampPos(changes.mapPos(fromBase, 1), nextDocLength);
+  const mappedTo = clampPos(changes.mapPos(toBase, -1), nextDocLength);
+  return {
+    from: Math.min(mappedFrom, mappedTo),
+    to: Math.max(mappedFrom, mappedTo)
+  };
+};
+
+const remapInlineSegments = (segments, changes, nextDocLength) =>
+  (Array.isArray(segments) ? segments : [])
+    .map((segment) => {
+      const mappedRange = mapRange(changes, segment?.from, segment?.to, nextDocLength);
+      return {
+        ...segment,
+        from: mappedRange.from,
+        to: mappedRange.to,
+        innerFrom: mappedRange.from,
+        innerTo: mappedRange.to,
+        outerFrom: mappedRange.from,
+        outerTo: mappedRange.to
+      };
+    })
+    .filter((segment) => segment.to > segment.from);
+
 const remapPresentationBlocks = (blocks, changes, nextDocLength) =>
-  blocks.map((block) => {
-    const fromInput = Number(block?.from || 0);
-    const toInput = Number(block?.to || fromInput);
-    const mappedFrom = clampPos(changes.mapPos(fromInput, 1), nextDocLength);
-    const mappedTo = clampPos(changes.mapPos(toInput, -1), nextDocLength);
-    const from = Math.min(mappedFrom, mappedTo);
-    const to = Math.max(mappedFrom, mappedTo);
-    return {
-      ...block,
-      from,
-      to
-    };
-  });
+  blocks
+    .map((block) => {
+      const mappedRange = mapRange(changes, block?.from, block?.to, nextDocLength);
+      return {
+        ...block,
+        from: mappedRange.from,
+        to: mappedRange.to,
+        inlineSegments: remapInlineSegments(block?.inlineSegments, changes, nextDocLength)
+      };
+    })
+    .filter((block) => block.to > block.from);
+
+const inlineClassesForSegment = (segment) => {
+  const marks = Array.isArray(segment?.marks) ? segment.marks : [];
+  const classes = [];
+
+  if (marks.includes("del")) {
+    classes.push("cm-inline-del");
+  }
+  if (marks.includes("codespan")) {
+    classes.push("cm-inline-codespan");
+  }
+
+  return classes.join(" ");
+};
 
 export const setPresentationDataEffect = StateEffect.define();
 
@@ -86,27 +125,63 @@ const classesForBlockLine = (block, currentBlockId, lineNumber, lineRange) => {
   return classes.join(" ");
 };
 
-const buildLineDecorations = (view, blocks, currentBlockId) => {
-  const builder = new RangeSetBuilder();
+const buildDecorations = (view, blocks, currentBlockId) => {
+  const decorations = [];
   const doc = view.state.doc;
+  const docLength = Number(doc.length || 0);
 
   for (const block of blocks) {
     const lineRange = resolveLineRange(doc, block);
     for (let lineNumber = lineRange.fromLine; lineNumber <= lineRange.toLine; lineNumber += 1) {
       const line = doc.line(lineNumber);
-      builder.add(
-        line.from,
-        line.from,
+      decorations.push(
         Decoration.line({
           attributes: {
             class: classesForBlockLine(block, currentBlockId, lineNumber, lineRange)
           }
-        })
+        }).range(line.from)
+      );
+    }
+
+    const inlineSegments = Array.isArray(block?.inlineSegments) ? block.inlineSegments : [];
+    for (const segment of inlineSegments) {
+      const className = inlineClassesForSegment(segment);
+      if (!className) {
+        continue;
+      }
+      const from = clampPos(segment?.from, docLength);
+      const to = clampPos(segment?.to, docLength);
+      if (to <= from) {
+        continue;
+      }
+      decorations.push(
+        Decoration.mark({
+          class: className
+        }).range(from, to)
       );
     }
   }
 
-  return builder.finish();
+  return Decoration.set(decorations, true);
+};
+
+const isWholeDocumentReplacement = (update) => {
+  let changeCount = 0;
+  let replaceAll = true;
+
+  update.changes.iterChangedRanges((fromA, toA, fromB, toB) => {
+    changeCount += 1;
+    if (
+      fromA !== 0
+      || toA !== update.startState.doc.length
+      || fromB !== 0
+      || toB !== update.state.doc.length
+    ) {
+      replaceAll = false;
+    }
+  });
+
+  return changeCount === 1 && replaceAll;
 };
 
 class BlockPresentationPlugin {
@@ -114,7 +189,7 @@ class BlockPresentationPlugin {
     const data = view.state.field(presentationDataField);
     this.blocks = data.blocks;
     this.currentBlockId = data.currentBlockId;
-    this.decorations = buildLineDecorations(view, this.blocks, this.currentBlockId);
+    this.decorations = buildDecorations(view, this.blocks, this.currentBlockId);
   }
 
   update(update) {
@@ -126,15 +201,18 @@ class BlockPresentationPlugin {
 
     if (!blocksChanged && !currentChanged) {
       if (update.docChanged) {
-        this.blocks = remapPresentationBlocks(this.blocks, update.changes, update.state.doc.length);
-        this.decorations = buildLineDecorations(update.view, this.blocks, this.currentBlockId);
+        // A replace-all edit invalidates every old block range at once, so wait for the next snapshot.
+        this.blocks = isWholeDocumentReplacement(update)
+          ? []
+          : remapPresentationBlocks(this.blocks, update.changes, update.state.doc.length);
+        this.decorations = buildDecorations(update.view, this.blocks, this.currentBlockId);
       }
       return;
     }
 
     this.blocks = nextBlocks;
     this.currentBlockId = nextCurrentBlockId;
-    this.decorations = buildLineDecorations(update.view, this.blocks, this.currentBlockId);
+    this.decorations = buildDecorations(update.view, this.blocks, this.currentBlockId);
   }
 }
 

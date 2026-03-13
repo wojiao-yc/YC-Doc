@@ -52,17 +52,27 @@ export const createMarkdownEditor = ({
 
   const getDoc = () => view.state.doc.toString();
 
-  const setDoc = (nextDoc) => {
+  const setDoc = (nextDoc, { presentationData = null } = {}) => {
     const next = String(nextDoc ?? "");
     if (next === getDoc()) {
+      if (presentationData) {
+        setPresentationData(presentationData);
+      }
       return;
     }
+    const effects = presentationData
+      ? [setPresentationDataEffect.of({
+          blocks: Array.isArray(presentationData?.blocks) ? presentationData.blocks : [],
+          currentBlockId: String(presentationData?.currentBlockId || "")
+        })]
+      : [];
     view.dispatch({
       changes: {
         from: 0,
         to: view.state.doc.length,
         insert: next
-      }
+      },
+      effects
     });
   };
 
