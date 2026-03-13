@@ -337,6 +337,29 @@
                       Outline {{ semanticOutline.length }}
                     </span>
                   </div>
+                  <div
+                    class="w-full rounded-lg border px-2 py-2 text-[11px] font-mono leading-5 max-h-44 overflow-auto"
+                    :class="isDark ? 'bg-slate-900/70 text-slate-200 border-slate-700' : 'bg-gray-50 text-slate-700 border-gray-200'"
+                  >
+                    <div class="flex items-center gap-2 flex-wrap mb-1">
+                      <span
+                        class="px-1.5 py-0.5 rounded border"
+                        :class="isDark ? 'bg-slate-800 border-slate-700 text-slate-200' : 'bg-white border-gray-300 text-gray-700'"
+                      >
+                        Inline Segments {{ activeInlineSegmentCount }}
+                      </span>
+                      <span
+                        class="px-1.5 py-0.5 rounded border"
+                        :class="isDark ? 'bg-slate-800 border-slate-700 text-slate-200' : 'bg-white border-gray-300 text-gray-700'"
+                      >
+                        Inline Tokens {{ activeInlineTokenCount }}
+                      </span>
+                    </div>
+                    <div v-if="inlineDebugLines.length" class="space-y-0.5">
+                      <div v-for="(line, index) in inlineDebugLines" :key="`inline-debug-${index}`">{{ line }}</div>
+                    </div>
+                    <div v-else class="opacity-70">No inline debug data for current block.</div>
+                  </div>
                 </div>
 
                 <div class="relative flex-1 overflow-y-auto py-2">
@@ -1099,6 +1122,59 @@ const currentBlockDebugTitle = computed(() => {
   const lineStart = Number(block.lineStart || 0);
   const lineEnd = Number(block.lineEnd || lineStart);
   return `${block.type}  L${lineStart}-${lineEnd}  [${block.from}, ${block.to})`;
+});
+
+const flattenInlineTokens = (tokens = []) =>
+  (Array.isArray(tokens) ? tokens : []).flatMap((token) => [
+    token,
+    ...flattenInlineTokens(token?.children || [])
+  ]);
+
+const activeInlineSegments = computed(() => {
+  const block = activeSemanticBlock.value;
+  return Array.isArray(block?.inlineSegments) ? block.inlineSegments : [];
+});
+
+const activeInlineTokens = computed(() => {
+  const block = activeSemanticBlock.value;
+  return flattenInlineTokens(Array.isArray(block?.inlineTokens) ? block.inlineTokens : []);
+});
+
+const activeInlineSegmentCount = computed(() => activeInlineSegments.value.length);
+const activeInlineTokenCount = computed(() => activeInlineTokens.value.length);
+
+const formatMarks = (marks) => {
+  const list = Array.isArray(marks) ? marks.filter(Boolean) : [];
+  return list.length ? list.join("|") : "-";
+};
+
+const inlineDebugLines = computed(() => {
+  const segmentLines = activeInlineSegments.value.slice(0, 10).map((segment, index) => {
+    const preview = String(segment?.text || "").replace(/\n/g, "\\n");
+    return [
+      `S${index + 1}`,
+      `[${segment.from},${segment.to})`,
+      `inner=[${segment.innerFrom},${segment.innerTo})`,
+      `outer=[${segment.outerFrom},${segment.outerTo})`,
+      `type=${segment.type}`,
+      `marks=${formatMarks(segment.marks)}`,
+      `text="${preview}"`
+    ].join("  ");
+  });
+
+  const tokenLines = activeInlineTokens.value.slice(0, 8).map((token, index) => {
+    const preview = String(token?.text || "").replace(/\n/g, "\\n");
+    return [
+      `T${index + 1}`,
+      `[${token.rawFrom},${token.rawTo})`,
+      `text=[${token.textFrom},${token.textTo})`,
+      `type=${token.type}`,
+      `marks=${formatMarks(token.marks)}`,
+      `text="${preview}"`
+    ].join("  ");
+  });
+
+  return [...segmentLines, ...tokenLines];
 });
 
 const formatSaveTime = (value) => {

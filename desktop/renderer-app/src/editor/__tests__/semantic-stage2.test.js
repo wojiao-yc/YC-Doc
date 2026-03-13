@@ -6,6 +6,9 @@ import { parseMarkdownToSemanticSnapshot } from "../parser/parse-markdown";
 import { findBlockContextByPos } from "../runtime/block-index";
 import { findCurrentBlock } from "../runtime/current-block";
 
+const flattenInlineTokens = (tokens = []) =>
+  tokens.flatMap((token) => [token, ...flattenInlineTokens(token?.children || [])]);
+
 test("parseListLine keeps ordered marker from the list prefix", () => {
   const dot = parseListLine("12. list item with ) in content");
   const paren = parseListLine("3) list item with . in content");
@@ -190,4 +193,129 @@ test("nested list items are parsed as independent blocks with increasing levels"
   for (let index = 1; index < listBlocks.length; index += 1) {
     assert.equal(listBlocks[index].from >= listBlocks[index - 1].to, true);
   }
+});
+
+test("inline segments preserve in-line syntax order and offsets", () => {
+  const markdown = "normal *italic* **bold** *again*";
+  const blocks = parseMarkdownToBlocks(markdown);
+  const paragraph = blocks.find((block) => block.type === "paragraph");
+  const inlineSegments = paragraph?.inlineSegments || [];
+
+  assert.equal(Array.isArray(inlineSegments), true);
+  assert.equal(inlineSegments.length >= 6, true);
+
+  const compact = inlineSegments.map((segment) => ({
+    text: segment.text,
+    marks: segment.marks
+  }));
+  assert.deepEqual(compact.slice(0, 6), [
+    { text: "normal ", marks: [] },
+    { text: "italic", marks: ["em"] },
+    { text: " ", marks: [] },
+    { text: "bold", marks: ["strong"] },
+    { text: " ", marks: [] },
+    { text: "again", marks: ["em"] }
+  ]);
+
+  for (let index = 0; index < inlineSegments.length; index += 1) {
+    const segment = inlineSegments[index];
+    assert.equal(typeof segment.from, "number");
+    assert.equal(typeof segment.to, "number");
+    assert.equal(segment.to > segment.from, true);
+    assert.equal(markdown.slice(segment.from, segment.to), segment.text);
+    if (index > 0) {
+      assert.equal(segment.from >= inlineSegments[index - 1].to, true);
+    }
+  }
+});
+
+test("inline segments ignore heading marker prefix and keep heading content offsets", () => {
+  const markdown = "# Title *focus*";
+  const blocks = parseMarkdownToBlocks(markdown);
+  const heading = blocks.find((block) => block.type === "heading");
+  const inlineSegments = heading?.inlineSegments || [];
+
+  assert.equal(inlineSegments.length >= 2, true);
+  assert.deepEqual(
+    inlineSegments.slice(0, 2).map((segment) => ({ text: segment.text, marks: segment.marks })),
+    [
+      { text: "Title ", marks: [] },
+      { text: "focus", marks: ["em"] }
+    ]
+  );
+  assert.equal(inlineSegments[0].from, markdown.indexOf("Title"));
+});
+
+test("inline token tree keeps stable outer and inner ranges for repeated and nested syntax", () => {
+  const markdown = [
+    "**a** **a**",
+    "",
+    "**hello `x` world**",
+    "",
+    "[link](a) and [link](b)",
+    "",
+    "_this is **nested** text_",
+    "",
+    "Use `a` and `a`",
+    "",
+    "~~del~~ and ~~del~~"
+  ].join("\n");
+  const blocks = parseMarkdownToBlocks(markdown);
+  const allInlineTokens = flattenInlineTokens(blocks.flatMap((block) => block.inlineTokens || []));
+  const allInlineSegments = blocks.flatMap((block) => block.inlineSegments || []);
+
+  assert.equal(allInlineTokens.length > 0, true);
+  assert.equal(allInlineSegments.length > 0, true);
+
+  for (const token of allInlineTokens) {
+    assert.equal(token.rawTo >= token.rawFrom, true);
+    assert.equal(token.textTo >= token.textFrom, true);
+    assert.equal(token.rawFrom <= token.textFrom, true);
+    assert.equal(token.rawTo >= token.textTo, true);
+    assert.equal(markdown.slice(token.rawFrom, token.rawTo), token.rawText);
+    if (token.textTo > token.textFrom) {
+      assert.equal(markdown.slice(token.textFrom, token.textTo), token.text);
+    }
+  }
+
+  const strongTokens = allInlineTokens.filter((token) => token.type === "strong");
+  const linkTokens = allInlineTokens.filter((token) => token.type === "link");
+  assert.equal(strongTokens.length >= 3, true);
+  assert.equal(strongTokens.every((token) => token.rawTo > token.textTo), true);
+  assert.deepEqual(linkTokens.map((token) => token.attrs?.href), ["a", "b"]);
+
+  for (const segment of allInlineSegments) {
+    assert.equal(segment.outerFrom <= segment.from, true);
+    assert.equal(segment.outerTo >= segment.to, true);
+    assert.equal(markdown.slice(segment.from, segment.to), segment.text);
+    if (segment.marks.length > 0) {
+      assert.equal(segment.outerTo > segment.to, true);
+    }
+  }
+});
+
+test("inline model works for blockquote and list line prefixes", () => {
+  const markdown = ["> quote with **bold** and `code`", "", "- item with [link](url)"].join("\n");
+  const blocks = parseMarkdownToBlocks(markdown);
+  const quote = blocks.find((block) => block.type === "blockquote");
+  const bullet = blocks.find((block) => block.type === "bullet_list_item");
+
+  assert.equal(Boolean(quote), true);
+  assert.equal(Boolean(bullet), true);
+
+  const quoteSegments = quote?.inlineSegments || [];
+  const bulletSegments = bullet?.inlineSegments || [];
+
+  assert.equal(
+    quoteSegments.some((segment) => segment.text === "bold" && segment.marks.includes("strong")),
+    true
+  );
+  assert.equal(
+    quoteSegments.some((segment) => segment.text === "code" && segment.marks.includes("codespan")),
+    true
+  );
+  assert.equal(
+    bulletSegments.some((segment) => segment.text === "link" && segment.marks.includes("link")),
+    true
+  );
 });

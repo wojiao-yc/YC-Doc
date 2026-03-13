@@ -2,6 +2,7 @@ import { marked } from "marked";
 import { createBlockNode } from "../model/block-node";
 import { BLOCK_TYPES } from "../model/block-types";
 import { parseImageLine } from "./parse-image";
+import { buildInlineModelForBlock } from "./parse-inline";
 import { parseListLine } from "./parse-list";
 
 const normalizeMarkdown = (markdown) => String(markdown || "").replace(/\r\n/g, "\n");
@@ -217,6 +218,15 @@ const pushBlock = (blocks, markdown, lineStarts, type, from, to, attrs = {}) => 
     return;
   }
   const range = toLineRange(markdown, lineStarts, from, to);
+  const rawText = markdown.slice(from, to);
+  const inlineModel = buildInlineModelForBlock({
+    blockType: type,
+    rawText,
+    from,
+    lineStart: range.lineStart
+  });
+  const inlineTokens = inlineModel.inlineTokens || [];
+  const inlineSegments = inlineModel.inlineSegments || [];
   blocks.push(
     createBlockNode({
       id: makeBlockId(type, from, to),
@@ -225,8 +235,10 @@ const pushBlock = (blocks, markdown, lineStarts, type, from, to, attrs = {}) => 
       to,
       lineStart: range.lineStart,
       lineEnd: range.lineEnd,
-      rawText: markdown.slice(from, to),
-      attrs
+      rawText,
+      attrs,
+      inlineTokens,
+      inlineSegments
     })
   );
 };
