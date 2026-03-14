@@ -43,3 +43,43 @@ test("pending markdown-sync flag is not cleared by a standalone currentId watche
   const markdownDoc = readSrc("composables/useMarkdownDocument.js");
   assert.doesNotMatch(markdownDoc, /watch\(currentId/);
 });
+
+test("presentation hides markdown syntax by default and keeps active token source visible", () => {
+  const presentation = readSrc("editor/extensions/presentation.js");
+
+  assert.match(presentation, /HEADING_PREFIX_PATTERN/);
+  assert.match(presentation, /INLINE_SYNTAX_TOKEN_TYPES/);
+  assert.match(presentation, /pickActiveInlineSyntaxToken/);
+  assert.match(presentation, /Decoration\.replace\(\{\}\)/);
+  assert.match(presentation, /selectionSet/);
+  assert.match(presentation, /blockKeepsSourceVisible/);
+  assert.match(presentation, /isTokenRelatedToActiveToken/);
+});
+
+test("presentation also supports block-level markdown rendering and source reveal", () => {
+  const presentation = readSrc("editor/extensions/presentation.js");
+
+  assert.match(presentation, /SOURCE_VISIBLE_BLOCK_TYPES/);
+  assert.match(presentation, /addListPrefixDecorationsForBlock/);
+  assert.match(presentation, /addBlockquotePrefixDecorationsForBlock/);
+  assert.match(presentation, /addTablePreviewDecorationForBlock/);
+  assert.match(presentation, /MarkdownTableWidget/);
+  assert.match(presentation, /cm-table-widget/);
+});
+
+test("editor theme exposes inline style classes used by hidden-syntax rendering", () => {
+  const theme = readSrc("styles/editor-theme.css");
+
+  assert.match(theme, /\.cm-inline-em/);
+  assert.match(theme, /\.cm-inline-strong/);
+  assert.match(theme, /\.cm-inline-link/);
+});
+
+test("list and special-block styles include rendered widgets for hidden-source mode", () => {
+  const lists = readSrc("styles/lists.css");
+  const special = readSrc("styles/special-blocks.css");
+
+  assert.match(lists, /\.cm-list-prefix-widget/);
+  assert.match(special, /\.cm-table-widget/);
+  assert.match(special, /\.cm-block-thematic-break\.cm-block-source-visible/);
+});

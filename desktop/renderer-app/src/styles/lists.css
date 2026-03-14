@@ -39,3 +39,27 @@
 .yc-editor-shell.is-dark .yc-editor-host .cm-line.cm-block-task-list-item.cm-task-unchecked {
   color: #cbd5e1;
 }
+
+.yc-editor-host .cm-list-prefix-widget {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  min-width: 1rem;
+  margin-right: 0.3rem;
+  color: #64748b;
+  font-variant-numeric: tabular-nums;
+  user-select: none;
+  pointer-events: none;
+}
+
+.yc-editor-host .cm-list-prefix-widget.cm-list-prefix-ordered-list-item {
+  min-width: 1.45rem;
+}
+
+.yc-editor-host .cm-list-prefix-widget.cm-list-prefix-task-list-item {
+  min-width: 1.2rem;
+}
+
+.yc-editor-shell.is-dark .yc-editor-host .cm-list-prefix-widget {
+  color: #94a3b8;
+}

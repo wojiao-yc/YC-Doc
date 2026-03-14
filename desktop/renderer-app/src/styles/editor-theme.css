@@ -45,6 +45,25 @@
   text-decoration-color: rgba(239, 68, 68, 0.72);
 }
 
+.yc-editor-host .cm-inline-em {
+  font-style: italic;
+}
+
+.yc-editor-host .cm-inline-strong {
+  font-weight: 700;
+}
+
+.yc-editor-host .cm-inline-link {
+  color: #2563eb;
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.12em;
+}
+
+.yc-editor-shell.is-dark .yc-editor-host .cm-inline-link {
+  color: #93c5fd;
+}
+
 .yc-editor-shell.is-dark .yc-editor-host .cm-inline-del {
   text-decoration-color: rgba(251, 113, 133, 0.78);
 }
