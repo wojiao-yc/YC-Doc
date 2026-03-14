@@ -2,27 +2,143 @@ import { ref, watch, nextTick, onBeforeUnmount } from "vue";
 
 const MARKDOWN_SAVE_DELAY_MS = 500;
 const MAX_MARKDOWN_FILE_BYTES = 20 * 1024 * 1024;
+const HEADING_LINE_PATTERN = /^#\s+(.*?)\s*$/;
+const OPEN_FENCE_PATTERN = /^\s{0,3}(`{3,}|~{3,})(.*)$/;
 
 const clamp = (value, min, max) => Math.min(max, Math.max(min, value));
+const normalizeMarkdownText = (value) => String(value || "").replace(/\r\n/g, "\n");
+const trimOuterBlankLines = (value) => String(value || "").replace(/^\n+/, "").replace(/\n+$/, "");
+const trimClosingHeadingHashes = (text) => String(text || "").replace(/[ \t]+#+[ \t]*$/, "").trim();
+
 const createBlankStep = (id = 1) => ({
   id,
   title: "",
   subtitle: "",
   content: ""
 });
+
 const createBlankSteps = () => [createBlankStep(1)];
-const normalizeMarkdownText = (value) => String(value || "").replace(/\r\n/g, "\n");
-const trimOuterBlankLines = (value) => String(value || "").replace(/^\n+/, "").replace(/\n+$/, "");
-const hasNonWhitespaceMarkdown = (value) => trimOuterBlankLines(normalizeMarkdownText(value)).length > 0;
-const appendHeadingStep = (markdown, title) => {
-  const base = trimOuterBlankLines(normalizeMarkdownText(markdown));
-  const safeTitle = String(title || "").trim() || "步骤";
-  return base ? `${base}\n\n# ${safeTitle}\n` : `# ${safeTitle}\n`;
+const defaultStepTitle = (index) => `Step ${index + 1}`;
+
+const closeFencePatternFor = (fenceToken) => {
+  const marker = fenceToken[0] === "~" ? "~" : "`";
+  const length = fenceToken.length;
+  return new RegExp(`^\\s{0,3}${marker}{${length},}\\s*$`);
 };
-const isBlankStep = (step) =>
-  !String(step?.title || "").trim()
-  && !String(step?.subtitle || "").trim()
-  && !String(step?.content || "").trim();
+
+const collectHeadingSections = (rawMarkdown) => {
+  const text = normalizeMarkdownText(rawMarkdown);
+  const lines = text.split("\n");
+  const sections = [];
+
+  let activeFence = null;
+  let currentSection = null;
+  let offset = 0;
+
+  const closeCurrentSectionAt = (endPos) => {
+    if (!currentSection) {
+      return;
+    }
+    const sectionEnd = Math.max(currentSection.start, Math.min(text.length, Number(endPos || 0)));
+    const rawBody = text.slice(currentSection.bodyStart, sectionEnd);
+    sections.push({
+      ...currentSection,
+      end: sectionEnd,
+      content: trimOuterBlankLines(rawBody)
+    });
+    currentSection = null;
+  };
+
+  for (let lineIndex = 0; lineIndex < lines.length; lineIndex += 1) {
+    const line = String(lines[lineIndex] || "");
+    const lineStart = offset;
+    const hasNewline = lineIndex < lines.length - 1;
+    const lineEnd = lineStart + line.length + (hasNewline ? 1 : 0);
+
+    if (!activeFence) {
+      const openFenceMatch = line.match(OPEN_FENCE_PATTERN);
+      if (openFenceMatch) {
+        activeFence = {
+          marker: openFenceMatch[1][0] === "~" ? "~" : "`",
+          length: openFenceMatch[1].length
+        };
+      }
+    } else if (closeFencePatternFor(activeFence.marker.repeat(activeFence.length)).test(line)) {
+      activeFence = null;
+    }
+
+    const headingMatch = !activeFence ? line.match(HEADING_LINE_PATTERN) : null;
+    if (headingMatch) {
+      closeCurrentSectionAt(lineStart);
+      currentSection = {
+        start: lineStart,
+        headingFrom: lineStart,
+        headingTo: lineStart + line.length,
+        bodyStart: lineEnd,
+        title: trimClosingHeadingHashes(headingMatch[1])
+      };
+    }
+
+    offset = lineEnd;
+  }
+
+  closeCurrentSectionAt(text.length);
+
+  const firstHeadingStart = sections[0]?.start ?? text.length;
+  const prologue = text.slice(0, firstHeadingStart);
+
+  return {
+    text,
+    prologue,
+    sections
+  };
+};
+
+const serializeHeadingSections = ({ prologue = "", sections = [] } = {}) => {
+  const normalizedPrologue = trimOuterBlankLines(normalizeMarkdownText(prologue));
+  const chunks = (Array.isArray(sections) ? sections : []).map((section) => {
+    const title = trimClosingHeadingHashes(section?.title || "");
+    const content = trimOuterBlankLines(normalizeMarkdownText(section?.content || ""));
+    const headingLine = title ? `# ${title}` : "# ";
+    return content ? `${headingLine}\n\n${content}` : headingLine;
+  });
+
+  let markdown = chunks.join("\n\n");
+  if (normalizedPrologue) {
+    markdown = markdown ? `${normalizedPrologue}\n\n${markdown}` : normalizedPrologue;
+  }
+
+  return markdown ? `${markdown}\n` : "";
+};
+
+const sectionsToSteps = ({ prologue = "", sections = [] } = {}) => {
+  if (!sections.length) {
+    const single = trimOuterBlankLines(prologue);
+    if (!single) {
+      return createBlankSteps();
+    }
+    return [{
+      id: 1,
+      title: "",
+      subtitle: "",
+      content: single
+    }];
+  }
+
+  const leading = trimOuterBlankLines(prologue);
+  return sections.map((section, index) => {
+    let content = String(section?.content || "");
+    if (index === 0 && leading) {
+      content = content ? `${leading}\n\n${content}` : leading;
+    }
+    return {
+      id: index + 1,
+      title: String(section?.title || "").trim(),
+      subtitle: "",
+      content
+    };
+  });
+};
 
 export const useMarkdownDocument = ({
   steps,
@@ -43,16 +159,14 @@ export const useMarkdownDocument = ({
   const lastSaveError = ref("");
 
   let markdownSaveTimer = null;
-  let pendingDocumentMarkdownFromSteps = null;
-  let pendingStepsFromDocumentMarkdown = false;
   const lastSavedMarkdownByPath = new Map();
 
   const isSingleBlankStepList = (list) =>
     Array.isArray(list)
     && list.length === 1
-    && isBlankStep(list[0]);
-
-  const defaultStepTitle = (index) => `步骤 ${index + 1}`;
+    && !String(list[0]?.title || "").trim()
+    && !String(list[0]?.subtitle || "").trim()
+    && !String(list[0]?.content || "").trim();
 
   const stepDisplayTitle = (step, index = 0) => {
     const title = String(step?.title || "").trim();
@@ -61,7 +175,7 @@ export const useMarkdownDocument = ({
     }
     const content = String(step?.content || "").trim();
     if ((steps.value?.length || 0) <= 1) {
-      return content ? "文档" : "空白文档";
+      return content ? "Document" : "Blank Document";
     }
     return defaultStepTitle(index);
   };
@@ -71,101 +185,45 @@ export const useMarkdownDocument = ({
       .split("\n")
       .map((line) => line.trim())
       .filter(Boolean);
-    return lines[0] || "空白内容";
-  };
-
-  const extractMarkdownSections = (rawMarkdown) => {
-    const text = normalizeMarkdownText(rawMarkdown);
-    const lines = text.split("\n");
-    const sections = [];
-    let fenceChar = "";
-    let pendingPrefixLines = [];
-    let currentSection = null;
-    let offset = 0;
-
-    const pushSection = (endIndex) => {
-      if (!currentSection) {
-        return;
-      }
-      sections.push({
-        title: currentSection.title,
-        content: trimOuterBlankLines(currentSection.lines.join("\n")),
-        startIndex: currentSection.startIndex,
-        endIndex
-      });
-    };
-
-    for (let index = 0; index < lines.length; index += 1) {
-      const line = lines[index];
-      const lineStart = offset;
-      const hasNewline = index < lines.length - 1;
-      const lineEnd = lineStart + line.length + (hasNewline ? 1 : 0);
-      const fenceMatch = line.match(/^(```|~~~)/);
-      if (fenceMatch) {
-        const nextFenceChar = fenceMatch[1][0];
-        fenceChar = fenceChar === nextFenceChar ? "" : (fenceChar || nextFenceChar);
-      }
-
-      const headingMatch = !fenceChar ? line.match(/^#\s+(.*?)\s*$/) : null;
-      if (headingMatch) {
-        pushSection(lineStart);
-        const prefixStart = pendingPrefixLines[0]?.startIndex;
-        currentSection = {
-          title: String(headingMatch[1] || "").trim(),
-          lines: sections.length === 0 ? pendingPrefixLines.map((item) => item.line) : [],
-          startIndex: sections.length === 0 && Number.isFinite(prefixStart) ? prefixStart : lineStart
-        };
-        pendingPrefixLines = [];
-        offset = lineEnd;
-        continue;
-      }
-
-      const lineRecord = { line, startIndex: lineStart };
-      if (currentSection) {
-        currentSection.lines.push(line);
-      } else {
-        pendingPrefixLines.push(lineRecord);
-      }
-      offset = lineEnd;
-    }
-
-    pushSection(text.length);
-
-    if (!sections.length) {
-      return [{
-        title: "",
-        content: trimOuterBlankLines(text),
-        startIndex: 0,
-        endIndex: text.length
-      }];
-    }
-
-    return sections;
+    return lines[0] || "Blank Content";
   };
 
   const parseMarkdownToSteps = (rawMarkdown) => {
-    const text = normalizeMarkdownText(rawMarkdown);
-    const sections = extractMarkdownSections(text);
+    const model = collectHeadingSections(rawMarkdown);
+    return sectionsToSteps(model);
+  };
 
-    if (!sections.length) {
-      const single = trimOuterBlankLines(text);
-      if (!single) {
-        return createBlankSteps();
-      }
-      return [{
-        id: 1,
-        title: "",
-        subtitle: "",
-        content: single
-      }];
+  const extractMarkdownSections = (rawMarkdown) => {
+    const model = collectHeadingSections(rawMarkdown);
+    return model.sections.map((section) => ({
+      title: String(section.title || "").trim(),
+      content: String(section.content || ""),
+      startIndex: section.start,
+      endIndex: section.end
+    }));
+  };
+
+  const serializeStepsToMarkdown = (sourceSteps) => {
+    const list = Array.isArray(sourceSteps) ? sourceSteps : [];
+    if (!list.length || isSingleBlankStepList(list)) {
+      return "";
     }
 
-    return sections.map((section, index) => ({
-      id: index + 1,
-      title: String(section.title || "").trim(),
-      subtitle: "",
-      content: String(section.content || "")
+    const hasAnyHeadingTitle = list.some((step) => String(step?.title || "").trim().length > 0);
+    if (!hasAnyHeadingTitle && list.length === 1) {
+      const rawContent = trimOuterBlankLines(normalizeMarkdownText(list[0]?.content || ""));
+      return rawContent ? `${rawContent}\n` : "";
+    }
+
+    const sections = list.map((step, index) => ({
+      title: String(step?.title || "").trim() || defaultStepTitle(index),
+      content: String(step?.content || "")
     }));
+
+    return serializeHeadingSections({
+      prologue: "",
+      sections
+    });
   };
 
   const formatBytes = (value) => {
@@ -189,23 +247,6 @@ export const useMarkdownDocument = ({
     return Number.isFinite(bytes) && bytes > MAX_MARKDOWN_FILE_BYTES;
   };
 
-  const serializeStepsToMarkdown = (sourceSteps) => {
-    const normalizedSteps = Array.isArray(sourceSteps) ? sourceSteps : [];
-    if (!normalizedSteps.length || isSingleBlankStepList(normalizedSteps)) {
-      return "";
-    }
-    if (normalizedSteps.length === 1 && !String(normalizedSteps[0]?.title || "").trim()) {
-      const rawContent = trimOuterBlankLines(normalizeMarkdownText(normalizedSteps[0]?.content || ""));
-      return rawContent ? `${rawContent}\n` : "";
-    }
-    const chunks = normalizedSteps.map((step, index) => {
-      const title = String(step?.title || "").trim() || defaultStepTitle(index);
-      const content = trimOuterBlankLines(normalizeMarkdownText(step?.content || ""));
-      return content ? `# ${title}\n\n${content}` : `# ${title}`;
-    });
-    return `${chunks.join("\n\n").trim()}\n`;
-  };
-
   const normalizeRelPath = (value) => String(value || "").trim();
 
   const getPathSnapshot = (targetRelPath = activeMarkdownRelPath.value) => {
@@ -224,9 +265,17 @@ export const useMarkdownDocument = ({
     lastSavedMarkdownByPath.set(relPath, normalizeMarkdownText(content));
   };
 
+  const syncStepsFromDocumentMarkdown = (rawMarkdown, preserveIndex = currentStepIndex.value) => {
+    const parsed = parseMarkdownToSteps(rawMarkdown);
+    const nextIndex = clamp(Number(preserveIndex) || 0, 0, Math.max(0, parsed.length - 1));
+    steps.value = parsed;
+    currentId.value = parsed[nextIndex]?.id ?? parsed[0]?.id ?? 1;
+  };
+
   const loadMarkdown = (text, { markAsSaved = false, relPath = activeMarkdownRelPath.value } = {}) => {
     const normalized = normalizeMarkdownText(text);
     documentMarkdown.value = normalized;
+    syncStepsFromDocumentMarkdown(normalized, 0);
     if (markAsSaved) {
       setPathSnapshot(relPath, normalized);
       saveStatus.value = "saved";
@@ -255,40 +304,6 @@ export const useMarkdownDocument = ({
       return true;
     }
     return snapshot !== normalizeMarkdownText(content);
-  };
-
-  const syncDocumentMarkdownFromSteps = (sourceSteps = steps.value) => {
-    const nextMarkdown = serializeStepsToMarkdown(sourceSteps);
-    if (documentMarkdown.value === nextMarkdown) {
-      return;
-    }
-    pendingDocumentMarkdownFromSteps = nextMarkdown;
-    documentMarkdown.value = nextMarkdown;
-  };
-
-  const applyExternalMarkdownChange = async (nextMarkdown, { focusIndex = null } = {}) => {
-    const normalized = updateMarkdown(nextMarkdown);
-    const targetSteps = Number.isFinite(focusIndex) ? parseMarkdownToSteps(normalized) : null;
-    await nextTick();
-    if (Number.isFinite(focusIndex)) {
-      const safeIndex = clamp(
-        Number(focusIndex) || 0,
-        0,
-        Math.max(0, (targetSteps?.length || steps.value.length) - 1)
-      );
-      currentId.value = targetSteps?.[safeIndex]?.id ?? steps.value[safeIndex]?.id ?? steps.value[0]?.id ?? 1;
-      if (isEditMode.value) {
-        await focusStepInEditMode(safeIndex);
-      }
-    }
-  };
-
-  const syncStepsFromDocumentMarkdown = (rawMarkdown, preserveIndex = currentStepIndex.value) => {
-    const parsed = parseMarkdownToSteps(rawMarkdown);
-    const targetIndex = clamp(Number(preserveIndex) || 0, 0, Math.max(0, parsed.length - 1));
-    pendingStepsFromDocumentMarkdown = true;
-    steps.value = parsed;
-    currentId.value = parsed[targetIndex]?.id ?? parsed[0]?.id ?? 1;
   };
 
   const writeActiveMarkdownNow = async (
@@ -322,7 +337,7 @@ export const useMarkdownDocument = ({
       const errorMessage = String(error?.message || error || "unknown_error");
       saveStatus.value = "error";
       lastSaveError.value = errorMessage;
-      showToast(`保存 Markdown 失败: ${errorMessage}`);
+      showToast(`Save markdown failed: ${errorMessage}`);
       return false;
     }
   };
@@ -379,6 +394,132 @@ export const useMarkdownDocument = ({
     await flushPendingMarkdownSave(currentRelPath);
   };
 
+  const applyExternalMarkdownChange = async (nextMarkdown, { focusIndex = null, focusEditor = true } = {}) => {
+    const normalized = updateMarkdown(nextMarkdown);
+    const targetSteps = Number.isFinite(focusIndex) ? parseMarkdownToSteps(normalized) : null;
+    await nextTick();
+    if (!Number.isFinite(focusIndex)) {
+      return;
+    }
+    const safeIndex = clamp(
+      Number(focusIndex) || 0,
+      0,
+      Math.max(0, (targetSteps?.length || steps.value.length) - 1)
+    );
+    currentId.value = targetSteps?.[safeIndex]?.id ?? steps.value[safeIndex]?.id ?? steps.value[0]?.id ?? 1;
+    if (focusEditor && isEditMode.value) {
+      await focusStepInEditMode(safeIndex);
+    }
+  };
+
+  const addStep = async () => {
+    const model = collectHeadingSections(documentMarkdown.value);
+    const sections = model.sections.map((section) => ({
+      title: section.title,
+      content: section.content
+    }));
+
+    if (!sections.length) {
+      const insertTitle = defaultStepTitle(0);
+      const base = trimOuterBlankLines(model.text);
+      const nextMarkdown = base ? `${base}\n\n# ${insertTitle}\n` : `# ${insertTitle}\n`;
+      await applyExternalMarkdownChange(nextMarkdown, { focusIndex: 0 });
+      return;
+    }
+
+    const insertIndex = clamp(currentStepIndex.value + 1, 0, sections.length);
+    sections.splice(insertIndex, 0, {
+      title: defaultStepTitle(insertIndex),
+      content: ""
+    });
+    const nextMarkdown = serializeHeadingSections({
+      prologue: model.prologue,
+      sections
+    });
+    await applyExternalMarkdownChange(nextMarkdown, { focusIndex: insertIndex });
+  };
+
+  const removeStep = async () => {
+    const model = collectHeadingSections(documentMarkdown.value);
+    if (!model.sections.length) {
+      await applyExternalMarkdownChange("", { focusIndex: 0 });
+      return;
+    }
+
+    const nextSections = model.sections.map((section) => ({
+      title: section.title,
+      content: section.content
+    }));
+    const idx = clamp(currentStepIndex.value, 0, Math.max(0, nextSections.length - 1));
+    nextSections.splice(idx, 1);
+
+    const nextMarkdown = serializeHeadingSections({
+      prologue: model.prologue,
+      sections: nextSections
+    });
+    const nextIndex = Math.max(0, idx - 1);
+    await applyExternalMarkdownChange(nextMarkdown, { focusIndex: nextIndex });
+  };
+
+  const renameStepTitle = async (index, nextTitle) => {
+    const model = collectHeadingSections(documentMarkdown.value);
+    if (!model.sections.length) {
+      return false;
+    }
+
+    const safeIndex = clamp(Number(index) || 0, 0, Math.max(0, model.sections.length - 1));
+    const normalizedTitle = trimClosingHeadingHashes(nextTitle || "");
+
+    const nextSections = model.sections.map((section) => ({
+      title: section.title,
+      content: section.content
+    }));
+    if (nextSections[safeIndex]?.title === normalizedTitle) {
+      return false;
+    }
+    nextSections[safeIndex].title = normalizedTitle;
+
+    const nextMarkdown = serializeHeadingSections({
+      prologue: model.prologue,
+      sections: nextSections
+    });
+    await applyExternalMarkdownChange(nextMarkdown, { focusIndex: safeIndex, focusEditor: false });
+    return true;
+  };
+
+  const moveStep = async (fromIndexInput, toIndexInput) => {
+    const model = collectHeadingSections(documentMarkdown.value);
+    const count = model.sections.length;
+    if (count <= 1) {
+      return false;
+    }
+
+    const fromIndex = clamp(Number(fromIndexInput) || 0, 0, count - 1);
+    const toIndex = clamp(Number(toIndexInput) || 0, 0, count - 1);
+    if (fromIndex === toIndex) {
+      return false;
+    }
+
+    const nextSections = model.sections.map((section) => ({
+      title: section.title,
+      content: section.content
+    }));
+    const [moved] = nextSections.splice(fromIndex, 1);
+    nextSections.splice(toIndex, 0, moved);
+
+    const nextMarkdown = serializeHeadingSections({
+      prologue: model.prologue,
+      sections: nextSections
+    });
+    await applyExternalMarkdownChange(nextMarkdown, { focusIndex: toIndex, focusEditor: false });
+    return true;
+  };
+
+  const syncDocumentMarkdownFromSteps = (sourceSteps = steps.value) => {
+    const nextMarkdown = serializeStepsToMarkdown(sourceSteps);
+    updateMarkdown(nextMarkdown);
+  };
+
   const loadStepsFromMarkdownFile = async (relPath, showSuccessToast = false) => {
     if (!isDesktopStorage || !canWorkspaceFileIO) {
       return;
@@ -389,8 +530,6 @@ export const useMarkdownDocument = ({
     }
     await persistActiveMarkdownBeforeSwitch(targetRelPath);
     markdownHydrating.value = true;
-    pendingDocumentMarkdownFromSteps = null;
-    pendingStepsFromDocumentMarkdown = false;
     try {
       const result = await desktopDataBridge.readWorkspaceFile({
         relPath: targetRelPath
@@ -399,26 +538,23 @@ export const useMarkdownDocument = ({
         if (result?.error === "workspace_file_too_large") {
           const actual = formatBytes(result?.size);
           const limit = formatBytes(result?.limitBytes || MAX_MARKDOWN_FILE_BYTES);
-          showToast(`Markdown 文件过大，已跳过: ${targetRelPath} (${actual} > ${limit})`);
+          showToast(`Markdown file too large, skipped: ${targetRelPath} (${actual} > ${limit})`);
           return;
         }
         throw new Error(String(result?.error || "read_workspace_file_failed"));
       }
       if (isMarkdownFileTooLarge(result?.size) || String(result.content || "").length > MAX_MARKDOWN_FILE_BYTES) {
-        showToast(`Markdown 文件过大，已跳过: ${targetRelPath}`);
+        showToast(`Markdown file too large, skipped: ${targetRelPath}`);
         return;
       }
       const rawMarkdown = normalizeMarkdownText(result.content || "");
-      const parsed = parseMarkdownToSteps(rawMarkdown);
       loadMarkdown(rawMarkdown, { markAsSaved: true, relPath: targetRelPath });
-      steps.value = parsed;
-      currentId.value = parsed[0]?.id ?? 1;
       activeMarkdownRelPath.value = targetRelPath;
       if (showSuccessToast) {
-        showToast(`已载入 Markdown: ${targetRelPath}`);
+        showToast(`Markdown loaded: ${targetRelPath}`);
       }
     } catch (error) {
-      showToast(`载入 Markdown 失败: ${String(error?.message || error || "unknown_error")}`);
+      showToast(`Load markdown failed: ${String(error?.message || error || "unknown_error")}`);
     } finally {
       markdownHydrating.value = false;
     }
@@ -432,8 +568,6 @@ export const useMarkdownDocument = ({
         lastSavedMarkdownByPath.delete(previousRelPath);
       }
     }
-    pendingStepsFromDocumentMarkdown = false;
-    pendingDocumentMarkdownFromSteps = "";
     documentMarkdown.value = "";
     steps.value = createBlankSteps();
     currentId.value = steps.value[0]?.id ?? 1;
@@ -449,82 +583,19 @@ export const useMarkdownDocument = ({
     documentMarkdown.value = `${current}${suffix}![image](${safeUrl})\n`;
   };
 
-  const addStep = async () => {
-    const sourceMarkdown = documentMarkdown.value;
-    const list = parseMarkdownToSteps(sourceMarkdown);
-    if (!list.length || (isSingleBlankStepList(list) && !hasNonWhitespaceMarkdown(sourceMarkdown))) {
-      await applyExternalMarkdownChange(`# ${defaultStepTitle(0)}\n`, { focusIndex: 0 });
-      return;
-    }
-
-    const insertIndex = clamp(currentStepIndex.value + 1, 0, list.length);
-    const nextSteps = list.map((step) => ({ ...step }));
-    nextSteps.splice(insertIndex, 0, {
-      id: 0,
-      title: defaultStepTitle(insertIndex),
-      subtitle: "",
-      content: ""
-    });
-
-    const nextMarkdown = serializeStepsToMarkdown(nextSteps);
-    const nextParsed = parseMarkdownToSteps(nextMarkdown);
-    if (nextParsed.length <= list.length) {
-      const forcedMarkdown = appendHeadingStep(sourceMarkdown, defaultStepTitle(Math.max(1, list.length)));
-      const forcedParsed = parseMarkdownToSteps(forcedMarkdown);
-      const forcedFocus = Math.max(0, forcedParsed.length - 1);
-      await applyExternalMarkdownChange(forcedMarkdown, { focusIndex: forcedFocus });
-      return;
-    }
-
-    await applyExternalMarkdownChange(nextMarkdown, { focusIndex: insertIndex });
-  };
-
-  const removeStep = async () => {
-    const list = parseMarkdownToSteps(documentMarkdown.value);
-    if (!list.length || isSingleBlankStepList(list)) {
-      await applyExternalMarkdownChange("", { focusIndex: 0 });
-      return;
-    }
-    const idx = clamp(currentStepIndex.value, 0, Math.max(0, list.length - 1));
-    if (list.length === 1) {
-      await applyExternalMarkdownChange("", { focusIndex: 0 });
-      return;
-    }
-    const nextSteps = list.map((step) => ({ ...step }));
-    nextSteps.splice(idx, 1);
-    const nextIndex = Math.max(0, idx - 1);
-    await applyExternalMarkdownChange(serializeStepsToMarkdown(nextSteps), { focusIndex: nextIndex });
-  };
-
   documentMarkdown.value = serializeStepsToMarkdown(steps.value);
+  syncStepsFromDocumentMarkdown(documentMarkdown.value, 0);
 
   watch(documentMarkdown, (value) => {
     if (markdownHydrating.value) {
       return;
     }
-    if (pendingDocumentMarkdownFromSteps !== null && value === pendingDocumentMarkdownFromSteps) {
-      pendingDocumentMarkdownFromSteps = null;
-      return;
-    }
-    pendingDocumentMarkdownFromSteps = null;
     syncStepsFromDocumentMarkdown(value);
     if (!activeMarkdownRelPath.value || !isMarkdownDirty()) {
       return;
     }
     scheduleActiveMarkdownSave();
   });
-
-  watch(steps, () => {
-    if (pendingStepsFromDocumentMarkdown) {
-      pendingStepsFromDocumentMarkdown = false;
-    } else {
-      syncDocumentMarkdownFromSteps();
-    }
-    if (!activeMarkdownRelPath.value || markdownHydrating.value || !isMarkdownDirty()) {
-      return;
-    }
-    scheduleActiveMarkdownSave();
-  }, { deep: true });
 
   watch(activeMarkdownRelPath, () => {
     clearScheduledMarkdownSave();
@@ -541,33 +612,37 @@ export const useMarkdownDocument = ({
 
   return {
     activeMarkdownRelPath,
+    addStep,
     appendMarkdownImage,
     clearScheduledMarkdownSave,
     documentMarkdown,
     extractMarkdownSections,
     flushPendingMarkdownSave,
     formatBytes,
+    isMarkdownDirty,
     isMarkdownFileName,
     isMarkdownFileTooLarge,
-    isMarkdownDirty,
     isSingleBlankStepList,
     lastSaveError,
     lastSavedAt,
     loadMarkdown,
     loadStepsFromMarkdownFile,
     markdownHydrating,
+    moveStep,
     parseMarkdownToSteps,
     persistActiveMarkdownBeforeSwitch,
     removeStep,
+    renameStepTitle,
     resetBlankEditorState,
     saveMarkdown,
     saveStatus,
+    serializeHeadingSections,
     serializeStepsToMarkdown,
     stepDisplayTitle,
     stepPreviewText,
     syncDocumentMarkdownFromSteps,
     updateMarkdown,
-    writeActiveMarkdownNow,
-    addStep
+    writeActiveMarkdownNow
   };
 };
+

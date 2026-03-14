@@ -13,35 +13,35 @@ test("semantic parsing is configured with zero debounce to reduce transient styl
   assert.match(app, /parseDelayMs:\s*0/);
 });
 
-test("addStep treats non-empty markdown as appendable even when parsed as a single blank step", () => {
+test("markdown sidebar logic is rebuilt around H1 sections", () => {
   const markdownDoc = readSrc("composables/useMarkdownDocument.js");
 
-  assert.match(markdownDoc, /hasNonWhitespaceMarkdown/);
-  assert.match(
-    markdownDoc,
-    /isSingleBlankStepList\(list\)\s*&&\s*!hasNonWhitespaceMarkdown\(sourceMarkdown\)/
-  );
+  assert.match(markdownDoc, /HEADING_LINE_PATTERN/);
+  assert.match(markdownDoc, /collectHeadingSections/);
+  assert.match(markdownDoc, /serializeHeadingSections/);
+  assert.match(markdownDoc, /sectionsToSteps/);
+  assert.match(markdownDoc, /const addStep = async/);
+  assert.match(markdownDoc, /const removeStep = async/);
+  assert.match(markdownDoc, /const renameStepTitle = async/);
+  assert.match(markdownDoc, /const moveStep = async/);
+  assert.match(markdownDoc, /sections\.splice\(insertIndex,\s*0/);
 });
 
-test("addStep has a forced append fallback when step count does not grow", () => {
-  const markdownDoc = readSrc("composables/useMarkdownDocument.js");
-
-  assert.match(markdownDoc, /appendHeadingStep/);
-  assert.match(markdownDoc, /nextParsed\.length <= list\.length/);
-  assert.match(markdownDoc, /const forcedMarkdown = appendHeadingStep/);
-  assert.match(markdownDoc, /await applyExternalMarkdownChange\(forcedMarkdown/);
-});
-
-test("external markdown updates derive target focus id from parsed next steps", () => {
+test("external markdown updates still derive target focus id from parsed next steps", () => {
   const markdownDoc = readSrc("composables/useMarkdownDocument.js");
 
   assert.match(markdownDoc, /const targetSteps = Number\.isFinite\(focusIndex\) \? parseMarkdownToSteps\(normalized\) : null/);
   assert.match(markdownDoc, /currentId\.value = targetSteps\?\.\[safeIndex\]\?\.id/);
 });
 
-test("pending markdown-sync flag is not cleared by a standalone currentId watcher", () => {
-  const markdownDoc = readSrc("composables/useMarkdownDocument.js");
-  assert.doesNotMatch(markdownDoc, /watch\(currentId/);
+test("app sidebar uses explicit handlers for title editing and drag reorder", () => {
+  const app = readSrc("App.vue");
+  assert.match(app, /handleActiveStepTitleInput/);
+  assert.match(app, /handleStepTitleInput/);
+  assert.match(app, /onStepDragStart/);
+  assert.match(app, /onStepDrop/);
+  assert.match(app, /renameStepTitle/);
+  assert.match(app, /moveStep/);
 });
 
 test("presentation hides markdown syntax by default and keeps active token source visible", () => {

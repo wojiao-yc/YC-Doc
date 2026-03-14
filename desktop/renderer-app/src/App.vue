@@ -662,8 +662,9 @@
 
         <div v-if="isEditMode && !isInspectorSidebarCollapsed" class="mt-3 space-y-2">
           <input
-            v-model="activeStep.title"
+            :value="activeStep?.title || ''"
             type="text"
+            @input="handleActiveStepTitleInput"
             class="w-full h-9 rounded-lg border px-3 text-sm font-medium focus:outline-none"
             :class="isDark ? 'border-slate-700 bg-slate-900 text-slate-100 focus:border-orange-400' : 'border-gray-200 bg-white text-gray-800 focus:border-orange-500'"
             placeholder="步骤标题"
@@ -681,9 +682,10 @@
           @click="handleStepSelection(step.id, index)"
           :title="isInspectorSidebarCollapsed ? stepDisplayTitle(step, index) : ''"
           :draggable="isEditMode"
-          @dragstart="onDragStart($event, index, isEditMode)"
-          @dragover="onDragOver($event, isEditMode)"
-          @drop="onDrop($event, index, isEditMode)"
+          @dragstart="onStepDragStart($event, index)"
+          @dragend="onStepDragEnd"
+          @dragover="onStepDragOver($event)"
+          @drop="onStepDrop($event, index)"
           class="nav-step-item px-4 py-3.5 flex items-start gap-3 cursor-pointer transition-all border-l-4"
           :class="[
             currentId === step.id
@@ -706,9 +708,10 @@
           <div v-if="!isInspectorSidebarCollapsed" class="flex-1 min-w-0">
             <div v-if="isEditMode" class="space-y-1">
               <input
-                v-model="step.title"
+                :value="step.title"
                 type="text"
                 @click.stop
+                @input="handleStepTitleInput(index, $event)"
                 class="w-full text-sm font-medium bg-transparent border-b border-transparent hover:border-gray-300 focus:border-orange-500 focus:outline-none px-1 py-0.5"
                 :class="isDark ? 'text-slate-100 hover:border-slate-700' : 'text-gray-800'"
                 placeholder="标题"
@@ -869,6 +872,7 @@ const mainRef = ref(null);
 const contentScrollRef = ref(null);
 const markdownEditorRef = ref(null);
 const editorSelection = ref({ anchor: 0, head: 0 });
+const draggedStepIndex = ref(-1);
 const terminalViewportRef = ref(null);
 const terminalSplitWrapRef = ref(null);
 const currentContentReadProgress = ref(0);
@@ -1004,10 +1008,7 @@ const {
   isFirstStep,
   isLastStep,
   next: baseNext,
-  prev: basePrev,
-  onDragStart,
-  onDragOver,
-  onDrop
+  prev: basePrev
 } = useSteps(showToast);
 
 const {
@@ -1057,8 +1058,10 @@ const {
   isSingleBlankStepList,
   loadStepsFromMarkdownFile,
   markdownHydrating,
+  moveStep,
   parseMarkdownToSteps,
   persistActiveMarkdownBeforeSwitch,
+  renameStepTitle,
   removeStep,
   resetBlankEditorState,
   saveMarkdown,
@@ -1243,6 +1246,55 @@ const handleManualSaveCurrentMarkdown = async () => {
     showToast("无需保存，内容已是最新");
   }
 };
+
+const handleActiveStepTitleInput = (event) => {
+  const nextTitle = String(event?.target?.value || "");
+  void renameStepTitle(currentStepIndex.value, nextTitle);
+};
+
+const handleStepTitleInput = (index, event) => {
+  const nextTitle = String(event?.target?.value || "");
+  void renameStepTitle(index, nextTitle);
+};
+
+const onStepDragStart = (event, index) => {
+  if (!isEditMode.value) {
+    return;
+  }
+  draggedStepIndex.value = Number(index);
+  if (event?.dataTransfer) {
+    event.dataTransfer.effectAllowed = "move";
+  }
+};
+
+const onStepDragOver = (event) => {
+  if (!isEditMode.value) {
+    return;
+  }
+  event.preventDefault();
+  if (event?.dataTransfer) {
+    event.dataTransfer.dropEffect = "move";
+  }
+};
+
+const onStepDragEnd = () => {
+  draggedStepIndex.value = -1;
+};
+
+const onStepDrop = async (event, targetIndex) => {
+  if (!isEditMode.value) {
+    return;
+  }
+  event.preventDefault();
+  const fromIndex = Number(draggedStepIndex.value);
+  const toIndex = Number(targetIndex);
+  draggedStepIndex.value = -1;
+  if (!Number.isFinite(fromIndex) || !Number.isFinite(toIndex) || fromIndex < 0 || toIndex < 0) {
+    return;
+  }
+  await moveStep(fromIndex, toIndex);
+};
+
 const handleStepSelection = async (stepId, index) => {
   currentId.value = stepId;
   if (!isEditMode.value) {
