@@ -31,6 +31,48 @@ test("math block parser only starts from valid block fences or single-line $$...
   assert.equal(fenced[1]?.type, "paragraph");
 });
 
+test("heading and thematic break ranges do not absorb trailing blank lines", () => {
+  const markdown = ["# Title", "", "", "---", "", "", "tail"].join("\n");
+  const blocks = parseMarkdownToBlocks(markdown);
+  const heading = blocks.find((block) => block.type === "heading");
+  const hr = blocks.find((block) => block.type === "thematic_break");
+
+  assert.equal(markdown.slice(heading?.from || 0, heading?.to || 0), "# Title");
+  assert.equal(markdown.slice(hr?.from || 0, hr?.to || 0), "---");
+  assert.equal(heading?.lineStart, 1);
+  assert.equal(heading?.lineEnd, 1);
+  assert.equal(hr?.lineStart, 4);
+  assert.equal(hr?.lineEnd, 4);
+});
+
+test("other block syntaxes keep stable line spans around separator blank lines", () => {
+  const markdown = [
+    "> quote",
+    "",
+    "- item",
+    "",
+    "```js",
+    "console.log(1)",
+    "```",
+    "",
+    "tail"
+  ].join("\n");
+  const blocks = parseMarkdownToBlocks(markdown);
+  const quote = blocks.find((block) => block.type === "blockquote");
+  const list = blocks.find((block) => block.type === "bullet_list_item");
+  const code = blocks.find((block) => block.type === "code_block");
+  const tail = blocks.find((block) => block.type === "paragraph" && block.rawText.trim() === "tail");
+
+  assert.equal(quote?.lineStart, 1);
+  assert.equal(quote?.lineEnd, 1);
+  assert.equal(list?.lineStart, 3);
+  assert.equal(list?.lineEnd, 3);
+  assert.equal(code?.lineStart, 5);
+  assert.equal(code?.lineEnd, 7);
+  assert.equal(tail?.lineStart, 9);
+  assert.equal(tail?.lineEnd, 9);
+});
+
 test("findBlockContextByPos returns no current block for inter-block gaps", () => {
   const blocks = parseMarkdownToBlocks("A\n\nB");
   const gapPos = 2;

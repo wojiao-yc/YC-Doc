@@ -13,6 +13,12 @@ const createBlankStep = (id = 1) => ({
 const createBlankSteps = () => [createBlankStep(1)];
 const normalizeMarkdownText = (value) => String(value || "").replace(/\r\n/g, "\n");
 const trimOuterBlankLines = (value) => String(value || "").replace(/^\n+/, "").replace(/\n+$/, "");
+const hasNonWhitespaceMarkdown = (value) => trimOuterBlankLines(normalizeMarkdownText(value)).length > 0;
+const appendHeadingStep = (markdown, title) => {
+  const base = trimOuterBlankLines(normalizeMarkdownText(markdown));
+  const safeTitle = String(title || "").trim() || "步骤";
+  return base ? `${base}\n\n# ${safeTitle}\n` : `# ${safeTitle}\n`;
+};
 const isBlankStep = (step) =>
   !String(step?.title || "").trim()
   && !String(step?.subtitle || "").trim()
@@ -261,11 +267,16 @@ export const useMarkdownDocument = ({
   };
 
   const applyExternalMarkdownChange = async (nextMarkdown, { focusIndex = null } = {}) => {
-    updateMarkdown(nextMarkdown);
+    const normalized = updateMarkdown(nextMarkdown);
+    const targetSteps = Number.isFinite(focusIndex) ? parseMarkdownToSteps(normalized) : null;
     await nextTick();
     if (Number.isFinite(focusIndex)) {
-      const safeIndex = clamp(Number(focusIndex) || 0, 0, Math.max(0, steps.value.length - 1));
-      currentId.value = steps.value[safeIndex]?.id ?? steps.value[0]?.id ?? 1;
+      const safeIndex = clamp(
+        Number(focusIndex) || 0,
+        0,
+        Math.max(0, (targetSteps?.length || steps.value.length) - 1)
+      );
+      currentId.value = targetSteps?.[safeIndex]?.id ?? steps.value[safeIndex]?.id ?? steps.value[0]?.id ?? 1;
       if (isEditMode.value) {
         await focusStepInEditMode(safeIndex);
       }
@@ -439,8 +450,9 @@ export const useMarkdownDocument = ({
   };
 
   const addStep = async () => {
-    const list = parseMarkdownToSteps(documentMarkdown.value);
-    if (!list.length || isSingleBlankStepList(list)) {
+    const sourceMarkdown = documentMarkdown.value;
+    const list = parseMarkdownToSteps(sourceMarkdown);
+    if (!list.length || (isSingleBlankStepList(list) && !hasNonWhitespaceMarkdown(sourceMarkdown))) {
       await applyExternalMarkdownChange(`# ${defaultStepTitle(0)}\n`, { focusIndex: 0 });
       return;
     }
@@ -453,7 +465,18 @@ export const useMarkdownDocument = ({
       subtitle: "",
       content: ""
     });
-    await applyExternalMarkdownChange(serializeStepsToMarkdown(nextSteps), { focusIndex: insertIndex });
+
+    const nextMarkdown = serializeStepsToMarkdown(nextSteps);
+    const nextParsed = parseMarkdownToSteps(nextMarkdown);
+    if (nextParsed.length <= list.length) {
+      const forcedMarkdown = appendHeadingStep(sourceMarkdown, defaultStepTitle(Math.max(1, list.length)));
+      const forcedParsed = parseMarkdownToSteps(forcedMarkdown);
+      const forcedFocus = Math.max(0, forcedParsed.length - 1);
+      await applyExternalMarkdownChange(forcedMarkdown, { focusIndex: forcedFocus });
+      return;
+    }
+
+    await applyExternalMarkdownChange(nextMarkdown, { focusIndex: insertIndex });
   };
 
   const removeStep = async () => {
@@ -502,12 +525,6 @@ export const useMarkdownDocument = ({
     }
     scheduleActiveMarkdownSave();
   }, { deep: true });
-
-  watch(currentId, () => {
-    if (pendingStepsFromDocumentMarkdown) {
-      pendingStepsFromDocumentMarkdown = false;
-    }
-  });
 
   watch(activeMarkdownRelPath, () => {
     clearScheduledMarkdownSave();

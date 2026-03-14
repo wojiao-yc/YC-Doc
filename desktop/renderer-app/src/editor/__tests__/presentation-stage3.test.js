@@ -66,6 +66,9 @@ test("editor wires presentation extension and accepts semantic snapshot input", 
   assert.match(presentation, /cm-list-level-/);
   assert.match(presentation, /inlineSegments/);
   assert.match(presentation, /Decoration\.mark/);
+  assert.match(presentation, /resolveRangeEndPosForLineLookup/);
+  assert.match(presentation, /sliceString/);
+  assert.match(presentation, /Trim visual-only trailing blank lines/);
 
   assert.match(shell, /presentationBlocks/);
   assert.match(shell, /currentBlockId/);

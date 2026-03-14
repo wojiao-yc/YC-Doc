@@ -1095,7 +1095,7 @@ const {
 } = useSemanticStore({
   markdownRef: documentMarkdown,
   selectionRef: editorSelection,
-  parseDelayMs: 70,
+  parseDelayMs: 0,
   currentBlockStrategy: "anchor"
 });
 

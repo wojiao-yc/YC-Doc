@@ -9,10 +9,50 @@ const safePosForLineLookup = (doc, pos) => {
   return Math.max(0, Math.min(length, Number(pos || 0)));
 };
 
+const charBefore = (doc, pos) => {
+  const safePos = safePosForLineLookup(doc, pos);
+  if (safePos <= 0) {
+    return "";
+  }
+  return doc.sliceString(safePos - 1, safePos);
+};
+
+const resolveRangeEndPosForLineLookup = (doc, fromPos, toBaseInput) => {
+  let to = safePosForLineLookup(doc, toBaseInput);
+  if (to <= fromPos) {
+    return fromPos;
+  }
+
+  // Trim visual-only trailing blank lines ("\n" + optional spaces/tabs) from line-class mapping.
+  while (to > fromPos) {
+    let cursor = to;
+    while (cursor > fromPos) {
+      const prevChar = charBefore(doc, cursor);
+      if (prevChar === " " || prevChar === "\t") {
+        cursor -= 1;
+        continue;
+      }
+      break;
+    }
+
+    const prevChar = charBefore(doc, cursor);
+    if (prevChar === "\n" || prevChar === "\r") {
+      to = Math.max(fromPos, cursor - 1);
+      continue;
+    }
+    break;
+  }
+
+  if (to <= fromPos) {
+    return fromPos;
+  }
+  return to - 1;
+};
+
 const resolveLineRange = (doc, block) => {
   const fromPos = safePosForLineLookup(doc, block.from);
   const toBase = Number(block.to || block.from);
-  const toPos = safePosForLineLookup(doc, Math.max(fromPos, toBase > fromPos ? toBase - 1 : toBase));
+  const toPos = resolveRangeEndPosForLineLookup(doc, fromPos, Math.max(fromPos, toBase));
   const fromLine = doc.lineAt(fromPos).number;
   const toLine = doc.lineAt(toPos).number;
   return { fromLine, toLine };

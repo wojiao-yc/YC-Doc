@@ -266,6 +266,14 @@ const parseParagraphLike = (raw) => {
   };
 };
 
+const trimTrailingBlankLinesInRange = (markdown, fromInput, toInput) => {
+  const from = Math.max(0, Math.min(markdown.length, Number(fromInput || 0)));
+  const to = Math.max(from, Math.min(markdown.length, Number(toInput || from)));
+  const raw = markdown.slice(from, to);
+  const trimmed = raw.replace(/(?:\n[ \t]*)+$/u, "");
+  return Math.max(from, from + trimmed.length);
+};
+
 const lexerTokens = (markdown) => {
   try {
     return marked.lexer(markdown, {
@@ -321,7 +329,8 @@ export const parseMarkdownToBlocks = (markdownInput) => {
     cursor = range.nextCursor;
 
     if (type === "heading") {
-      pushBlock(blocks, markdown, lineStarts, BLOCK_TYPES.HEADING, range.from, range.to, {
+      const trimmedTo = trimTrailingBlankLinesInRange(markdown, range.from, range.to);
+      pushBlock(blocks, markdown, lineStarts, BLOCK_TYPES.HEADING, range.from, trimmedTo, {
         level: Number(token.depth || 1),
         text: String(token.text || "")
       });
@@ -342,7 +351,8 @@ export const parseMarkdownToBlocks = (markdownInput) => {
     }
 
     if (type === "hr") {
-      pushBlock(blocks, markdown, lineStarts, BLOCK_TYPES.THEMATIC_BREAK, range.from, range.to, {});
+      const trimmedTo = trimTrailingBlankLinesInRange(markdown, range.from, range.to);
+      pushBlock(blocks, markdown, lineStarts, BLOCK_TYPES.THEMATIC_BREAK, range.from, trimmedTo, {});
       continue;
     }
 
