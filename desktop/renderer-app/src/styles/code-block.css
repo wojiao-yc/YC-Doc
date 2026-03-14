@@ -16,13 +16,12 @@
 .yc-editor-host .cm-line.cm-block-code-block.cm-block-start {
   border-top-left-radius: 10px;
   border-top-right-radius: 10px;
-  padding-top: 0.55rem;
-  margin-top: 0.42rem;
+  /* Keep spacing inside the line box to avoid CodeMirror cursor/coords drift from line margins. */
+  padding-top: 0.97rem;
 }
 
 .yc-editor-host .cm-line.cm-block-code-block.cm-block-end {
   border-bottom-left-radius: 10px;
   border-bottom-right-radius: 10px;
-  padding-bottom: 0.55rem;
-  margin-bottom: 0.5rem;
+  padding-bottom: 1.05rem;
 }
