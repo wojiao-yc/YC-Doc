@@ -10,6 +10,7 @@ import "./styles/blockquote.css";
 import "./styles/code-block.css";
 import "./styles/special-blocks.css";
 import "./styles/editor-theme.css";
+import "katex/dist/katex.min.css";
 import "xterm/css/xterm.css";
 import { registerSW } from "virtual:pwa-register";
 

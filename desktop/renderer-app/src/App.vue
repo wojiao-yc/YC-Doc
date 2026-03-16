@@ -848,6 +848,7 @@
 <script setup>
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { marked } from "marked";
+import katex from "katex";
 import { FitAddon } from "@xterm/addon-fit";
 import { Terminal as XTermTerminal } from "xterm";
 import ToastMessage from "./components/ToastMessage.vue";
@@ -858,6 +859,102 @@ import { useResizable } from "./composables/useResizable";
 import { useSteps } from "./composables/useSteps";
 import { useTerminal } from "./composables/useTerminal";
 import { useToast } from "./composables/useToast";
+
+// 渲染数学公式
+const renderMathFormula = (formula, displayMode) => {
+  try {
+    if (typeof katex?.renderToString === "function") {
+      return katex.renderToString(formula, {
+        displayMode: displayMode,
+        throwOnError: false,
+        errorColor: "#cc0000"
+      });
+    }
+    // 如果 katex 不可用，尝试动态 require
+    if (typeof require === "function") {
+      const katexRequired = require("katex");
+      if (katexRequired?.renderToString) {
+        return katexRequired.renderToString(formula, {
+          displayMode: displayMode,
+          throwOnError: false,
+          errorColor: "#cc0000"
+        });
+      }
+    }
+    // 回退：返回原始公式
+    return displayMode
+      ? `<div class="math-block">${formula}</div>`
+      : `<span class="math-inline">${formula}</span>`;
+  } catch (e) {
+    return displayMode
+      ? `<div class="math-block">${formula}</div>`
+      : `<span class="math-inline">${formula}</span>`;
+  }
+};
+
+const preprocessMathFormulas = (markdown) => {
+  if (!markdown || typeof markdown !== "string") {
+    return "";
+  }
+
+  let result = markdown;
+
+  // 处理 $$...$$ 块级公式（先处理块级再处理行内，避免冲突）
+  result = result.replace(/\$\$([\s\S]*?)\$\$/g, (match, formula) => {
+    const trimmedFormula = formula.trim();
+    if (!trimmedFormula) return match;
+    return `<div class="math-block">${renderMathFormula(trimmedFormula, true)}</div>`;
+  });
+
+  // 处理 $...$ 行内公式
+  result = result.replace(/\$([^$\n]+?)\$/g, (match, formula) => {
+    const trimmedFormula = formula.trim();
+    if (!trimmedFormula) return match;
+    return `<span class="math-inline">${renderMathFormula(trimmedFormula, false)}</span>`;
+  });
+
+  // 使用 marked 解析剩余的 markdown
+  const parsed = marked.parse(result, {
+    breaks: true,
+    gfm: true,
+    // 确保图片使用默认的渲染器
+    renderer: new marked.Renderer()
+  });
+
+  // 处理图片路径
+  let processedHtml = parsed;
+
+  // 处理 file:// 协议和本地路径
+  processedHtml = processedHtml.replace(/src="([^"]+)"/g, (match, src) => {
+    // 如果已经是 http/https 协议，不做处理
+    if (src.startsWith("http://") || src.startsWith("https://")) {
+      return match;
+    }
+    // 如果已经是 file:// 协议（正确格式 file:///），直接返回
+    if (src.startsWith("file:///") || src.startsWith("file://localhost/")) {
+      return match;
+    }
+    // 处理旧格式的 file:// 协议（如 file://C:/），转换为正确格式
+    if (src.startsWith("file://")) {
+      // file://C:/Users/... -> file:///C:/Users/...
+      return `src="file:///${src.slice(7)}"`;
+    }
+    // 处理 Windows 本地绝对路径（如 C:/、D:/ 或 /C:/、/D:/）
+    // 支持：C:/、/C:/、C:\、/C\ 等格式
+    if (/^\/?[A-Za-z]:[/\\]/.test(src)) {
+      // 移除开头的 /（如果存在）
+      let filePath = src.replace(/^\/+/, "");
+      // 转换反斜杠为正斜杠
+      filePath = filePath.replace(/\\/g, "/");
+      return `src="file:///${filePath}"`;
+    }
+    // Unix 绝对路径（如 /assets/img/...）和其他路径保持原样
+    return match;
+  });
+
+  // 确保图片标签有正确的类名（使用更可靠的正则表达式）
+  return processedHtml.replace(/<img\b/g, '<img class="md-image"');
+};
 
 const mode = ref("edit");
 const isDark = ref(false);
@@ -1024,11 +1121,17 @@ const adjustVisualEditorWidth = (delta) => {
 };
 
 const contentPaneKey = computed(() => (isEditMode.value ? mode.value : `${mode.value}:${currentId.value}`));
+
 const renderedMarkdown = computed(() => {
   if (isEditMode.value) {
     return "";
   }
-  return String(marked.parse(String(activeStep.value?.content || ""), { breaks: true, gfm: true }) || "");
+  const content = String(activeStep.value?.content || "");
+  try {
+    return preprocessMathFormulas(content);
+  } catch (e) {
+    return String(marked.parse(content, { breaks: true, gfm: true }) || "");
+  }
 });
 
 async function focusStepInEditMode(index) {

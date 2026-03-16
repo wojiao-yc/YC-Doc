@@ -49,12 +49,12 @@ const toLineRange = (markdown, lineStarts, fromInput, toInput) => {
   };
 };
 
-const findRawRange = (markdown, rawInput, cursorInput = 0, maxToInput = markdown.length) => {
+const findRawRange = (markdown, rawInput, cursorInput = 0, maxToInput = markdown.length, fallbackText = "") => {
   const raw = String(rawInput || "");
   const cursor = Math.max(0, Math.min(markdown.length, Number(cursorInput || 0)));
   const maxTo = Math.max(cursor, Math.min(markdown.length, Number(maxToInput || markdown.length)));
 
-  if (!raw) {
+  if (!raw && !fallbackText) {
     return {
       from: cursor,
       to: cursor,
@@ -62,23 +62,50 @@ const findRawRange = (markdown, rawInput, cursorInput = 0, maxToInput = markdown
     };
   }
 
-  let from = markdown.indexOf(raw, cursor);
-  if (from < 0 || from + raw.length > maxTo) {
-    const localFrom = markdown.slice(cursor, maxTo).indexOf(raw);
-    from = localFrom >= 0 ? cursor + localFrom : -1;
-  }
-  if (from < 0) {
-    from = markdown.indexOf(raw);
-  }
-  if (from < 0) {
-    from = cursor;
+  // 优先使用 token.raw 精确匹配
+  let from = -1;
+  if (raw) {
+    from = markdown.indexOf(raw, cursor);
+    if (from >= 0 && from + raw.length <= maxTo) {
+      const to = Math.max(from, Math.min(markdown.length, from + raw.length));
+      return {
+        from,
+        to,
+        nextCursor: Math.max(cursor, to)
+      };
+    }
   }
 
-  const to = Math.max(from, Math.min(markdown.length, from + raw.length));
+  // 如果精确匹配失败，尝试使用 fallbackText（token.text）进行匹配
+  const searchText = raw || fallbackText;
+  if (searchText) {
+    from = markdown.indexOf(searchText, cursor);
+    if (from >= 0 && from + searchText.length <= maxTo) {
+      const to = Math.max(from, Math.min(markdown.length, from + searchText.length));
+      return {
+        from,
+        to,
+        nextCursor: Math.max(cursor, to)
+      };
+    }
+
+    // 在整个文档范围内查找（不限制 cursor）
+    from = markdown.indexOf(searchText);
+    if (from >= 0) {
+      const to = Math.max(from, Math.min(markdown.length, from + searchText.length));
+      return {
+        from,
+        to,
+        nextCursor: Math.max(cursor, to)
+      };
+    }
+  }
+
+  // 如果都找不到，返回 cursor 位置
   return {
-    from,
-    to,
-    nextCursor: Math.max(cursor, to)
+    from: cursor,
+    to: cursor,
+    nextCursor: cursor
   };
 };
 
@@ -308,15 +335,16 @@ export const parseMarkdownToBlocks = (markdownInput) => {
 
     const type = String(token.type || "");
     const raw = String(token.raw || "");
+    const text = String(token.text || "");
 
     if (type === "space") {
-      const range = findRawRange(markdown, raw, cursor);
+      const range = findRawRange(markdown, raw, cursor, markdown.length, text);
       cursor = range.nextCursor;
       continue;
     }
 
     if (type === "list") {
-      const listRange = findRawRange(markdown, raw, cursor);
+      const listRange = findRawRange(markdown, raw, cursor, markdown.length, text);
       cursor = listRange.nextCursor;
       const listItems = extractListBlocksFromRange(markdown, listRange.from, listRange.to);
       for (const item of listItems) {
@@ -325,7 +353,7 @@ export const parseMarkdownToBlocks = (markdownInput) => {
       continue;
     }
 
-    const range = findRawRange(markdown, raw || token.text || "", cursor);
+    const range = findRawRange(markdown, raw || text, cursor, markdown.length, text);
     cursor = range.nextCursor;
 
     if (type === "heading") {

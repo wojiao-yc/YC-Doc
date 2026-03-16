@@ -14,6 +14,9 @@ export default defineConfig({
       allow: [path.resolve(__dirname, "..")]
     }
   },
+  optimizeDeps: {
+    include: ["katex"]
+  },
   plugins: [
     vue(),
     VitePWA({
