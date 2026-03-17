@@ -124,82 +124,6 @@ const remapInlineTokens = (tokens, changes, nextDocLength) =>
     })
     .filter((token) => token.rawTo > token.rawFrom);
 
-const splitMarkdownTableRow = (lineInput) => {
-  let source = String(lineInput || "").trim();
-  if (source.startsWith("|")) {
-    source = source.slice(1);
-  }
-  if (source.endsWith("|")) {
-    source = source.slice(0, -1);
-  }
-
-  const cells = [];
-  let cell = "";
-  let escaped = false;
-
-  for (const char of source) {
-    if (escaped) {
-      cell += char;
-      escaped = false;
-      continue;
-    }
-    if (char === "\\") {
-      escaped = true;
-      continue;
-    }
-    if (char === "|") {
-      cells.push(cell.trim());
-      cell = "";
-      continue;
-    }
-    cell += char;
-  }
-  cells.push(cell.trim());
-  return cells;
-};
-
-const isMarkdownTableDelimiterCell = (cellInput) => /^:?-{3,}:?$/.test(String(cellInput || "").trim());
-
-const parseMarkdownTable = (rawTextInput) => {
-  const lines = String(rawTextInput || "")
-    .split("\n")
-    .map((line) => String(line || "").trim())
-    .filter((line) => line.length > 0);
-
-  if (lines.length < 2) {
-    return null;
-  }
-
-  const header = splitMarkdownTableRow(lines[0]);
-  const delimiter = splitMarkdownTableRow(lines[1]);
-  if (!delimiter.length || delimiter.some((cell) => !isMarkdownTableDelimiterCell(cell))) {
-    return null;
-  }
-
-  const rows = lines.slice(2).map((line) => splitMarkdownTableRow(line));
-  const columnCount = Math.max(
-    header.length,
-    rows.reduce((max, row) => Math.max(max, row.length), 0)
-  );
-
-  if (columnCount <= 0) {
-    return null;
-  }
-
-  const normalizeRow = (row) => {
-    const next = [...row];
-    while (next.length < columnCount) {
-      next.push("");
-    }
-    return next.slice(0, columnCount);
-  };
-
-  return {
-    header: normalizeRow(header),
-    rows: rows.map((row) => normalizeRow(row))
-  };
-};
-
 class ListPrefixWidget extends WidgetType {
   constructor({ blockType = "", text = "", checked = false } = {}) {
     super();
@@ -223,66 +147,6 @@ class ListPrefixWidget extends WidgetType {
     span.textContent = this.text;
     span.setAttribute("aria-hidden", "true");
     return span;
-  }
-
-  ignoreEvent() {
-    return false;
-  }
-}
-
-class MarkdownTableWidget extends WidgetType {
-  constructor(rawText = "", from = 0) {
-    super();
-    this.rawText = String(rawText || "");
-    this.from = Number(from || 0);
-  }
-
-  eq(other) {
-    return (
-      other instanceof MarkdownTableWidget
-      && other.rawText === this.rawText
-      && other.from === this.from
-    );
-  }
-
-  toDOM() {
-    const wrap = document.createElement("div");
-    wrap.className = "cm-table-widget";
-    wrap.setAttribute("data-table-from", String(this.from));
-
-    const parsed = parseMarkdownTable(this.rawText);
-    if (!parsed) {
-      const fallback = document.createElement("div");
-      fallback.className = "cm-table-widget-fallback";
-      fallback.textContent = "Table";
-      wrap.appendChild(fallback);
-      return wrap;
-    }
-
-    const table = document.createElement("table");
-    const thead = document.createElement("thead");
-    const headRow = document.createElement("tr");
-    for (const cell of parsed.header) {
-      const th = document.createElement("th");
-      th.textContent = cell;
-      headRow.appendChild(th);
-    }
-    thead.appendChild(headRow);
-    table.appendChild(thead);
-
-    const tbody = document.createElement("tbody");
-    for (const row of parsed.rows) {
-      const tr = document.createElement("tr");
-      for (const cell of row) {
-        const td = document.createElement("td");
-        td.textContent = cell;
-        tr.appendChild(td);
-      }
-      tbody.appendChild(tr);
-    }
-    table.appendChild(tbody);
-    wrap.appendChild(table);
-    return wrap;
   }
 
   ignoreEvent() {
@@ -552,20 +416,6 @@ const addBlockquotePrefixDecorationsForBlock = (decorations, doc, block, docLeng
   }
 };
 
-const addTablePreviewDecorationForBlock = (decorations, block, docLength) => {
-  const from = clampPos(block?.from, docLength);
-  const to = clampPos(block?.to, docLength);
-  if (to <= from) {
-    return;
-  }
-  decorations.push(
-    Decoration.replace({
-      block: true,
-      widget: new MarkdownTableWidget(String(block?.rawText || ""), from)
-    }).range(from, to)
-  );
-};
-
 const isTokenRelatedToActiveToken = (token, activeToken) => {
   if (!activeToken) {
     return false;
@@ -666,8 +516,6 @@ const buildDecorations = (view, blocks, currentBlockId) => {
         addBlockquotePrefixDecorationsForBlock(decorations, doc, block, docLength);
       } else if (blockType === "thematic_break") {
         addHiddenSyntaxRangeDecoration(decorations, blockFrom, blockTo);
-      } else if (blockType === "table") {
-        addTablePreviewDecorationForBlock(decorations, block, docLength);
       }
     }
 
@@ -766,30 +614,6 @@ export const presentationExtensions = [
     }
   }),
   ViewPlugin.fromClass(BlockPresentationPlugin, {
-    decorations: (plugin) => plugin.decorations,
-    eventHandlers: {
-      mousedown: (event, view) => {
-        const target = event.target;
-        if (!(target instanceof Element)) {
-          return false;
-        }
-        const tableRoot = target.closest(".cm-table-widget");
-        if (!tableRoot) {
-          return false;
-        }
-        const from = Number(tableRoot.getAttribute("data-table-from") || 0);
-        if (!Number.isFinite(from)) {
-          return false;
-        }
-        view.dispatch({
-          selection: {
-            anchor: Math.max(0, Math.min(view.state.doc.length, from))
-          },
-          scrollIntoView: true
-        });
-        view.focus();
-        return true;
-      }
-    }
+    decorations: (plugin) => plugin.decorations
   })
 ];
