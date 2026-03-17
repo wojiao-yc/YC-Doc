@@ -154,6 +154,97 @@ class ListPrefixWidget extends WidgetType {
   }
 }
 
+const normalizeImageSrc = (src) => {
+  const srcStr = String(src || "");
+  if (!srcStr) {
+    return "";
+  }
+  // 如果已经是 http/https 协议，不做处理
+  if (srcStr.startsWith("http://") || srcStr.startsWith("https://")) {
+    return srcStr;
+  }
+  // 如果已经是 file:// 协议（正确格式 file:///），直接返回
+  if (srcStr.startsWith("file:///") || srcStr.startsWith("file://localhost/")) {
+    return srcStr;
+  }
+  // 处理旧格式的 file:// 协议（如 file://C:/），转换为正确格式
+  if (srcStr.startsWith("file://")) {
+    return `file:///${srcStr.slice(7)}`;
+  }
+  // 处理 Windows 本地绝对路径（如 C:/、D:/ 或 /C:/、/D:/）
+  // 支持：C:/、/C:/、C:\、/C\ 等格式
+  if (/^\/?[A-Za-z]:[/\\]/.test(srcStr)) {
+    // 移除开头的 /（如果存在）
+    let filePath = srcStr.replace(/^\/+/, "");
+    // 转换反斜杠为正斜杠
+    filePath = filePath.replace(/\\/g, "/");
+    return `file:///${filePath}`;
+  }
+  // Unix 绝对路径（如 /assets/img/...）
+  if (srcStr.startsWith("/")) {
+    return `file://${srcStr}`;
+  }
+  // 其他相对路径保持原样
+  return srcStr;
+};
+
+class ImageWidget extends WidgetType {
+  constructor({ src = "", alt = "", title = "", blockId = "" } = {}) {
+    super();
+    this.src = String(src || "");
+    this.alt = String(alt || "");
+    this.title = title != null ? String(title || "") : "";
+    this.blockId = String(blockId || "");
+  }
+
+  eq(other) {
+    return (
+      other instanceof ImageWidget
+      && other.src === this.src
+      && other.alt === this.alt
+      && other.title === this.title
+      && other.blockId === this.blockId
+    );
+  }
+
+  toDOM() {
+    const wrapper = document.createElement("span");
+    wrapper.className = "cm-image-widget";
+    wrapper.setAttribute("data-image-block-id", this.blockId);
+
+    const img = document.createElement("img");
+    img.src = normalizeImageSrc(this.src);
+    img.alt = this.alt;
+    if (this.title) {
+      img.title = this.title;
+    }
+    img.className = "cm-image-widget-img";
+
+    // 添加加载错误处理
+    img.onerror = () => {
+      img.style.display = "none";
+      const errorMsg = document.createElement("span");
+      errorMsg.className = "cm-image-widget-error";
+      errorMsg.textContent = "[图片加载失败]";
+      wrapper.appendChild(errorMsg);
+    };
+
+    // 添加显示源码按钮
+    const btn = document.createElement("span");
+    btn.className = "cm-image-widget-btn";
+    btn.textContent = "显示源码";
+    btn.setAttribute("data-image-block-id", this.blockId);
+
+    wrapper.appendChild(img);
+    wrapper.appendChild(btn);
+    return wrapper;
+  }
+
+  ignoreEvent() {
+    return false;
+  }
+}
+
 const remapPresentationBlocks = (blocks, changes, nextDocLength) =>
   blocks
     .map((block) => {
@@ -427,6 +518,9 @@ const isTokenRelatedToActiveToken = (token, activeToken) => {
 
 export const setPresentationDataEffect = StateEffect.define();
 
+// 切换图片展开状态
+export const toggleImageExpandEffect = StateEffect.define();
+
 const presentationDataField = StateField.define({
   create: () => normalizePresentationData(),
   update: (value, transaction) => {
@@ -434,6 +528,25 @@ const presentationDataField = StateField.define({
     for (const effect of transaction.effects) {
       if (effect.is(setPresentationDataEffect)) {
         next = normalizePresentationData(effect.value);
+      }
+    }
+    return next;
+  }
+});
+
+// 图片展开状态 Field
+const imageExpandField = StateField.define({
+  create: () => new Set(),
+  update: (value, transaction) => {
+    let next = new Set(value);
+    for (const effect of transaction.effects) {
+      if (effect.is(toggleImageExpandEffect)) {
+        const imageId = String(effect.value || "");
+        if (next.has(imageId)) {
+          next.delete(imageId);
+        } else {
+          next.add(imageId);
+        }
       }
     }
     return next;
@@ -480,13 +593,17 @@ const buildDecorations = (view, blocks, currentBlockId) => {
   const docLength = Number(doc.length || 0);
   const selection = selectionSnapshotOf(view.state);
   const activeInlineToken = pickActiveInlineSyntaxToken(blocks, selection, docLength);
+  const imageExpandSet = view.state.field(imageExpandField) || new Set();
 
   for (const block of blocks) {
     const blockFrom = clampPos(block?.from, docLength);
     const blockTo = clampPos(block?.to, docLength);
     const blockType = String(block?.type || "");
-    const blockKeepsSourceVisible = SOURCE_VISIBLE_BLOCK_TYPES.has(blockType)
-      && selectionIntersectsRange(selection, blockFrom, blockTo);
+    const blockId = String(block?.id || "");
+    const isImageExpanded = imageExpandSet.has(blockId);
+    // 图片块：默认隐藏源码显示图片，点击后显示源码
+    const blockKeepsSourceVisible = (SOURCE_VISIBLE_BLOCK_TYPES.has(blockType)
+      && selectionIntersectsRange(selection, blockFrom, blockTo)) || isImageExpanded;
 
     const lineRange = resolveLineRange(doc, block);
     for (let lineNumber = lineRange.fromLine; lineNumber <= lineRange.toLine; lineNumber += 1) {
@@ -516,6 +633,25 @@ const buildDecorations = (view, blocks, currentBlockId) => {
         addBlockquotePrefixDecorationsForBlock(decorations, doc, block, docLength);
       } else if (blockType === "thematic_break") {
         addHiddenSyntaxRangeDecoration(decorations, blockFrom, blockTo);
+      } else if (blockType === "image") {
+        // 隐藏图片源码
+        addHiddenSyntaxRangeDecoration(decorations, blockFrom, blockTo);
+      }
+    }
+
+    // 图片块：始终添加 ImageWidget
+    if (blockType === "image") {
+      const attrs = block?.attrs || {};
+      const src = String(attrs.src || "");
+      const alt = String(attrs.alt || "");
+      const title = attrs.title != null ? String(attrs.title || "") : "";
+      if (src) {
+        decorations.push(
+          Decoration.widget({
+            widget: new ImageWidget({ src, alt, title, blockId }),
+            side: 1
+          }).range(blockTo)
+        );
       }
     }
 
@@ -606,12 +742,34 @@ class BlockPresentationPlugin {
   }
 }
 
+// 图片按钮点击事件处理
+const imageClickHandler = (event, view) => {
+  // 只处理显示源码按钮的点击
+  const target = event.target;
+  const btn = target.closest(".cm-image-widget-btn");
+  if (!btn) {
+    return false;
+  }
+  const blockId = btn.getAttribute("data-image-block-id");
+  if (blockId) {
+    view.dispatch({
+      effects: toggleImageExpandEffect.of(blockId)
+    });
+    return true;
+  }
+  return false;
+};
+
 export const presentationExtensions = [
   presentationDataField,
+  imageExpandField,
   EditorView.baseTheme({
     ".cm-line.cm-block": {
       transition: "background-color 120ms ease, color 120ms ease"
     }
+  }),
+  EditorView.domEventHandlers({
+    click: imageClickHandler
   }),
   ViewPlugin.fromClass(BlockPresentationPlugin, {
     decorations: (plugin) => plugin.decorations
