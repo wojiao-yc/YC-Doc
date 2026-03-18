@@ -189,12 +189,13 @@ const normalizeImageSrc = (src) => {
 };
 
 class ImageWidget extends WidgetType {
-  constructor({ src = "", alt = "", title = "", blockId = "" } = {}) {
+  constructor({ src = "", alt = "", title = "", blockId = "", isExpanded = false } = {}) {
     super();
     this.src = String(src || "");
     this.alt = String(alt || "");
     this.title = title != null ? String(title || "") : "";
     this.blockId = String(blockId || "");
+    this.isExpanded = Boolean(isExpanded);
   }
 
   eq(other) {
@@ -204,6 +205,7 @@ class ImageWidget extends WidgetType {
       && other.alt === this.alt
       && other.title === this.title
       && other.blockId === this.blockId
+      && other.isExpanded === this.isExpanded
     );
   }
 
@@ -229,10 +231,10 @@ class ImageWidget extends WidgetType {
       wrapper.appendChild(errorMsg);
     };
 
-    // 添加显示源码按钮
+    // 添加显示源码按钮（使用符号 <> 或 ><）
     const btn = document.createElement("span");
     btn.className = "cm-image-widget-btn";
-    btn.textContent = "显示源码";
+    btn.textContent = this.isExpanded ? "><" : "<>";
     btn.setAttribute("data-image-block-id", this.blockId);
 
     wrapper.appendChild(img);
@@ -648,7 +650,7 @@ const buildDecorations = (view, blocks, currentBlockId) => {
       if (src) {
         decorations.push(
           Decoration.widget({
-            widget: new ImageWidget({ src, alt, title, blockId }),
+            widget: new ImageWidget({ src, alt, title, blockId, isExpanded: isImageExpanded }),
             side: 1
           }).range(blockTo)
         );

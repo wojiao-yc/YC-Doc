@@ -16,7 +16,15 @@
   background-image: linear-gradient(90deg, rgba(71, 85, 105, 0.12) 0%, rgba(71, 85, 105, 0.7) 50%, rgba(71, 85, 105, 0.12) 100%);
 }
 
-.yc-editor-host .cm-line.cm-block-image,
+/* 去除图片块的展示框样式 - 保持与普通段落一致 */
+.yc-editor-host .cm-line.cm-block-image {
+  background: transparent;
+  box-shadow: none;
+  padding-left: inherit;
+  padding-right: inherit;
+}
+
+/* 保留 math-block 和 html-block 的展示框样式 */
 .yc-editor-host .cm-line.cm-block-math-block,
 .yc-editor-host .cm-line.cm-block-html-block {
   --yc-special-block-border: #cbd5e1;
@@ -27,7 +35,6 @@
   padding-right: 0.8rem;
 }
 
-.yc-editor-shell.is-dark .yc-editor-host .cm-line.cm-block-image,
 .yc-editor-shell.is-dark .yc-editor-host .cm-line.cm-block-math-block,
 .yc-editor-shell.is-dark .yc-editor-host .cm-line.cm-block-html-block {
   --yc-special-block-border: #334155;
@@ -35,7 +42,15 @@
   background: var(--yc-special-block-bg);
 }
 
+/* 去除图片块的圆角和边框样式 */
 .yc-editor-host .cm-line.cm-block-image.cm-block-start,
+.yc-editor-host .cm-line.cm-block-image.cm-block-end,
+.yc-editor-host .cm-line.cm-block-image.cm-block-start.cm-block-end {
+  box-shadow: none;
+  border-radius: 0;
+}
+
+/* 保留 math-block 和 html-block 的圆角样式 */
 .yc-editor-host .cm-line.cm-block-math-block.cm-block-start,
 .yc-editor-host .cm-line.cm-block-html-block.cm-block-start {
   box-shadow:
@@ -46,7 +61,6 @@
   border-top-right-radius: 10px;
 }
 
-.yc-editor-host .cm-line.cm-block-image.cm-block-end,
 .yc-editor-host .cm-line.cm-block-math-block.cm-block-end,
 .yc-editor-host .cm-line.cm-block-html-block.cm-block-end {
   box-shadow:
@@ -57,7 +71,6 @@
   border-bottom-right-radius: 10px;
 }
 
-.yc-editor-host .cm-line.cm-block-image.cm-block-start.cm-block-end,
 .yc-editor-host .cm-line.cm-block-math-block.cm-block-start.cm-block-end,
 .yc-editor-host .cm-line.cm-block-html-block.cm-block-start.cm-block-end {
   box-shadow: inset 0 0 0 1px var(--yc-special-block-border);
@@ -91,15 +104,18 @@
   position: absolute;
   top: 4px;
   right: 4px;
-  font-size: 11px;
+  font-size: 12px;
+  font-family: monospace;
+  font-weight: bold;
   color: white;
   background: rgba(0, 0, 0, 0.6);
-  padding: 3px 8px;
+  padding: 2px 6px;
   border-radius: 4px;
   cursor: pointer;
   opacity: 0;
   transition: opacity 0.2s ease;
   user-select: none;
+  line-height: 1;
 }
 
 .yc-editor-host .cm-image-widget:hover .cm-image-widget-btn {
