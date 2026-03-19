@@ -81,6 +81,12 @@ const normalizePresentationData = (input = {}) => ({
 });
 
 const clampPos = (value, length) => Math.max(0, Math.min(Number(length || 0), Number(value || 0)));
+const mathExpandKeyOf = (block) => {
+  if (String(block?.type || "") !== "math_block") {
+    return "";
+  }
+  return `math_block:${Math.max(0, Number(block?.from || 0))}`;
+};
 
 const escapeHtml = (value) =>
   String(value || "")
@@ -684,8 +690,7 @@ const mathExpandField = StateField.define({
         const blocks = Array.isArray(effect.value?.blocks) ? effect.value.blocks : [];
         const validMathIds = new Set(
           blocks
-            .filter((block) => String(block?.type || "") === "math_block")
-            .map((block) => String(block?.id || ""))
+            .map((block) => mathExpandKeyOf(block))
             .filter(Boolean)
         );
         next = validMathIds.size
@@ -746,8 +751,9 @@ const buildDecorations = (view, blocks, currentBlockId) => {
       const blockTo = clampPos(block?.to, docLength);
       const blockType = String(block?.type || "");
       const blockId = String(block?.id || "");
+      const mathExpandKey = mathExpandKeyOf({ type: blockType, from: blockFrom });
       const isImageExpanded = imageExpandSet.has(blockId);
-      const isMathExpanded = mathExpandSet.has(blockId);
+      const isMathExpanded = mathExpandSet.has(mathExpandKey);
       // Keep source visible for focused source-first block types or expanded media/math blocks.
       const blockKeepsSourceVisible = (SOURCE_VISIBLE_BLOCK_TYPES.has(blockType)
         && selectionIntersectsRange(selection, blockFrom, blockTo)) || isImageExpanded || isMathExpanded;
@@ -815,11 +821,13 @@ const buildDecorations = (view, blocks, currentBlockId) => {
       if (blockType === "math_block") {
         const attrs = block?.attrs || {};
         const formula = String(attrs.formula || "").trim();
+        const widgetPos = isMathExpanded ? blockTo : blockFrom;
+        const widgetSide = isMathExpanded ? 1 : -1;
         decorations.push(
           Decoration.widget({
-            widget: new MathBlockWidget({ formula, blockId, isExpanded: isMathExpanded }),
-            side: -1
-          }).range(blockFrom)
+            widget: new MathBlockWidget({ formula, blockId: mathExpandKey, isExpanded: isMathExpanded }),
+            side: widgetSide
+          }).range(widgetPos)
         );
       }
 

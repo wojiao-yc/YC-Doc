@@ -168,6 +168,21 @@
   border: 0 !important;
 }
 
+.yc-editor-host .cm-line.cm-block-math-block.cm-block-source-visible {
+  background: transparent !important;
+  box-shadow: none !important;
+  padding-left: inherit !important;
+  padding-right: inherit !important;
+  border-radius: 0 !important;
+}
+
+.yc-editor-host .cm-line.cm-block-math-block.cm-block-source-visible.cm-block-start,
+.yc-editor-host .cm-line.cm-block-math-block.cm-block-source-visible.cm-block-end,
+.yc-editor-host .cm-line.cm-block-math-block.cm-block-source-visible.cm-block-start.cm-block-end {
+  box-shadow: none !important;
+  border-radius: 0 !important;
+}
+
 .yc-editor-host .cm-math-widget {
   display: block;
   position: relative;
@@ -199,7 +214,14 @@
   cursor: pointer;
   user-select: none;
   line-height: 1.2;
-  transition: background-color 0.15s ease;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.15s ease, background-color 0.15s ease;
+}
+
+.yc-editor-host .cm-math-widget:hover .cm-math-widget-btn {
+  opacity: 1;
+  pointer-events: auto;
 }
 
 .yc-editor-host .cm-math-widget-btn:hover {
