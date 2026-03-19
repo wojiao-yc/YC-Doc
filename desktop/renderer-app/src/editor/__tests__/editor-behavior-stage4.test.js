@@ -115,3 +115,18 @@ test("list and special-block styles include rendered widgets for hidden-source m
   assert.match(special, /\.cm-table-widget/);
   assert.match(special, /\.cm-block-thematic-break\.cm-block-source-visible/);
 });
+
+test("editor includes custom right-click context menu extension with grouped commands", () => {
+  const createEditor = readSrc("editor/core/create-editor.js");
+  const menuExtension = readSrc("editor/extensions/context-menu.js");
+
+  assert.match(createEditor, /contextMenuExtensions/);
+  assert.match(createEditor, /\.\.\.contextMenuExtensions/);
+
+  assert.match(menuExtension, /新增链接/);
+  assert.match(menuExtension, /文本格式/);
+  assert.match(menuExtension, /段落设置/);
+  assert.match(menuExtension, /插入/);
+  assert.match(menuExtension, /clipboard-cut/);
+  assert.match(menuExtension, /select-all/);
+});

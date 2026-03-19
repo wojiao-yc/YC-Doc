@@ -6,6 +6,7 @@ import { createEditorView } from "./create-view";
 import { coreExtensions } from "../extensions/core";
 import { markdownExtensions } from "../extensions/markdown";
 import { presentationExtensions, setPresentationDataEffect } from "../extensions/presentation";
+import { contextMenuExtensions } from "../extensions/context-menu";
 import { createEditorThemeExtension } from "../extensions/theme";
 
 export const createMarkdownEditor = ({
@@ -36,6 +37,7 @@ export const createMarkdownEditor = ({
       ...coreExtensions,
       ...markdownExtensions,
       ...presentationExtensions,
+      ...contextMenuExtensions,
       themeCompartment.of(createEditorThemeExtension(Boolean(dark))),
       updateListener
     ]
