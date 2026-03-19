@@ -10,7 +10,9 @@ const readSrc = (relativePath) => readFileSync(resolve(srcDir, relativePath), "u
 
 test("semantic parsing is configured with zero debounce to reduce transient style flicker", () => {
   const app = readSrc("App.vue");
+  const semanticStore = readSrc("editor/state/semantic-store.js");
   assert.match(app, /parseDelayMs:\s*0/);
+  assert.match(semanticStore, /if \(delay <= 0\)\s*\{\s*parseNow\(\);\s*return;\s*\}/);
 });
 
 test("markdown sidebar logic is rebuilt around H1 sections", () => {
@@ -65,6 +67,18 @@ test("presentation also supports block-level markdown rendering and source revea
   assert.match(presentation, /addTablePreviewDecorationForBlock/);
   assert.match(presentation, /MarkdownTableWidget/);
   assert.match(presentation, /cm-table-widget/);
+});
+
+test("image source toggle updates immediately and prunes stale expanded-image ids", () => {
+  const presentation = readSrc("editor/extensions/presentation.js");
+
+  assert.match(presentation, /updateHasEffect\(update,\s*toggleImageExpandEffect\)/);
+  assert.match(presentation, /selectionChanged \|\| imageExpandChanged/);
+  assert.match(presentation, /effect\.is\(setPresentationDataEffect\)/);
+  assert.match(presentation, /validImageIds/);
+  assert.match(presentation, /this\.blocks = \[\]/);
+  assert.match(presentation, /btn\.textContent\s*=\s*this\.isExpanded/);
+  assert.match(presentation, /btn\.setAttribute\(\"title\"/);
 });
 
 test("editor theme exposes inline style classes used by hidden-syntax rendering", () => {

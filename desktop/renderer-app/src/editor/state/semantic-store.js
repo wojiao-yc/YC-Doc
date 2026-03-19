@@ -39,10 +39,15 @@ export const useSemanticStore = ({
       clearTimeout(parseTimer);
       parseTimer = null;
     }
+    const delay = Math.max(0, Number(parseDelayMs || 0));
+    if (delay <= 0) {
+      parseNow();
+      return;
+    }
     parseTimer = setTimeout(() => {
       parseTimer = null;
       parseNow();
-    }, Math.max(0, Number(parseDelayMs || 0)));
+    }, delay);
   };
 
   watch(markdownRef, () => {

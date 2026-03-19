@@ -81,49 +81,6 @@ const normalizePresentationData = (input = {}) => ({
 
 const clampPos = (value, length) => Math.max(0, Math.min(Number(length || 0), Number(value || 0)));
 
-const mapRange = (changes, fromInput, toInput, nextDocLength) => {
-  const fromBase = Number(fromInput || 0);
-  const toBase = Number(toInput || fromBase);
-  const mappedFrom = clampPos(changes.mapPos(fromBase, 1), nextDocLength);
-  const mappedTo = clampPos(changes.mapPos(toBase, -1), nextDocLength);
-  return {
-    from: Math.min(mappedFrom, mappedTo),
-    to: Math.max(mappedFrom, mappedTo)
-  };
-};
-
-const remapInlineSegments = (segments, changes, nextDocLength) =>
-  (Array.isArray(segments) ? segments : [])
-    .map((segment) => {
-      const mappedRange = mapRange(changes, segment?.from, segment?.to, nextDocLength);
-      return {
-        ...segment,
-        from: mappedRange.from,
-        to: mappedRange.to,
-        innerFrom: mappedRange.from,
-        innerTo: mappedRange.to,
-        outerFrom: mappedRange.from,
-        outerTo: mappedRange.to
-      };
-    })
-    .filter((segment) => segment.to > segment.from);
-
-const remapInlineTokens = (tokens, changes, nextDocLength) =>
-  (Array.isArray(tokens) ? tokens : [])
-    .map((token) => {
-      const mappedRawRange = mapRange(changes, token?.rawFrom, token?.rawTo, nextDocLength);
-      const mappedTextRange = mapRange(changes, token?.textFrom, token?.textTo, nextDocLength);
-      return {
-        ...token,
-        rawFrom: mappedRawRange.from,
-        rawTo: mappedRawRange.to,
-        textFrom: mappedTextRange.from,
-        textTo: mappedTextRange.to,
-        children: remapInlineTokens(token?.children, changes, nextDocLength)
-      };
-    })
-    .filter((token) => token.rawTo > token.rawFrom);
-
 class ListPrefixWidget extends WidgetType {
   constructor({ blockType = "", text = "", checked = false } = {}) {
     super();
@@ -234,7 +191,8 @@ class ImageWidget extends WidgetType {
     // 添加显示源码按钮（使用符号 <> 或 ><）
     const btn = document.createElement("span");
     btn.className = "cm-image-widget-btn";
-    btn.textContent = this.isExpanded ? "><" : "<>";
+    btn.textContent = this.isExpanded ? "收起源码" : "展开源码";
+    btn.setAttribute("title", this.isExpanded ? "收起源码" : "展开源码");
     btn.setAttribute("data-image-block-id", this.blockId);
 
     wrapper.appendChild(img);
@@ -246,20 +204,6 @@ class ImageWidget extends WidgetType {
     return false;
   }
 }
-
-const remapPresentationBlocks = (blocks, changes, nextDocLength) =>
-  blocks
-    .map((block) => {
-      const mappedRange = mapRange(changes, block?.from, block?.to, nextDocLength);
-      return {
-        ...block,
-        from: mappedRange.from,
-        to: mappedRange.to,
-        inlineTokens: remapInlineTokens(block?.inlineTokens, changes, nextDocLength),
-        inlineSegments: remapInlineSegments(block?.inlineSegments, changes, nextDocLength)
-      };
-    })
-    .filter((block) => block.to > block.from);
 
 const inlineClassesForSegment = (segment) => {
   const marks = Array.isArray(segment?.marks) ? segment.marks : [];
@@ -549,6 +493,19 @@ const imageExpandField = StateField.define({
         } else {
           next.add(imageId);
         }
+        continue;
+      }
+      if (effect.is(setPresentationDataEffect)) {
+        const blocks = Array.isArray(effect.value?.blocks) ? effect.value.blocks : [];
+        const validImageIds = new Set(
+          blocks
+            .filter((block) => String(block?.type || "") === "image")
+            .map((block) => String(block?.id || ""))
+            .filter(Boolean)
+        );
+        next = validImageIds.size
+          ? new Set([...next].filter((id) => validImageIds.has(id)))
+          : new Set();
       }
     }
     return next;
@@ -690,24 +647,11 @@ const buildDecorations = (view, blocks, currentBlockId) => {
   return Decoration.set(decorations, true);
 };
 
-const isWholeDocumentReplacement = (update) => {
-  let changeCount = 0;
-  let replaceAll = true;
+const transactionHasEffect = (transaction, effectType) =>
+  Boolean(transaction?.effects?.some((effect) => effect.is(effectType)));
 
-  update.changes.iterChangedRanges((fromA, toA, fromB, toB) => {
-    changeCount += 1;
-    if (
-      fromA !== 0
-      || toA !== update.startState.doc.length
-      || fromB !== 0
-      || toB !== update.state.doc.length
-    ) {
-      replaceAll = false;
-    }
-  });
-
-  return changeCount === 1 && replaceAll;
-};
+const updateHasEffect = (update, effectType) =>
+  Boolean(update?.transactions?.some((transaction) => transactionHasEffect(transaction, effectType)));
 
 class BlockPresentationPlugin {
   constructor(view) {
@@ -724,15 +668,14 @@ class BlockPresentationPlugin {
     const blocksChanged = nextBlocks !== this.blocks;
     const currentChanged = nextCurrentBlockId !== this.currentBlockId;
     const selectionChanged = update.selectionSet;
+    const imageExpandChanged = updateHasEffect(update, toggleImageExpandEffect);
 
     if (!blocksChanged && !currentChanged) {
       if (update.docChanged) {
-        // A replace-all edit invalidates every old block range at once, so wait for the next snapshot.
-        this.blocks = isWholeDocumentReplacement(update)
-          ? []
-          : remapPresentationBlocks(this.blocks, update.changes, update.state.doc.length);
+        // Any document edit can invalidate old ranges; wait for semantic snapshot instead of remapping stale blocks.
+        this.blocks = [];
         this.decorations = buildDecorations(update.view, this.blocks, this.currentBlockId);
-      } else if (selectionChanged) {
+      } else if (selectionChanged || imageExpandChanged) {
         this.decorations = buildDecorations(update.view, this.blocks, this.currentBlockId);
       }
       return;
@@ -752,6 +695,8 @@ const imageClickHandler = (event, view) => {
   if (!btn) {
     return false;
   }
+  event.preventDefault();
+  event.stopPropagation();
   const blockId = btn.getAttribute("data-image-block-id");
   if (blockId) {
     view.dispatch({

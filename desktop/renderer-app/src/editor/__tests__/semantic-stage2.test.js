@@ -31,6 +31,58 @@ test("math block parser only starts from valid block fences or single-line $$...
   assert.equal(fenced[1]?.type, "paragraph");
 });
 
+test("paragraph-like special blocks are split without separator blank lines", () => {
+  const markdown = [
+    "before",
+    "![alt](https://example.com/a.png)",
+    "$$E=mc^2$$",
+    "| a | b |",
+    "| - | - |",
+    "| 1 | 2 |",
+    "after"
+  ].join("\n");
+  const blocks = parseMarkdownToBlocks(markdown);
+  const types = blocks.map((block) => block.type);
+
+  assert.deepEqual(types, ["paragraph", "image", "math_block", "table", "paragraph"]);
+  assert.equal(markdown.slice(blocks[1].from, blocks[1].to), "![alt](https://example.com/a.png)");
+  assert.equal(markdown.slice(blocks[2].from, blocks[2].to), "$$E=mc^2$$");
+  assert.equal(markdown.slice(blocks[3].from, blocks[3].to), ["| a | b |", "| - | - |", "| 1 | 2 |"].join("\n"));
+});
+
+test("image block range does not swallow newline before heading or list", () => {
+  const markdown = [
+    "![alt](https://example.com/a.png)",
+    "# Heading",
+    "- item"
+  ].join("\n");
+  const blocks = parseMarkdownToBlocks(markdown);
+  const image = blocks.find((block) => block.type === "image");
+  const heading = blocks.find((block) => block.type === "heading");
+  const list = blocks.find((block) => block.type === "bullet_list_item");
+
+  assert.equal(Boolean(image), true);
+  assert.equal(Boolean(heading), true);
+  assert.equal(Boolean(list), true);
+  assert.equal(markdown.slice(image?.from || 0, image?.to || 0), "![alt](https://example.com/a.png)");
+  assert.equal(markdown[image?.to || 0], "\n");
+  assert.equal(markdown.slice(heading?.from || 0, heading?.to || 0), "# Heading");
+  assert.equal(heading?.lineStart, 2);
+  assert.equal(list?.lineStart, 3);
+});
+
+test("fenced math block is recognized without blank lines around it", () => {
+  const markdown = ["top", "$$", "a+b", "$$", "tail"].join("\n");
+  const blocks = parseMarkdownToBlocks(markdown);
+  const math = blocks.find((block) => block.type === "math_block");
+
+  assert.deepEqual(
+    blocks.map((block) => block.type),
+    ["paragraph", "math_block", "paragraph"]
+  );
+  assert.equal(markdown.slice(math?.from || 0, math?.to || 0), ["$$", "a+b", "$$"].join("\n"));
+});
+
 test("heading and thematic break ranges do not absorb trailing blank lines", () => {
   const markdown = ["# Title", "", "", "---", "", "", "tail"].join("\n");
   const blocks = parseMarkdownToBlocks(markdown);

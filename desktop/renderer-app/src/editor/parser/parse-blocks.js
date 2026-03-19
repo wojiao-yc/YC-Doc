@@ -5,6 +5,9 @@ import { parseImageLine } from "./parse-image";
 import { buildInlineModelForBlock } from "./parse-inline";
 import { parseListLine } from "./parse-list";
 
+const OPEN_MATH_FENCE_PATTERN = /^\s{0,3}\$\$\s*$/;
+const SINGLE_LINE_MATH_PATTERN = /^\s{0,3}\$\$(.+?)\$\$\s*$/;
+
 const normalizeMarkdown = (markdown) => String(markdown || "").replace(/\r\n/g, "\n");
 
 const makeBlockId = (type, from, to) => `${String(type)}:${from}:${to}`;
@@ -114,7 +117,7 @@ const isMathBlockRaw = (rawInput) => {
   if (!raw) {
     return false;
   }
-  if (/^\s{0,3}\$\$(.+?)\$\$\s*$/.test(raw)) {
+  if (SINGLE_LINE_MATH_PATTERN.test(raw)) {
     return true;
   }
   return /^\s{0,3}\$\$\s*\n[\s\S]*?\n\s{0,3}\$\$\s*$/.test(raw);
@@ -169,12 +172,22 @@ const buildLinesForRange = (markdown, from, to) => {
     lines.push({
       text,
       from: lineFrom,
-      to: lineTo
+      to: lineTo,
+      hasNewline
     });
     cursor = lineTo;
   }
 
   return lines;
+};
+
+const lineContentEnd = (line) => {
+  const from = Math.max(0, Number(line?.from || 0));
+  const to = Math.max(from, Number(line?.to || from));
+  if (line?.hasNewline) {
+    return Math.max(from, to - 1);
+  }
+  return to;
 };
 
 const tableColumnsOf = (token) => {
@@ -187,6 +200,181 @@ const tableColumnsOf = (token) => {
     return 0;
   }
   return normalized.split("|").length;
+};
+
+const tableCellsFromLine = (lineText) => String(lineText || "").trim().replace(/^\|/, "").replace(/\|$/, "").split("|");
+
+const isTableDelimiterLine = (lineText) => {
+  const trimmed = String(lineText || "").trim();
+  if (!trimmed.includes("|")) {
+    return false;
+  }
+  const cells = tableCellsFromLine(trimmed);
+  if (!cells.length) {
+    return false;
+  }
+  return cells.every((cell) => /^:?-{3,}:?$/.test(String(cell || "").trim()));
+};
+
+const isTableHeaderLine = (lineText) => {
+  const trimmed = String(lineText || "").trim();
+  if (!trimmed || !trimmed.includes("|")) {
+    return false;
+  }
+  const cells = tableCellsFromLine(trimmed);
+  return cells.length >= 2 && cells.some((cell) => String(cell || "").trim().length > 0);
+};
+
+const isTableBodyLine = (lineText) => {
+  const trimmed = String(lineText || "").trim();
+  return Boolean(trimmed) && trimmed.includes("|");
+};
+
+const tableColumnCountFromHeaderLine = (lineText) => {
+  const normalized = String(lineText || "").trim().replace(/^\|/, "").replace(/\|$/, "");
+  if (!normalized) {
+    return 0;
+  }
+  return normalized.split("|").length;
+};
+
+const parseParagraphRangeToBlocks = (markdown, from, to) => {
+  const lines = buildLinesForRange(markdown, from, to);
+  if (!lines.length) {
+    return [];
+  }
+
+  const blocks = [];
+  let paragraphFrom = -1;
+  let paragraphTo = -1;
+
+  const flushParagraph = () => {
+    if (paragraphFrom < 0 || paragraphTo <= paragraphFrom) {
+      paragraphFrom = -1;
+      paragraphTo = -1;
+      return;
+    }
+    const trimmedTo = trimTrailingBlankLinesInRange(markdown, paragraphFrom, paragraphTo);
+    if (trimmedTo > paragraphFrom) {
+      const raw = markdown.slice(paragraphFrom, trimmedTo);
+      const paragraphLike = parseParagraphLike(raw);
+      blocks.push({
+        type: paragraphLike.type,
+        from: paragraphFrom,
+        to: trimmedTo,
+        attrs: paragraphLike.attrs
+      });
+    }
+    paragraphFrom = -1;
+    paragraphTo = -1;
+  };
+
+  const appendParagraphLine = (line) => {
+    if (paragraphFrom < 0) {
+      paragraphFrom = line.from;
+    }
+    paragraphTo = line.to;
+  };
+
+  for (let index = 0; index < lines.length; index += 1) {
+    const line = lines[index];
+    const lineText = String(line?.text || "");
+    const trimmed = lineText.trim();
+
+    if (!trimmed) {
+      appendParagraphLine(line);
+      continue;
+    }
+
+    const image = parseImageLine(trimmed);
+    if (image) {
+      flushParagraph();
+      const blockTo = lineContentEnd(line);
+      if (blockTo > line.from) {
+        blocks.push({
+          type: BLOCK_TYPES.IMAGE,
+          from: line.from,
+          to: blockTo,
+          attrs: image
+        });
+      }
+      continue;
+    }
+
+    if (SINGLE_LINE_MATH_PATTERN.test(lineText)) {
+      flushParagraph();
+      const blockTo = lineContentEnd(line);
+      if (blockTo > line.from) {
+        blocks.push({
+          type: BLOCK_TYPES.MATH_BLOCK,
+          from: line.from,
+          to: blockTo,
+          attrs: {
+            formula: extractMathFormula(markdown.slice(line.from, blockTo)),
+            displayMode: true
+          }
+        });
+      }
+      continue;
+    }
+
+    if (OPEN_MATH_FENCE_PATTERN.test(lineText)) {
+      let fenceEndIndex = -1;
+      for (let cursor = index + 1; cursor < lines.length; cursor += 1) {
+        if (OPEN_MATH_FENCE_PATTERN.test(lines[cursor].text)) {
+          fenceEndIndex = cursor;
+          break;
+        }
+      }
+
+      if (fenceEndIndex >= 0) {
+        flushParagraph();
+        const blockTo = lineContentEnd(lines[fenceEndIndex]);
+        if (blockTo > line.from) {
+          const raw = markdown.slice(line.from, blockTo);
+          blocks.push({
+            type: BLOCK_TYPES.MATH_BLOCK,
+            from: line.from,
+            to: blockTo,
+            attrs: {
+              formula: extractMathFormula(raw),
+              displayMode: true
+            }
+          });
+        }
+        index = fenceEndIndex;
+        continue;
+      }
+    }
+
+    const nextLine = lines[index + 1];
+    if (nextLine && isTableHeaderLine(lineText) && isTableDelimiterLine(nextLine.text)) {
+      flushParagraph();
+      let tableEndIndex = index + 1;
+      while (tableEndIndex + 1 < lines.length && isTableBodyLine(lines[tableEndIndex + 1].text)) {
+        tableEndIndex += 1;
+      }
+
+      const blockTo = lineContentEnd(lines[tableEndIndex]);
+      if (blockTo > line.from) {
+        blocks.push({
+          type: BLOCK_TYPES.TABLE,
+          from: line.from,
+          to: blockTo,
+          attrs: {
+            columns: tableColumnCountFromHeaderLine(lineText)
+          }
+        });
+      }
+      index = tableEndIndex;
+      continue;
+    }
+
+    appendParagraphLine(line);
+  }
+
+  flushParagraph();
+  return blocks;
 };
 
 const extractListBlocksFromRange = (markdown, from, to) => {
@@ -385,7 +573,8 @@ export const parseMarkdownToBlocks = (markdownInput) => {
     }
 
     if (type === "table") {
-      pushBlock(blocks, markdown, lineStarts, BLOCK_TYPES.TABLE, range.from, range.to, {
+      const trimmedTo = trimTrailingBlankLinesInRange(markdown, range.from, range.to);
+      pushBlock(blocks, markdown, lineStarts, BLOCK_TYPES.TABLE, range.from, trimmedTo, {
         columns: tableColumnsOf(token)
       });
       continue;
@@ -397,8 +586,23 @@ export const parseMarkdownToBlocks = (markdownInput) => {
     }
 
     if (type === "paragraph" || type === "text") {
-      const paragraphLike = parseParagraphLike(raw);
-      pushBlock(blocks, markdown, lineStarts, paragraphLike.type, range.from, range.to, paragraphLike.attrs);
+      const paragraphBlocks = parseParagraphRangeToBlocks(markdown, range.from, range.to);
+      if (!paragraphBlocks.length) {
+        const paragraphLike = parseParagraphLike(raw);
+        pushBlock(blocks, markdown, lineStarts, paragraphLike.type, range.from, range.to, paragraphLike.attrs);
+        continue;
+      }
+      for (const paragraphBlock of paragraphBlocks) {
+        pushBlock(
+          blocks,
+          markdown,
+          lineStarts,
+          paragraphBlock.type,
+          paragraphBlock.from,
+          paragraphBlock.to,
+          paragraphBlock.attrs || {}
+        );
+      }
       continue;
     }
 
