@@ -71,6 +71,18 @@ test("image block range does not swallow newline before heading or list", () => 
   assert.equal(list?.lineStart, 3);
 });
 
+test("image parser reads persisted width metadata from source comment", () => {
+  const markdown = "![alt](https://example.com/a.png \"img\") <!-- yc-image-width:640 -->";
+  const blocks = parseMarkdownToBlocks(markdown);
+  const image = blocks.find((block) => block.type === "image");
+
+  assert.equal(Boolean(image), true);
+  assert.equal(image?.attrs?.src, "https://example.com/a.png");
+  assert.equal(image?.attrs?.title, "img");
+  assert.equal(image?.attrs?.width, 640);
+  assert.equal(markdown.slice(image?.from || 0, image?.to || 0), markdown);
+});
+
 test("fenced math block is recognized without blank lines around it", () => {
   const markdown = ["top", "$$", "a+b", "$$", "tail"].join("\n");
   const blocks = parseMarkdownToBlocks(markdown);

@@ -76,6 +76,76 @@
   text-decoration-color: rgba(251, 113, 133, 0.78);
 }
 
+.yc-editor-host .cm-source-image-delim,
+.yc-editor-host .cm-source-image-meta-delim,
+.yc-editor-host .cm-source-math-delim {
+  color: #64748b;
+  font-weight: 600;
+}
+
+.yc-editor-host .cm-source-image-alt {
+  color: #b45309;
+}
+
+.yc-editor-host .cm-source-image-url {
+  color: #2563eb;
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.08em;
+}
+
+.yc-editor-host .cm-source-image-title {
+  color: #7c3aed;
+}
+
+.yc-editor-host .cm-source-image-meta-key,
+.yc-editor-host .cm-source-math-command {
+  color: #0f766e;
+  font-weight: 600;
+}
+
+.yc-editor-host .cm-source-image-meta-number,
+.yc-editor-host .cm-source-math-number {
+  color: #b91c1c;
+  font-weight: 700;
+}
+
+.yc-editor-host .cm-source-math-operator {
+  color: #0369a1;
+}
+
+.yc-editor-shell.is-dark .yc-editor-host .cm-source-image-delim,
+.yc-editor-shell.is-dark .yc-editor-host .cm-source-image-meta-delim,
+.yc-editor-shell.is-dark .yc-editor-host .cm-source-math-delim {
+  color: #94a3b8;
+}
+
+.yc-editor-shell.is-dark .yc-editor-host .cm-source-image-alt {
+  color: #fcd34d;
+}
+
+.yc-editor-shell.is-dark .yc-editor-host .cm-source-image-url {
+  color: #93c5fd;
+}
+
+.yc-editor-shell.is-dark .yc-editor-host .cm-source-image-title {
+  color: #c4b5fd;
+}
+
+.yc-editor-shell.is-dark .yc-editor-host .cm-source-image-meta-key,
+.yc-editor-shell.is-dark .yc-editor-host .cm-source-math-command {
+  color: #2dd4bf;
+}
+
+.yc-editor-shell.is-dark .yc-editor-host .cm-source-image-meta-number,
+.yc-editor-shell.is-dark .yc-editor-host .cm-source-math-number {
+  color: #fca5a5;
+}
+
+.yc-editor-shell.is-dark .yc-editor-host .cm-source-math-operator {
+  color: #7dd3fc;
+}
+
 .yc-editor-host .cm-inline-codespan {
   font-family: "Cascadia Code", "JetBrains Mono", Consolas, monospace;
   background: rgba(148, 163, 184, 0.16);

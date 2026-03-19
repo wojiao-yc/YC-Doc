@@ -287,6 +287,25 @@
   padding-right: 90px;
 }
 
+.yc-editor-host .cm-math-widget::before {
+  content: "";
+  position: absolute;
+  inset: -6px -10px;
+  border: 1px solid rgba(203, 213, 225, 0.95);
+  border-radius: 12px;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.15s ease;
+}
+
+.yc-editor-host .cm-math-widget:hover::before {
+  opacity: 1;
+}
+
+.yc-editor-shell.is-dark .yc-editor-host .cm-math-widget::before {
+  border-color: rgba(100, 116, 139, 0.78);
+}
+
 .yc-editor-host .cm-math-widget-content {
   display: block;
   overflow-x: auto;

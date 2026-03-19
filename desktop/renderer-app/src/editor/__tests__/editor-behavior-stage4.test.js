@@ -89,6 +89,24 @@ test("editor theme exposes inline style classes used by hidden-syntax rendering"
   assert.match(theme, /\.cm-inline-link/);
 });
 
+test("image and math source code use token-level syntax highlight classes", () => {
+  const presentation = readSrc("editor/extensions/presentation.js");
+  const theme = readSrc("styles/editor-theme.css");
+
+  assert.match(presentation, /addImageSourceSyntaxDecorationsForBlock/);
+  assert.match(presentation, /addMathSourceSyntaxDecorationsForBlock/);
+  assert.match(presentation, /cm-source-image-url/);
+  assert.match(presentation, /cm-source-math-command/);
+
+  assert.match(theme, /\.cm-source-image-delim/);
+  assert.match(theme, /\.cm-source-image-alt/);
+  assert.match(theme, /\.cm-source-image-url/);
+  assert.match(theme, /\.cm-source-image-title/);
+  assert.match(theme, /\.cm-source-math-delim/);
+  assert.match(theme, /\.cm-source-math-command/);
+  assert.match(theme, /\.cm-source-math-number/);
+});
+
 test("list and special-block styles include rendered widgets for hidden-source mode", () => {
   const lists = readSrc("styles/lists.css");
   const special = readSrc("styles/special-blocks.css");

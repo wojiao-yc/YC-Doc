@@ -1,6 +1,7 @@
 import { Decoration, EditorView, ViewPlugin, WidgetType } from "@codemirror/view";
 import { StateEffect, StateField } from "@codemirror/state";
 import katex from "katex";
+import { parseImageLine, serializeImageLine } from "../parser/parse-image";
 
 const HEADING_PREFIX_PATTERN = /^\s{0,3}#{1,6}[ \t]+/;
 const BLOCKQUOTE_PREFIX_PATTERN = /^\s{0,3}>\s?/;
@@ -110,6 +111,9 @@ const tableExpandKeyOf = (block) => {
 const DEFAULT_IMAGE_WIDTH = 520;
 const MIN_IMAGE_WIDTH = 160;
 const MAX_IMAGE_WIDTH = 1400;
+const SOURCE_TOGGLE_ICON_COLLAPSED = "</>";
+const SOURCE_TOGGLE_ICON_EXPANDED = ">/<";
+const sourceToggleTitle = (isExpanded) => (isExpanded ? "Hide source" : "Show source");
 const normalizeImageWidth = (value, fallback = DEFAULT_IMAGE_WIDTH) => {
   const numeric = Number(value);
   if (!Number.isFinite(numeric)) {
@@ -356,8 +360,8 @@ class ImageWidget extends WidgetType {
     // Toggle source visibility for this image block.
     const btn = document.createElement("span");
     btn.className = "cm-image-widget-btn";
-    btn.textContent = this.isExpanded ? "Hide source" : "Show source";
-    btn.setAttribute("title", this.isExpanded ? "Hide source" : "Show source");
+    btn.textContent = this.isExpanded ? SOURCE_TOGGLE_ICON_EXPANDED : SOURCE_TOGGLE_ICON_COLLAPSED;
+    btn.setAttribute("title", sourceToggleTitle(this.isExpanded));
     btn.setAttribute("data-image-block-id", this.blockId);
 
     toolbar.appendChild(btn);
@@ -405,8 +409,8 @@ class MathBlockWidget extends WidgetType {
 
     const btn = document.createElement("span");
     btn.className = "cm-math-widget-btn";
-    btn.textContent = this.isExpanded ? "Hide source" : "Show source";
-    btn.setAttribute("title", this.isExpanded ? "Hide source" : "Show source");
+    btn.textContent = this.isExpanded ? SOURCE_TOGGLE_ICON_EXPANDED : SOURCE_TOGGLE_ICON_COLLAPSED;
+    btn.setAttribute("title", sourceToggleTitle(this.isExpanded));
     btn.setAttribute("data-math-block-id", this.blockId);
 
     wrapper.appendChild(content);
@@ -488,8 +492,8 @@ class TableBlockWidget extends WidgetType {
 
     const btn = document.createElement("span");
     btn.className = "cm-table-widget-btn";
-    btn.textContent = this.isExpanded ? "Hide source" : "Show source";
-    btn.setAttribute("title", this.isExpanded ? "Hide source" : "Show source");
+    btn.textContent = this.isExpanded ? SOURCE_TOGGLE_ICON_EXPANDED : SOURCE_TOGGLE_ICON_COLLAPSED;
+    btn.setAttribute("title", sourceToggleTitle(this.isExpanded));
     btn.setAttribute("data-table-block-id", this.blockId);
 
     wrapper.appendChild(content);
@@ -839,6 +843,274 @@ const addInlineMathPreviewDecorationForToken = (decorations, doc, token, docLeng
   );
 };
 
+const addSourceSyntaxMarkDecoration = (decorations, fromInput, toInput, className) => {
+  const from = Number(fromInput || 0);
+  const to = Number(toInput || 0);
+  const cls = String(className || "").trim();
+  if (to <= from || !cls) {
+    return;
+  }
+  decorations.push(
+    Decoration.mark({
+      class: cls
+    }).range(from, to)
+  );
+};
+
+const addMathFormulaTokenMarks = (decorations, formulaText, formulaFrom) => {
+  const formula = String(formulaText || "");
+  const baseFrom = Number(formulaFrom || 0);
+  if (!formula) {
+    return;
+  }
+
+  for (const match of formula.matchAll(/\\[A-Za-z]+/g)) {
+    const raw = String(match[0] || "");
+    if (!raw) {
+      continue;
+    }
+    const start = baseFrom + Number(match.index || 0);
+    addSourceSyntaxMarkDecoration(decorations, start, start + raw.length, "cm-source-math-command");
+  }
+
+  for (const match of formula.matchAll(/\b\d+(?:\.\d+)?\b/g)) {
+    const raw = String(match[0] || "");
+    if (!raw) {
+      continue;
+    }
+    const start = baseFrom + Number(match.index || 0);
+    addSourceSyntaxMarkDecoration(decorations, start, start + raw.length, "cm-source-math-number");
+  }
+
+  for (const match of formula.matchAll(/[+\-*/=^_()[\]{}<>]/g)) {
+    const raw = String(match[0] || "");
+    if (!raw) {
+      continue;
+    }
+    const start = baseFrom + Number(match.index || 0);
+    addSourceSyntaxMarkDecoration(decorations, start, start + raw.length, "cm-source-math-operator");
+  }
+};
+
+const addImageSourceSyntaxDecorationsForBlock = (decorations, doc, fromInput, toInput, docLength) => {
+  const from = clampPos(fromInput, docLength);
+  const to = clampPos(toInput, docLength);
+  if (to <= from) {
+    return;
+  }
+
+  const rawLine = doc.sliceString(from, to);
+  const leading = rawLine.match(/^\s*/u)?.[0] || "";
+  const trailing = rawLine.match(/\s*$/u)?.[0] || "";
+  const sourceStart = leading.length;
+  const sourceEnd = Math.max(sourceStart, rawLine.length - trailing.length);
+  const source = rawLine.slice(sourceStart, sourceEnd);
+  if (!source.startsWith("![")) {
+    return;
+  }
+
+  const baseFrom = from + sourceStart;
+  const altClose = source.indexOf("](");
+  if (altClose < 2) {
+    return;
+  }
+
+  const srcStart = altClose + 2;
+  const closeParen = source.indexOf(")", srcStart);
+  if (closeParen < 0) {
+    return;
+  }
+
+  let srcEnd = srcStart;
+  while (srcEnd < closeParen && !/\s/u.test(source[srcEnd])) {
+    srcEnd += 1;
+  }
+  if (srcEnd <= srcStart) {
+    return;
+  }
+
+  addSourceSyntaxMarkDecoration(decorations, baseFrom, baseFrom + 2, "cm-source-image-delim");
+  addSourceSyntaxMarkDecoration(decorations, baseFrom + 2, baseFrom + altClose, "cm-source-image-alt");
+  addSourceSyntaxMarkDecoration(decorations, baseFrom + altClose, baseFrom + altClose + 2, "cm-source-image-delim");
+  addSourceSyntaxMarkDecoration(decorations, baseFrom + srcStart, baseFrom + srcEnd, "cm-source-image-url");
+
+  let cursor = srcEnd;
+  while (cursor < closeParen && /\s/u.test(source[cursor])) {
+    cursor += 1;
+  }
+  if (cursor < closeParen && source[cursor] === "\"") {
+    const titleQuoteOpen = cursor;
+    const titleQuoteClose = source.indexOf("\"", titleQuoteOpen + 1);
+    if (titleQuoteClose > titleQuoteOpen && titleQuoteClose < closeParen + 1) {
+      const tail = source.slice(titleQuoteClose + 1, closeParen);
+      if (/^\s*$/u.test(tail)) {
+        addSourceSyntaxMarkDecoration(
+          decorations,
+          baseFrom + titleQuoteOpen,
+          baseFrom + titleQuoteOpen + 1,
+          "cm-source-image-delim"
+        );
+        addSourceSyntaxMarkDecoration(
+          decorations,
+          baseFrom + titleQuoteOpen + 1,
+          baseFrom + titleQuoteClose,
+          "cm-source-image-title"
+        );
+        addSourceSyntaxMarkDecoration(
+          decorations,
+          baseFrom + titleQuoteClose,
+          baseFrom + titleQuoteClose + 1,
+          "cm-source-image-delim"
+        );
+      }
+    }
+  }
+
+  addSourceSyntaxMarkDecoration(
+    decorations,
+    baseFrom + closeParen,
+    baseFrom + closeParen + 1,
+    "cm-source-image-delim"
+  );
+
+  const commentStart = source.indexOf("<!--", closeParen + 1);
+  if (commentStart < 0) {
+    return;
+  }
+  const commentEnd = source.indexOf("-->", commentStart + 4);
+  if (commentEnd < 0) {
+    return;
+  }
+
+  addSourceSyntaxMarkDecoration(
+    decorations,
+    baseFrom + commentStart,
+    baseFrom + commentStart + 4,
+    "cm-source-image-meta-delim"
+  );
+  addSourceSyntaxMarkDecoration(
+    decorations,
+    baseFrom + commentEnd,
+    baseFrom + commentEnd + 3,
+    "cm-source-image-meta-delim"
+  );
+
+  const commentBody = source.slice(commentStart + 4, commentEnd);
+  const keyMatch = commentBody.match(/yc-image-width/i);
+  if (keyMatch && Number.isFinite(keyMatch.index)) {
+    const keyFrom = baseFrom + commentStart + 4 + Number(keyMatch.index || 0);
+    const keyTo = keyFrom + String(keyMatch[0] || "").length;
+    addSourceSyntaxMarkDecoration(decorations, keyFrom, keyTo, "cm-source-image-meta-key");
+  }
+
+  const numberMatch = commentBody.match(/:\s*(\d+)/);
+  if (numberMatch && Number.isFinite(numberMatch.index)) {
+    const fullStart = baseFrom + commentStart + 4 + Number(numberMatch.index || 0);
+    const colonOffset = String(numberMatch[0] || "").indexOf(":");
+    if (colonOffset >= 0) {
+      const colonFrom = fullStart + colonOffset;
+      addSourceSyntaxMarkDecoration(decorations, colonFrom, colonFrom + 1, "cm-source-image-meta-delim");
+    }
+    const value = String(numberMatch[1] || "");
+    const valueOffset = String(numberMatch[0] || "").lastIndexOf(value);
+    if (value && valueOffset >= 0) {
+      const valueFrom = fullStart + valueOffset;
+      addSourceSyntaxMarkDecoration(
+        decorations,
+        valueFrom,
+        valueFrom + value.length,
+        "cm-source-image-meta-number"
+      );
+    }
+  }
+};
+
+const addMathSourceSyntaxDecorationsForBlock = (decorations, doc, fromInput, toInput, docLength) => {
+  const from = clampPos(fromInput, docLength);
+  const to = clampPos(toInput, docLength);
+  if (to <= from) {
+    return;
+  }
+
+  const fromLine = doc.lineAt(from).number;
+  const toLine = doc.lineAt(Math.max(from, to - 1)).number;
+
+  if (fromLine === toLine) {
+    const line = doc.line(fromLine);
+    const segmentFrom = Math.max(line.from, from);
+    const segmentTo = Math.min(line.to, to);
+    const raw = doc.sliceString(segmentFrom, segmentTo);
+    const leading = raw.match(/^\s*/u)?.[0] || "";
+    const trailing = raw.match(/\s*$/u)?.[0] || "";
+    const sourceStart = leading.length;
+    const sourceEnd = Math.max(sourceStart, raw.length - trailing.length);
+    const source = raw.slice(sourceStart, sourceEnd);
+    if (!(source.startsWith("$$") && source.endsWith("$$") && source.length >= 4)) {
+      return;
+    }
+
+    const baseFrom = segmentFrom + sourceStart;
+    const closeStart = source.length - 2;
+    addSourceSyntaxMarkDecoration(decorations, baseFrom, baseFrom + 2, "cm-source-math-delim");
+    addMathFormulaTokenMarks(decorations, source.slice(2, closeStart), baseFrom + 2);
+    addSourceSyntaxMarkDecoration(
+      decorations,
+      baseFrom + closeStart,
+      baseFrom + closeStart + 2,
+      "cm-source-math-delim"
+    );
+    return;
+  }
+
+  const firstLine = doc.line(fromLine);
+  const firstFrom = Math.max(firstLine.from, from);
+  const firstTo = Math.min(firstLine.to, to);
+  const firstRaw = doc.sliceString(firstFrom, firstTo);
+  const firstLeading = firstRaw.match(/^\s*/u)?.[0] || "";
+  const firstBaseFrom = firstFrom + firstLeading.length;
+  const firstTrimmed = firstRaw.trim();
+  const firstMarker = firstTrimmed.indexOf("$$");
+  if (firstMarker >= 0) {
+    addSourceSyntaxMarkDecoration(
+      decorations,
+      firstBaseFrom + firstMarker,
+      firstBaseFrom + firstMarker + 2,
+      "cm-source-math-delim"
+    );
+  }
+
+  for (let lineNumber = fromLine + 1; lineNumber < toLine; lineNumber += 1) {
+    const line = doc.line(lineNumber);
+    const lineRaw = doc.sliceString(line.from, line.to);
+    const lineLeading = lineRaw.match(/^\s*/u)?.[0] || "";
+    const lineTrailing = lineRaw.match(/\s*$/u)?.[0] || "";
+    const lineStart = lineLeading.length;
+    const lineEnd = Math.max(lineStart, lineRaw.length - lineTrailing.length);
+    if (lineEnd <= lineStart) {
+      continue;
+    }
+    const formulaText = lineRaw.slice(lineStart, lineEnd);
+    addMathFormulaTokenMarks(decorations, formulaText, line.from + lineStart);
+  }
+
+  const lastLine = doc.line(toLine);
+  const lastFrom = Math.max(lastLine.from, from);
+  const lastTo = Math.min(lastLine.to, to);
+  const lastRaw = doc.sliceString(lastFrom, lastTo);
+  const lastLeading = lastRaw.match(/^\s*/u)?.[0] || "";
+  const lastBaseFrom = lastFrom + lastLeading.length;
+  const lastTrimmed = lastRaw.trim();
+  const lastMarker = lastTrimmed.indexOf("$$");
+  if (lastMarker >= 0) {
+    addSourceSyntaxMarkDecoration(
+      decorations,
+      lastBaseFrom + lastMarker,
+      lastBaseFrom + lastMarker + 2,
+      "cm-source-math-delim"
+    );
+  }
+};
+
 export const setPresentationDataEffect = StateEffect.define();
 
 // Toggle hidden-source preview for image/math/table blocks.
@@ -928,14 +1200,18 @@ const imageWidthField = StateField.define({
       }
       if (effect.is(setPresentationDataEffect)) {
         const blocks = Array.isArray(effect.value?.blocks) ? effect.value.blocks : [];
-        const validImageIds = new Set(
-          blocks
-            .map((block) => imageExpandKeyOf(block))
-            .filter(Boolean)
-        );
-        next = validImageIds.size
-          ? new Map([...next.entries()].filter(([id]) => validImageIds.has(id)))
-          : new Map();
+        const hydrated = new Map();
+        for (const block of blocks) {
+          const imageId = imageExpandKeyOf(block);
+          if (!imageId) {
+            continue;
+          }
+          const widthFromSource = normalizeImageWidth(block?.attrs?.width, Number.NaN);
+          if (Number.isFinite(widthFromSource)) {
+            hydrated.set(imageId, widthFromSource);
+          }
+        }
+        next = hydrated;
       }
     }
     return next;
@@ -1134,13 +1410,25 @@ const buildDecorations = (view, blocks, currentBlockId) => {
         }
       }
 
+      if (blockKeepsSourceVisible) {
+        if (blockType === "image") {
+          addImageSourceSyntaxDecorationsForBlock(decorations, doc, blockFrom, blockTo, docLength);
+        } else if (blockType === "math_block") {
+          addMathSourceSyntaxDecorationsForBlock(decorations, doc, blockFrom, blockTo, docLength);
+        }
+      }
+
       // Always mount image preview widget.
       if (blockType === "image") {
         const attrs = block?.attrs || {};
         const src = String(attrs.src || "");
         const alt = String(attrs.alt || "");
         const title = attrs.title != null ? String(attrs.title || "") : "";
-        const imageWidth = normalizeImageWidth(imageWidthMap.get(imageExpandKey));
+        const persistedWidth = normalizeImageWidth(attrs.width, Number.NaN);
+        const imageWidth = normalizeImageWidth(
+          imageWidthMap.get(imageExpandKey),
+          Number.isFinite(persistedWidth) ? persistedWidth : DEFAULT_IMAGE_WIDTH
+        );
         const widgetPos = isImageExpanded ? blockTo : blockFrom;
         const widgetSide = isImageExpanded ? 1 : -1;
         if (src) {
@@ -1344,6 +1632,75 @@ const presentationContextMenuHandler = (event, view) => {
   return false;
 };
 
+const resolveImageBlockRangeById = (view, blockId) => {
+  const targetBlockId = String(blockId || "");
+  if (!targetBlockId) {
+    return null;
+  }
+
+  const data = view.state.field(presentationDataField);
+  const blocks = Array.isArray(data?.blocks) ? data.blocks : [];
+  const docLength = Number(view.state.doc.length || 0);
+  for (const block of blocks) {
+    const from = clampPos(block?.from, docLength);
+    const to = Math.max(from, clampPos(block?.to, docLength));
+    if (imageExpandKeyOf({ type: block?.type, from }) === targetBlockId) {
+      return { from, to };
+    }
+  }
+  return null;
+};
+
+const persistImageWidthToMarkdown = (view, blockId, widthInput) => {
+  const range = resolveImageBlockRangeById(view, blockId);
+  if (!range) {
+    return;
+  }
+
+  const width = normalizeImageWidth(widthInput, Number.NaN);
+  if (!Number.isFinite(width)) {
+    return;
+  }
+
+  const doc = view.state.doc;
+  const rawLine = doc.sliceString(range.from, range.to);
+  const trimmed = rawLine.trim();
+  if (!trimmed) {
+    return;
+  }
+
+  const parsed = parseImageLine(trimmed);
+  if (!parsed || !parsed.src) {
+    return;
+  }
+
+  const leadingWhitespace = rawLine.match(/^\s*/u)?.[0] || "";
+  const widthForSource = width === DEFAULT_IMAGE_WIDTH ? undefined : width;
+  const nextLine = `${leadingWhitespace}${serializeImageLine({
+    alt: parsed.alt,
+    src: parsed.src,
+    title: parsed.title,
+    width: widthForSource
+  })}`;
+
+  if (nextLine === rawLine) {
+    return;
+  }
+
+  view.dispatch({
+    changes: {
+      from: range.from,
+      to: range.to,
+      insert: nextLine
+    },
+    effects: setImageWidthEffect.of({
+      blockId: String(blockId || ""),
+      width
+    }),
+    userEvent: "input"
+  });
+};
+
 const presentationMouseDownHandler = (event, view) => {
   const target = event.target;
   if (!(target instanceof Element)) {
@@ -1392,6 +1749,9 @@ const presentationMouseDownHandler = (event, view) => {
   const onMouseUp = () => {
     window.removeEventListener("mousemove", onMouseMove, true);
     window.removeEventListener("mouseup", onMouseUp, true);
+    if (lastWidth !== startWidth) {
+      persistImageWidthToMarkdown(view, blockId, lastWidth);
+    }
   };
 
   window.addEventListener("mousemove", onMouseMove, true);
