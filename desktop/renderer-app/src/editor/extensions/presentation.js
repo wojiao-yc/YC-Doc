@@ -751,14 +751,25 @@ const buildDecorations = (view, blocks, currentBlockId) => {
       // Keep source visible for focused source-first block types or expanded media/math blocks.
       const blockKeepsSourceVisible = (SOURCE_VISIBLE_BLOCK_TYPES.has(blockType)
         && selectionIntersectsRange(selection, blockFrom, blockTo)) || isImageExpanded || isMathExpanded;
+      const hideMathSourceLines = blockType === "math_block" && !blockKeepsSourceVisible;
 
       const lineRange = resolveLineRange(doc, block);
       for (let lineNumber = lineRange.fromLine; lineNumber <= lineRange.toLine; lineNumber += 1) {
         const line = doc.line(lineNumber);
+        const baseClass = classesForBlockLine(block, currentBlockId, lineNumber, lineRange, blockKeepsSourceVisible);
+        const isMathSourceAnchorLine = hideMathSourceLines && lineNumber === lineRange.fromLine;
+        const isMathSourceHiddenLine = hideMathSourceLines && !isMathSourceAnchorLine;
+        const className = [
+          baseClass,
+          isMathSourceAnchorLine ? "cm-block-math-source-anchor" : "",
+          isMathSourceHiddenLine ? "cm-block-math-source-hidden" : ""
+        ]
+          .filter(Boolean)
+          .join(" ");
         decorations.push(
           Decoration.line({
             attributes: {
-              class: classesForBlockLine(block, currentBlockId, lineNumber, lineRange, blockKeepsSourceVisible)
+              class: className
             }
           }).range(line.from)
         );
