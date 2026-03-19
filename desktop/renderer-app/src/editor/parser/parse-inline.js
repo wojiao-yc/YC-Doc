@@ -12,6 +12,8 @@ const INLINE_BLOCK_TYPES = new Set([
 
 const MARK_TOKEN_TYPES = new Set(["em", "strong", "codespan", "del", "link"]);
 const INNER_TEXT_RANGE_TOKEN_TYPES = new Set(["em", "strong", "codespan", "del", "link", "escape"]);
+const INLINE_MATH_TOKEN_TYPE = "math_inline";
+const INLINE_MATH_EXCLUDED_TOKEN_TYPES = new Set(["codespan"]);
 
 const HEADING_PREFIX_PATTERN = /^\s{0,3}#{1,6}[ \t]+/;
 const LIST_PREFIX_PATTERN = /^(\s*)(?:[-+*]\s+\[(?: |x|X)\]\s+|[-+*]\s+|\d+[.)]\s+)/;
@@ -204,6 +206,168 @@ const lexInlineTokens = (text) => {
   }
 
   return [{ type: "text", raw: source, text: source }];
+};
+
+const normalizeTokenRawRange = (token) => {
+  const rawFrom = Number(token?.rawFrom);
+  const rawTo = Number(token?.rawTo);
+  if (!Number.isFinite(rawFrom) || !Number.isFinite(rawTo) || rawTo <= rawFrom) {
+    return null;
+  }
+  return {
+    from: rawFrom,
+    to: rawTo
+  };
+};
+
+const collectTokenRangesByType = (tokens, types = new Set(), output = []) => {
+  for (const token of Array.isArray(tokens) ? tokens : []) {
+    const tokenType = asString(token?.type);
+    const range = normalizeTokenRawRange(token);
+    if (range && types.has(tokenType)) {
+      output.push(range);
+    }
+
+    if (Array.isArray(token?.children) && token.children.length) {
+      collectTokenRangesByType(token.children, types, output);
+    }
+  }
+  return output;
+};
+
+const rangeIntersects = (leftFrom, leftTo, rightFrom, rightTo) => leftFrom < rightTo && leftTo > rightFrom;
+
+const rangeIntersectsAny = (from, to, ranges = []) =>
+  ranges.some((range) => rangeIntersects(from, to, Number(range?.from || 0), Number(range?.to || 0)));
+
+const offsetInAnyRange = (offset, ranges = []) =>
+  ranges.some((range) => offset >= Number(range?.from || 0) && offset < Number(range?.to || 0));
+
+const isEscapedAt = (source, indexInput) => {
+  const index = Number(indexInput || 0);
+  if (index <= 0) {
+    return false;
+  }
+
+  let slashCount = 0;
+  for (let cursor = index - 1; cursor >= 0; cursor -= 1) {
+    if (source[cursor] !== "\\") {
+      break;
+    }
+    slashCount += 1;
+  }
+  return slashCount % 2 === 1;
+};
+
+const isSingleDollarDelimiterAt = (source, indexInput) => {
+  const index = Number(indexInput || 0);
+  if (index < 0 || index >= source.length) {
+    return false;
+  }
+  if (source[index] !== "$") {
+    return false;
+  }
+  if (isEscapedAt(source, index)) {
+    return false;
+  }
+  if (source[index - 1] === "$" || source[index + 1] === "$") {
+    return false;
+  }
+  return true;
+};
+
+const buildInlineMathTokens = ({
+  source,
+  baseFrom,
+  line,
+  lineFrom,
+  state,
+  excludedRanges = []
+}) => {
+  const tokens = [];
+  if (!source || !source.includes("$")) {
+    return tokens;
+  }
+
+  const safeBaseFrom = Number(baseFrom || 0);
+  const safeLine = Math.max(1, Number(line || 1));
+  const safeLineFrom = Number(lineFrom || 0);
+  let cursor = 0;
+
+  while (cursor < source.length) {
+    if (!isSingleDollarDelimiterAt(source, cursor)) {
+      cursor += 1;
+      continue;
+    }
+
+    const openOffset = cursor;
+    const openPos = safeBaseFrom + openOffset;
+    if (offsetInAnyRange(openPos, excludedRanges)) {
+      cursor += 1;
+      continue;
+    }
+
+    let closeOffset = -1;
+    for (let next = openOffset + 1; next < source.length; next += 1) {
+      if (!isSingleDollarDelimiterAt(source, next)) {
+        continue;
+      }
+      const closePos = safeBaseFrom + next;
+      if (offsetInAnyRange(closePos, excludedRanges)) {
+        continue;
+      }
+
+      const candidateTo = closePos + 1;
+      if (rangeIntersectsAny(openPos, candidateTo, excludedRanges)) {
+        continue;
+      }
+
+      closeOffset = next;
+      break;
+    }
+
+    if (closeOffset < 0) {
+      cursor += 1;
+      continue;
+    }
+
+    const rawFrom = openPos;
+    const rawTo = safeBaseFrom + closeOffset + 1;
+    const textFrom = rawFrom + 1;
+    const textTo = Math.max(textFrom, rawTo - 1);
+    const formula = source.slice(openOffset + 1, closeOffset);
+    if (!formula.trim() || formula.startsWith(" ") || formula.endsWith(" ")) {
+      cursor = closeOffset + 1;
+      continue;
+    }
+
+    tokens.push({
+      id: `it_${state.nextTokenId}`,
+      type: INLINE_MATH_TOKEN_TYPE,
+      marks: [],
+      rawFrom,
+      rawTo,
+      textFrom,
+      textTo,
+      line: safeLine,
+      columnRawFrom: Math.max(0, rawFrom - safeLineFrom),
+      columnRawTo: Math.max(0, rawTo - safeLineFrom),
+      columnTextFrom: Math.max(0, textFrom - safeLineFrom),
+      columnTextTo: Math.max(0, textTo - safeLineFrom),
+      rawText: source.slice(openOffset, closeOffset + 1),
+      text: formula,
+      attrs: {
+        formula,
+        displayMode: false
+      },
+      rangeResolved: true,
+      children: []
+    });
+    state.nextTokenId += 1;
+    cursor = closeOffset + 1;
+  }
+
+  return tokens;
 };
 
 const collectTokenNodes = ({
@@ -408,6 +572,9 @@ const fallbackLineModel = ({ source, from, line, lineFrom, state }) => {
 
 const parseInlineModelFromLine = ({ lineText, from, line, lineFrom, state }) => {
   const source = asString(lineText);
+  const safeFrom = Number(from || 0);
+  const safeLine = Math.max(1, Number(line || 1));
+  const safeLineFrom = Number(lineFrom || 0);
   if (!source) {
     return {
       inlineTokens: [],
@@ -419,28 +586,55 @@ const parseInlineModelFromLine = ({ lineText, from, line, lineFrom, state }) => 
   const inlineTokens = collectTokenNodes({
     source,
     tokens,
-    baseFrom: Number(from || 0),
-    line: Math.max(1, Number(line || 1)),
-    lineFrom: Number(lineFrom || 0),
+    baseFrom: safeFrom,
+    line: safeLine,
+    lineFrom: safeLineFrom,
     marks: [],
     state
   });
   const inlineSegments = flattenTokenNodesToSegments({
     nodes: inlineTokens,
-    lineFrom: Number(lineFrom || 0)
+    lineFrom: safeLineFrom
   });
+
+  const addInlineMathTokens = (tokensInput) => {
+    const tokensList = Array.isArray(tokensInput) ? tokensInput : [];
+    const excludedRanges = collectTokenRangesByType(tokensList, INLINE_MATH_EXCLUDED_TOKEN_TYPES);
+    const mathTokens = buildInlineMathTokens({
+      source,
+      baseFrom: safeFrom,
+      line: safeLine,
+      lineFrom: safeLineFrom,
+      state,
+      excludedRanges
+    });
+    if (!mathTokens.length) {
+      return tokensList;
+    }
+    return [...tokensList, ...mathTokens].sort((left, right) => {
+      if (left.rawFrom !== right.rawFrom) {
+        return left.rawFrom - right.rawFrom;
+      }
+      return left.rawTo - right.rawTo;
+    });
+  };
 
   if (inlineTokens.length && inlineSegments.length) {
-    return { inlineTokens, inlineSegments };
+    return {
+      inlineTokens: addInlineMathTokens(inlineTokens),
+      inlineSegments
+    };
   }
 
-  return fallbackLineModel({
+  const fallback = fallbackLineModel({
     source,
-    from,
-    line: Math.max(1, Number(line || 1)),
-    lineFrom: Number(lineFrom || 0),
+    from: safeFrom,
+    line: safeLine,
+    lineFrom: safeLineFrom,
     state
   });
+  fallback.inlineTokens = addInlineMathTokens(fallback.inlineTokens);
+  return fallback;
 };
 
 const contentStartOffsetForLine = (blockType, lineText, lineIndex) => {

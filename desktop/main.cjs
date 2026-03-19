@@ -398,6 +398,23 @@ const createWindow = async () => {
     return { action: "deny" };
   });
 
+  mainWindow.webContents.on("before-input-event", (event, input) => {
+    const key = String(input?.key || "").toLowerCase();
+    const toggleByF12 = key === "f12";
+    const toggleByShortcut = (Boolean(input?.control) || Boolean(input?.meta))
+      && Boolean(input?.shift)
+      && key === "i";
+    if (!toggleByF12 && !toggleByShortcut) {
+      return;
+    }
+    event.preventDefault();
+    if (mainWindow.webContents.isDevToolsOpened()) {
+      mainWindow.webContents.closeDevTools();
+      return;
+    }
+    mainWindow.webContents.openDevTools({ mode: "detach" });
+  });
+
   const emitMaximizedChanged = () => {
     if (!mainWindow || mainWindow.isDestroyed()) {
       return;

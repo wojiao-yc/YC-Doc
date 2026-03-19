@@ -1,12 +1,13 @@
 import { Decoration, EditorView, ViewPlugin, WidgetType } from "@codemirror/view";
 import { StateEffect, StateField } from "@codemirror/state";
+import katex from "katex";
 
 const HEADING_PREFIX_PATTERN = /^\s{0,3}#{1,6}[ \t]+/;
 const BLOCKQUOTE_PREFIX_PATTERN = /^\s{0,3}>\s?/;
 const TASK_LIST_PREFIX_PATTERN = /^(\s*)([-+*])\s+\[( |x|X)\]\s+/;
 const BULLET_LIST_PREFIX_PATTERN = /^(\s*)([-+*])\s+/;
 const ORDERED_LIST_PREFIX_PATTERN = /^(\s*)(\d+)([.)])\s+/;
-const INLINE_SYNTAX_TOKEN_TYPES = new Set(["em", "strong", "codespan", "del", "link"]);
+const INLINE_SYNTAX_TOKEN_TYPES = new Set(["em", "strong", "codespan", "del", "link", "math_inline"]);
 const SOURCE_VISIBLE_BLOCK_TYPES = new Set([
   "heading",
   "bullet_list_item",
@@ -81,6 +82,35 @@ const normalizePresentationData = (input = {}) => ({
 
 const clampPos = (value, length) => Math.max(0, Math.min(Number(length || 0), Number(value || 0)));
 
+const escapeHtml = (value) =>
+  String(value || "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+
+const renderMathHtml = (formulaInput, displayMode = false) => {
+  const formula = String(formulaInput || "").trim();
+  if (!formula) {
+    return `<span class="cm-math-empty">${displayMode ? "Empty math block" : "Empty formula"}</span>`;
+  }
+
+  try {
+    if (typeof katex?.renderToString === "function") {
+      return katex.renderToString(formula, {
+        displayMode: Boolean(displayMode),
+        throwOnError: false,
+        output: "html"
+      });
+    }
+  } catch {
+    // fall through
+  }
+
+  return `<span class="cm-math-fallback">${escapeHtml(formula)}</span>`;
+};
+
 class ListPrefixWidget extends WidgetType {
   constructor({ blockType = "", text = "", checked = false } = {}) {
     super();
@@ -116,32 +146,29 @@ const normalizeImageSrc = (src) => {
   if (!srcStr) {
     return "";
   }
-  // 如果已经是 http/https 协议，不做处理
+  // Keep remote URLs unchanged.
   if (srcStr.startsWith("http://") || srcStr.startsWith("https://")) {
     return srcStr;
   }
-  // 如果已经是 file:// 协议（正确格式 file:///），直接返回
+  // Keep normalized file protocol paths unchanged.
   if (srcStr.startsWith("file:///") || srcStr.startsWith("file://localhost/")) {
     return srcStr;
   }
-  // 处理旧格式的 file:// 协议（如 file://C:/），转换为正确格式
+  // Convert legacy file://C:/... to file:///C:/...
   if (srcStr.startsWith("file://")) {
     return `file:///${srcStr.slice(7)}`;
   }
-  // 处理 Windows 本地绝对路径（如 C:/、D:/ 或 /C:/、/D:/）
-  // 支持：C:/、/C:/、C:\、/C\ 等格式
+  // Convert absolute Windows paths to file protocol.
   if (/^\/?[A-Za-z]:[/\\]/.test(srcStr)) {
-    // 移除开头的 /（如果存在）
     let filePath = srcStr.replace(/^\/+/, "");
-    // 转换反斜杠为正斜杠
     filePath = filePath.replace(/\\/g, "/");
     return `file:///${filePath}`;
   }
-  // Unix 绝对路径（如 /assets/img/...）
+  // Convert absolute Unix paths to file protocol.
   if (srcStr.startsWith("/")) {
     return `file://${srcStr}`;
   }
-  // 其他相对路径保持原样
+  // Keep relative paths unchanged.
   return srcStr;
 };
 
@@ -179,7 +206,7 @@ class ImageWidget extends WidgetType {
     }
     img.className = "cm-image-widget-img";
 
-    // 添加加载错误处理
+    // Fallback text for broken images.
     img.onerror = () => {
       img.style.display = "none";
       const errorMsg = document.createElement("span");
@@ -188,7 +215,7 @@ class ImageWidget extends WidgetType {
       wrapper.appendChild(errorMsg);
     };
 
-    // 添加显示源码按钮（使用符号 <> 或 ><）
+    // Toggle source visibility for this image block.
     const btn = document.createElement("span");
     btn.className = "cm-image-widget-btn";
     btn.textContent = this.isExpanded ? "收起源码" : "展开源码";
@@ -197,6 +224,88 @@ class ImageWidget extends WidgetType {
 
     wrapper.appendChild(img);
     wrapper.appendChild(btn);
+    return wrapper;
+  }
+
+  ignoreEvent() {
+    return false;
+  }
+}
+
+class MathBlockWidget extends WidgetType {
+  constructor({ formula = "", blockId = "", isExpanded = false } = {}) {
+    super();
+    this.formula = String(formula || "");
+    this.blockId = String(blockId || "");
+    this.isExpanded = Boolean(isExpanded);
+  }
+
+  eq(other) {
+    return (
+      other instanceof MathBlockWidget
+      && other.formula === this.formula
+      && other.blockId === this.blockId
+      && other.isExpanded === this.isExpanded
+    );
+  }
+
+  toDOM() {
+    const wrapper = document.createElement("span");
+    wrapper.className = "cm-math-widget";
+    wrapper.setAttribute("data-math-block-id", this.blockId);
+
+    const content = document.createElement("span");
+    content.className = "cm-math-widget-content";
+    try {
+      content.innerHTML = renderMathHtml(this.formula, true);
+    } catch {
+      content.textContent = this.formula || "Math render failed";
+    }
+
+    const btn = document.createElement("span");
+    btn.className = "cm-math-widget-btn";
+    btn.textContent = this.isExpanded ? "Hide source" : "Show source";
+    btn.setAttribute("title", this.isExpanded ? "Hide source" : "Show source");
+    btn.setAttribute("data-math-block-id", this.blockId);
+
+    wrapper.appendChild(content);
+    wrapper.appendChild(btn);
+    return wrapper;
+  }
+
+  ignoreEvent() {
+    return false;
+  }
+}
+
+class InlineMathWidget extends WidgetType {
+  constructor({ formula = "", from = 0, to = 0 } = {}) {
+    super();
+    this.formula = String(formula || "");
+    this.from = Number(from || 0);
+    this.to = Number(to || this.from);
+  }
+
+  eq(other) {
+    return (
+      other instanceof InlineMathWidget
+      && other.formula === this.formula
+      && other.from === this.from
+      && other.to === this.to
+    );
+  }
+
+  toDOM() {
+    const wrapper = document.createElement("span");
+    wrapper.className = "cm-inline-math-widget";
+    wrapper.setAttribute("data-math-inline-from", String(this.from));
+    wrapper.setAttribute("data-math-inline-to", String(this.to));
+    wrapper.setAttribute("title", "Click to edit formula source");
+    try {
+      wrapper.innerHTML = renderMathHtml(this.formula, false);
+    } catch {
+      wrapper.textContent = this.formula || "Formula render failed";
+    }
     return wrapper;
   }
 
@@ -372,6 +481,26 @@ const addHiddenSyntaxRangeDecoration = (decorations, from, to) => {
   decorations.push(Decoration.replace({}).range(from, to));
 };
 
+const addHiddenSyntaxRangeDecorationsByLine = (decorations, doc, fromInput, toInput, docLength) => {
+  const from = clampPos(fromInput, docLength);
+  const to = clampPos(toInput, docLength);
+  if (to <= from) {
+    return;
+  }
+
+  const fromLine = doc.lineAt(from).number;
+  const toLine = doc.lineAt(Math.max(from, to - 1)).number;
+  for (let lineNumber = fromLine; lineNumber <= toLine; lineNumber += 1) {
+    const line = doc.line(lineNumber);
+    const rangeFrom = Math.max(line.from, from);
+    const rangeTo = Math.min(line.to, to);
+    if (rangeTo <= rangeFrom) {
+      continue;
+    }
+    addHiddenSyntaxRangeDecoration(decorations, rangeFrom, rangeTo);
+  }
+};
+
 const addHiddenSyntaxDecorationsForToken = (decorations, token) => {
   const leftFrom = token.rawFrom;
   const leftTo = Math.max(leftFrom, Math.min(token.rawTo, token.textFrom));
@@ -462,10 +591,35 @@ const isTokenRelatedToActiveToken = (token, activeToken) => {
   return tokenInsideActive || tokenContainsActive;
 };
 
+const addInlineMathPreviewDecorationForToken = (decorations, doc, token, docLength) => {
+  const rawFrom = clampPos(token?.rawFrom, docLength);
+  const rawTo = clampPos(token?.rawTo, docLength);
+  if (rawTo <= rawFrom) {
+    return;
+  }
+
+  const textFrom = clampPos(token?.textFrom, docLength);
+  const textTo = clampPos(token?.textTo, docLength);
+  const formula = doc.sliceString(textFrom, textTo);
+
+  addHiddenSyntaxRangeDecoration(decorations, rawFrom, rawTo);
+  decorations.push(
+    Decoration.widget({
+      widget: new InlineMathWidget({
+        formula,
+        from: rawFrom,
+        to: rawTo
+      }),
+      side: 1
+    }).range(rawTo)
+  );
+};
+
 export const setPresentationDataEffect = StateEffect.define();
 
-// 切换图片展开状态
+// Toggle hidden-source preview for image and math blocks.
 export const toggleImageExpandEffect = StateEffect.define();
+export const toggleMathExpandEffect = StateEffect.define();
 
 const presentationDataField = StateField.define({
   create: () => normalizePresentationData(),
@@ -480,7 +634,7 @@ const presentationDataField = StateField.define({
   }
 });
 
-// 图片展开状态 Field
+// Expanded image block ids.
 const imageExpandField = StateField.define({
   create: () => new Set(),
   update: (value, transaction) => {
@@ -505,6 +659,37 @@ const imageExpandField = StateField.define({
         );
         next = validImageIds.size
           ? new Set([...next].filter((id) => validImageIds.has(id)))
+          : new Set();
+      }
+    }
+    return next;
+  }
+});
+
+const mathExpandField = StateField.define({
+  create: () => new Set(),
+  update: (value, transaction) => {
+    let next = new Set(value);
+    for (const effect of transaction.effects) {
+      if (effect.is(toggleMathExpandEffect)) {
+        const mathId = String(effect.value || "");
+        if (next.has(mathId)) {
+          next.delete(mathId);
+        } else {
+          next.add(mathId);
+        }
+        continue;
+      }
+      if (effect.is(setPresentationDataEffect)) {
+        const blocks = Array.isArray(effect.value?.blocks) ? effect.value.blocks : [];
+        const validMathIds = new Set(
+          blocks
+            .filter((block) => String(block?.type || "") === "math_block")
+            .map((block) => String(block?.id || ""))
+            .filter(Boolean)
+        );
+        next = validMathIds.size
+          ? new Set([...next].filter((id) => validMathIds.has(id)))
           : new Set();
       }
     }
@@ -553,98 +738,123 @@ const buildDecorations = (view, blocks, currentBlockId) => {
   const selection = selectionSnapshotOf(view.state);
   const activeInlineToken = pickActiveInlineSyntaxToken(blocks, selection, docLength);
   const imageExpandSet = view.state.field(imageExpandField) || new Set();
+  const mathExpandSet = view.state.field(mathExpandField) || new Set();
 
   for (const block of blocks) {
-    const blockFrom = clampPos(block?.from, docLength);
-    const blockTo = clampPos(block?.to, docLength);
-    const blockType = String(block?.type || "");
-    const blockId = String(block?.id || "");
-    const isImageExpanded = imageExpandSet.has(blockId);
-    // 图片块：默认隐藏源码显示图片，点击后显示源码
-    const blockKeepsSourceVisible = (SOURCE_VISIBLE_BLOCK_TYPES.has(blockType)
-      && selectionIntersectsRange(selection, blockFrom, blockTo)) || isImageExpanded;
+    try {
+      const blockFrom = clampPos(block?.from, docLength);
+      const blockTo = clampPos(block?.to, docLength);
+      const blockType = String(block?.type || "");
+      const blockId = String(block?.id || "");
+      const isImageExpanded = imageExpandSet.has(blockId);
+      const isMathExpanded = mathExpandSet.has(blockId);
+      // Keep source visible for focused source-first block types or expanded media/math blocks.
+      const blockKeepsSourceVisible = (SOURCE_VISIBLE_BLOCK_TYPES.has(blockType)
+        && selectionIntersectsRange(selection, blockFrom, blockTo)) || isImageExpanded || isMathExpanded;
 
-    const lineRange = resolveLineRange(doc, block);
-    for (let lineNumber = lineRange.fromLine; lineNumber <= lineRange.toLine; lineNumber += 1) {
-      const line = doc.line(lineNumber);
-      decorations.push(
-        Decoration.line({
-          attributes: {
-            class: classesForBlockLine(block, currentBlockId, lineNumber, lineRange, blockKeepsSourceVisible)
-          }
-        }).range(line.from)
-      );
-    }
-
-    if (!blockKeepsSourceVisible) {
-      if (blockType === "heading") {
-        const headingPrefixRange = headingPrefixRangeForBlock(block, docLength);
-        if (headingPrefixRange) {
-          addHiddenSyntaxRangeDecoration(decorations, headingPrefixRange.from, headingPrefixRange.to);
-        }
-      } else if (
-        blockType === "bullet_list_item"
-        || blockType === "ordered_list_item"
-        || blockType === "task_list_item"
-      ) {
-        addListPrefixDecorationsForBlock(decorations, doc, block, docLength);
-      } else if (blockType === "blockquote") {
-        addBlockquotePrefixDecorationsForBlock(decorations, doc, block, docLength);
-      } else if (blockType === "thematic_break") {
-        addHiddenSyntaxRangeDecoration(decorations, blockFrom, blockTo);
-      } else if (blockType === "image") {
-        // 隐藏图片源码
-        addHiddenSyntaxRangeDecoration(decorations, blockFrom, blockTo);
-      }
-    }
-
-    // 图片块：始终添加 ImageWidget
-    if (blockType === "image") {
-      const attrs = block?.attrs || {};
-      const src = String(attrs.src || "");
-      const alt = String(attrs.alt || "");
-      const title = attrs.title != null ? String(attrs.title || "") : "";
-      if (src) {
+      const lineRange = resolveLineRange(doc, block);
+      for (let lineNumber = lineRange.fromLine; lineNumber <= lineRange.toLine; lineNumber += 1) {
+        const line = doc.line(lineNumber);
         decorations.push(
-          Decoration.widget({
-            widget: new ImageWidget({ src, alt, title, blockId, isExpanded: isImageExpanded }),
-            side: 1
-          }).range(blockTo)
+          Decoration.line({
+            attributes: {
+              class: classesForBlockLine(block, currentBlockId, lineNumber, lineRange, blockKeepsSourceVisible)
+            }
+          }).range(line.from)
         );
       }
-    }
 
-    const inlineSegments = Array.isArray(block?.inlineSegments) ? block.inlineSegments : [];
-    for (const segment of inlineSegments) {
-      const className = inlineClassesForSegment(segment);
-      if (!className) {
-        continue;
+      if (!blockKeepsSourceVisible) {
+        if (blockType === "heading") {
+          const headingPrefixRange = headingPrefixRangeForBlock(block, docLength);
+          if (headingPrefixRange) {
+            addHiddenSyntaxRangeDecoration(decorations, headingPrefixRange.from, headingPrefixRange.to);
+          }
+        } else if (
+          blockType === "bullet_list_item"
+          || blockType === "ordered_list_item"
+          || blockType === "task_list_item"
+        ) {
+          addListPrefixDecorationsForBlock(decorations, doc, block, docLength);
+        } else if (blockType === "blockquote") {
+          addBlockquotePrefixDecorationsForBlock(decorations, doc, block, docLength);
+        } else if (blockType === "thematic_break") {
+          addHiddenSyntaxRangeDecoration(decorations, blockFrom, blockTo);
+        } else if (blockType === "image" || blockType === "math_block") {
+          addHiddenSyntaxRangeDecorationsByLine(decorations, doc, blockFrom, blockTo, docLength);
+        }
       }
-      const from = clampPos(segment?.from, docLength);
-      const to = clampPos(segment?.to, docLength);
-      if (to <= from) {
-        continue;
-      }
-      decorations.push(
-        Decoration.mark({
-          class: className
-        }).range(from, to)
-      );
-    }
 
-    const syntaxTokens = collectInlineSyntaxTokens(block?.inlineTokens, docLength);
-    for (const token of syntaxTokens) {
-      if (blockKeepsSourceVisible) {
-        continue;
+      // Always mount image preview widget.
+      if (blockType === "image") {
+        const attrs = block?.attrs || {};
+        const src = String(attrs.src || "");
+        const alt = String(attrs.alt || "");
+        const title = attrs.title != null ? String(attrs.title || "") : "";
+        if (src) {
+          decorations.push(
+            Decoration.widget({
+              widget: new ImageWidget({ src, alt, title, blockId, isExpanded: isImageExpanded }),
+              side: 1
+            }).range(blockTo)
+          );
+        }
       }
-      if (isTokenRelatedToActiveToken(token, activeInlineToken)) {
-        continue;
+
+      if (blockType === "math_block") {
+        const attrs = block?.attrs || {};
+        const formula = String(attrs.formula || "").trim();
+        decorations.push(
+          Decoration.widget({
+            widget: new MathBlockWidget({ formula, blockId, isExpanded: isMathExpanded }),
+            side: -1
+          }).range(blockFrom)
+        );
       }
-      addHiddenSyntaxDecorationsForToken(decorations, token);
+
+      const inlineSegments = Array.isArray(block?.inlineSegments) ? block.inlineSegments : [];
+      for (const segment of inlineSegments) {
+        const className = inlineClassesForSegment(segment);
+        if (!className) {
+          continue;
+        }
+        const from = clampPos(segment?.from, docLength);
+        const to = clampPos(segment?.to, docLength);
+        if (to <= from) {
+          continue;
+        }
+        decorations.push(
+          Decoration.mark({
+            class: className
+          }).range(from, to)
+        );
+      }
+
+      const syntaxTokens = collectInlineSyntaxTokens(block?.inlineTokens, docLength);
+      for (const token of syntaxTokens) {
+        if (blockKeepsSourceVisible) {
+          continue;
+        }
+        if (isTokenRelatedToActiveToken(token, activeInlineToken)) {
+          continue;
+        }
+        if (token.type === "math_inline") {
+          addInlineMathPreviewDecorationForToken(decorations, doc, token, docLength);
+          continue;
+        }
+        addHiddenSyntaxDecorationsForToken(decorations, token);
+      }
+    } catch (error) {
+      // Ignore a single-block render error to keep the editor alive.
+      console.error("[yc-editor] block presentation error", error, block);
     }
   }
-
-  return Decoration.set(decorations, true);
+  try {
+    return Decoration.set(decorations, true);
+  } catch (error) {
+    console.error("[yc-editor] decoration set error", error);
+    return Decoration.none;
+  }
 };
 
 const transactionHasEffect = (transaction, effectType) =>
@@ -669,13 +879,14 @@ class BlockPresentationPlugin {
     const currentChanged = nextCurrentBlockId !== this.currentBlockId;
     const selectionChanged = update.selectionSet;
     const imageExpandChanged = updateHasEffect(update, toggleImageExpandEffect);
+    const mathExpandChanged = updateHasEffect(update, toggleMathExpandEffect);
 
     if (!blocksChanged && !currentChanged) {
       if (update.docChanged) {
         // Any document edit can invalidate old ranges; wait for semantic snapshot instead of remapping stale blocks.
         this.blocks = [];
         this.decorations = buildDecorations(update.view, this.blocks, this.currentBlockId);
-      } else if (selectionChanged || imageExpandChanged) {
+      } else if (selectionChanged || imageExpandChanged || mathExpandChanged) {
         this.decorations = buildDecorations(update.view, this.blocks, this.currentBlockId);
       }
       return;
@@ -687,36 +898,71 @@ class BlockPresentationPlugin {
   }
 }
 
-// 图片按钮点击事件处理
-const imageClickHandler = (event, view) => {
-  // 只处理显示源码按钮的点击
+const presentationClickHandler = (event, view) => {
   const target = event.target;
-  const btn = target.closest(".cm-image-widget-btn");
-  if (!btn) {
+  if (!(target instanceof Element)) {
     return false;
   }
-  event.preventDefault();
-  event.stopPropagation();
-  const blockId = btn.getAttribute("data-image-block-id");
-  if (blockId) {
-    view.dispatch({
-      effects: toggleImageExpandEffect.of(blockId)
-    });
-    return true;
+
+  const imageBtn = target.closest(".cm-image-widget-btn");
+  if (imageBtn) {
+    event.preventDefault();
+    event.stopPropagation();
+    const blockId = imageBtn.getAttribute("data-image-block-id");
+    if (blockId) {
+      view.dispatch({
+        effects: toggleImageExpandEffect.of(blockId)
+      });
+      return true;
+    }
   }
+
+  const mathBtn = target.closest(".cm-math-widget-btn");
+  if (mathBtn) {
+    event.preventDefault();
+    event.stopPropagation();
+    const blockId = mathBtn.getAttribute("data-math-block-id");
+    if (blockId) {
+      view.dispatch({
+        effects: toggleMathExpandEffect.of(blockId)
+      });
+      return true;
+    }
+  }
+
+  const inlineMath = target.closest(".cm-inline-math-widget");
+  if (inlineMath) {
+    const from = Number(inlineMath.getAttribute("data-math-inline-from"));
+    const to = Number(inlineMath.getAttribute("data-math-inline-to"));
+    if (Number.isFinite(from)) {
+      const docLength = Number(view.state.doc.length || 0);
+      const safeTo = Number.isFinite(to) ? clampPos(to, docLength) : clampPos(from + 1, docLength);
+      const cursor = clampPos(Math.min(Math.max(from + 1, from), safeTo), docLength);
+      view.dispatch({
+        selection: {
+          anchor: cursor,
+          head: cursor
+        }
+      });
+      view.focus();
+      return true;
+    }
+  }
+
   return false;
 };
 
 export const presentationExtensions = [
   presentationDataField,
   imageExpandField,
+  mathExpandField,
   EditorView.baseTheme({
     ".cm-line.cm-block": {
       transition: "background-color 120ms ease, color 120ms ease"
     }
   }),
   EditorView.domEventHandlers({
-    click: imageClickHandler
+    click: presentationClickHandler
   }),
   ViewPlugin.fromClass(BlockPresentationPlugin, {
     decorations: (plugin) => plugin.decorations

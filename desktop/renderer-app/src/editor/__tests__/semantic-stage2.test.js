@@ -388,6 +388,19 @@ test("inline token tree keeps stable outer and inner ranges for repeated and nes
   }
 });
 
+test("inline math tokens are parsed and skip codespan content", () => {
+  const markdown = "$a+b$ and `$PATH` and $c^2$";
+  const blocks = parseMarkdownToBlocks(markdown);
+  const paragraph = blocks.find((block) => block.type === "paragraph");
+  const inlineTokens = flattenInlineTokens(paragraph?.inlineTokens || []);
+  const mathTokens = inlineTokens.filter((token) => token.type === "math_inline");
+
+  assert.equal(mathTokens.length, 2);
+  assert.deepEqual(mathTokens.map((token) => token.text), ["a+b", "c^2"]);
+  assert.deepEqual(mathTokens.map((token) => markdown.slice(token.rawFrom, token.rawTo)), ["$a+b$", "$c^2$"]);
+  assert.equal(mathTokens.every((token) => token.attrs?.displayMode === false), true);
+});
+
 test("inline model works for blockquote and list line prefixes", () => {
   const markdown = ["> quote with **bold** and `code`", "", "- item with [link](url)"].join("\n");
   const blocks = parseMarkdownToBlocks(markdown);
