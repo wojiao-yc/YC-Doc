@@ -33,11 +33,19 @@
 }
 
 .yc-editor-host .cm-line.cm-block-task-list-item.cm-task-checked {
-  opacity: 0.74;
+  color: #111827;
+  text-decoration-line: line-through;
+  text-decoration-thickness: 1.35px;
+  text-decoration-color: #111827;
 }
 
 .yc-editor-shell.is-dark .yc-editor-host .cm-line.cm-block-task-list-item.cm-task-unchecked {
   color: #cbd5e1;
+}
+
+.yc-editor-shell.is-dark .yc-editor-host .cm-line.cm-block-task-list-item.cm-task-checked {
+  color: #e2e8f0;
+  text-decoration-color: #e2e8f0;
 }
 
 .yc-editor-host .cm-list-prefix-widget {
@@ -56,10 +64,49 @@
   min-width: 1.45rem;
 }
 
-.yc-editor-host .cm-list-prefix-widget.cm-list-prefix-task-list-item {
-  min-width: 1.2rem;
+.yc-editor-host .cm-list-prefix-widget.cm-list-prefix-bullet-list-item {
+  justify-content: center;
+  min-width: 0.95rem;
+  font-size: 1.08em;
+  line-height: 1;
+}
+
+.yc-editor-host .cm-task-checkbox-widget {
+  width: 18px;
+  height: 18px;
+  border-radius: 5px;
+  border: 1.5px solid #94a3b8;
+  background: #ffffff;
+  color: #ffffff;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1;
+  margin-right: 0.34rem;
+  padding: 0;
+  cursor: pointer;
+  user-select: none;
+  text-decoration: none;
+  transition: background-color 120ms ease, border-color 120ms ease;
+}
+
+.yc-editor-host .cm-task-checkbox-widget.is-checked {
+  background: #8b5cf6;
+  border-color: #8b5cf6;
 }
 
 .yc-editor-shell.is-dark .yc-editor-host .cm-list-prefix-widget {
   color: #94a3b8;
+}
+
+.yc-editor-shell.is-dark .yc-editor-host .cm-task-checkbox-widget {
+  background: #0f172a;
+  border-color: #64748b;
+}
+
+.yc-editor-shell.is-dark .yc-editor-host .cm-task-checkbox-widget.is-checked {
+  background: #8b5cf6;
+  border-color: #8b5cf6;
 }

@@ -110,8 +110,14 @@ test("image and math source code use token-level syntax highlight classes", () =
 test("list and special-block styles include rendered widgets for hidden-source mode", () => {
   const lists = readSrc("styles/lists.css");
   const special = readSrc("styles/special-blocks.css");
+  const presentation = readSrc("editor/extensions/presentation.js");
 
   assert.match(lists, /\.cm-list-prefix-widget/);
+  assert.match(lists, /\.cm-task-checkbox-widget/);
+  assert.match(lists, /text-decoration-line:\s*line-through/);
+  assert.match(presentation, /TaskCheckboxWidget/);
+  assert.match(presentation, /toggleTaskListStateAtLine/);
+  assert.match(presentation, /data-task-toggle-from/);
   assert.match(special, /\.cm-table-widget/);
   assert.match(special, /\.cm-block-thematic-break\.cm-block-source-visible/);
 });

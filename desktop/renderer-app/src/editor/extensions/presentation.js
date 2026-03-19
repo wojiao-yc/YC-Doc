@@ -8,7 +8,17 @@ const BLOCKQUOTE_PREFIX_PATTERN = /^\s{0,3}>\s?/;
 const TASK_LIST_PREFIX_PATTERN = /^(\s*)([-+*])\s+\[( |x|X)\]\s+/;
 const BULLET_LIST_PREFIX_PATTERN = /^(\s*)([-+*])\s+/;
 const ORDERED_LIST_PREFIX_PATTERN = /^(\s*)(\d+)([.)])\s+/;
-const INLINE_SYNTAX_TOKEN_TYPES = new Set(["em", "strong", "codespan", "del", "link", "math_inline"]);
+const TASK_LIST_CHECKBOX_PATTERN = /^(\s*[-+*]\s+\[)( |x|X)(\]\s+)/;
+const INLINE_SYNTAX_TOKEN_TYPES = new Set([
+  "em",
+  "strong",
+  "codespan",
+  "del",
+  "link",
+  "math_inline",
+  "mark",
+  "comment"
+]);
 const SOURCE_VISIBLE_BLOCK_TYPES = new Set([
   "heading",
   "bullet_list_item",
@@ -259,6 +269,36 @@ class ListPrefixWidget extends WidgetType {
     span.textContent = this.text;
     span.setAttribute("aria-hidden", "true");
     return span;
+  }
+
+  ignoreEvent() {
+    return false;
+  }
+}
+
+class TaskCheckboxWidget extends WidgetType {
+  constructor({ checked = false, lineFrom = 0 } = {}) {
+    super();
+    this.checked = Boolean(checked);
+    this.lineFrom = Math.max(0, Number(lineFrom || 0));
+  }
+
+  eq(other) {
+    return (
+      other instanceof TaskCheckboxWidget
+      && other.checked === this.checked
+      && other.lineFrom === this.lineFrom
+    );
+  }
+
+  toDOM() {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = `cm-task-checkbox-widget${this.checked ? " is-checked" : ""}`;
+    button.setAttribute("data-task-toggle-from", String(this.lineFrom));
+    button.setAttribute("aria-label", this.checked ? "Mark task as not done" : "Mark task as done");
+    button.textContent = this.checked ? "\u2713" : "";
+    return button;
   }
 
   ignoreEvent() {
@@ -753,15 +793,12 @@ const listPrefixMatchForLine = (blockType, lineText) => {
 };
 
 const listPrefixLabelForBlock = (block, match) => {
-  if (block?.type === "task_list_item") {
-    return block?.attrs?.checked ? "[x]" : "[ ]";
-  }
   if (block?.type === "ordered_list_item") {
     const marker = String(block?.attrs?.marker || match?.[3] || ".");
     const index = Math.max(1, Number(block?.attrs?.index || match?.[2] || 1));
     return `${index}${marker}`;
   }
-  return "-";
+  return "\u2022";
 };
 
 const addListPrefixDecorationsForBlock = (decorations, doc, block, docLength) => {
@@ -777,12 +814,24 @@ const addListPrefixDecorationsForBlock = (decorations, doc, block, docLength) =>
     return;
   }
   addHiddenSyntaxRangeDecoration(decorations, prefixFrom, prefixTo);
+  if (String(block?.type || "") === "task_list_item") {
+    decorations.push(
+      Decoration.widget({
+        widget: new TaskCheckboxWidget({
+          checked: Boolean(block?.attrs?.checked),
+          lineFrom: line.from
+        }),
+        side: -1
+      }).range(prefixTo)
+    );
+    return;
+  }
   decorations.push(
     Decoration.widget({
       widget: new ListPrefixWidget({
         blockType: String(block?.type || ""),
         text: listPrefixLabelForBlock(block, match),
-        checked: Boolean(block?.attrs?.checked)
+        checked: false
       }),
       side: -1
     }).range(prefixTo)
@@ -840,6 +889,34 @@ const addInlineMathPreviewDecorationForToken = (decorations, doc, token, docLeng
       }),
       side: 1
     }).range(rawTo)
+  );
+};
+
+const inlineClassForSyntaxToken = (tokenTypeInput) => {
+  const tokenType = String(tokenTypeInput || "");
+  if (tokenType === "mark") {
+    return "cm-inline-mark";
+  }
+  if (tokenType === "comment") {
+    return "cm-inline-comment";
+  }
+  return "";
+};
+
+const addInlineSyntaxMarkDecorationForToken = (decorations, token, docLength, className) => {
+  const cls = String(className || "").trim();
+  if (!cls) {
+    return;
+  }
+  const from = clampPos(token?.textFrom, docLength);
+  const to = clampPos(token?.textTo, docLength);
+  if (to <= from) {
+    return;
+  }
+  decorations.push(
+    Decoration.mark({
+      class: cls
+    }).range(from, to)
   );
 };
 
@@ -1503,6 +1580,10 @@ const buildDecorations = (view, blocks, currentBlockId) => {
           addInlineMathPreviewDecorationForToken(decorations, doc, token, docLength);
           continue;
         }
+        const tokenClass = inlineClassForSyntaxToken(token.type);
+        if (tokenClass) {
+          addInlineSyntaxMarkDecorationForToken(decorations, token, docLength, tokenClass);
+        }
         addHiddenSyntaxDecorationsForToken(decorations, token);
       }
     } catch (error) {
@@ -1651,6 +1732,34 @@ const resolveImageBlockRangeById = (view, blockId) => {
   return null;
 };
 
+const toggleTaskListStateAtLine = (view, lineFromInput) => {
+  const doc = view.state.doc;
+  const docLength = Number(doc.length || 0);
+  const lineFrom = clampPos(lineFromInput, docLength);
+  const line = doc.lineAt(lineFrom);
+  const text = String(line.text || "");
+  const match = text.match(TASK_LIST_CHECKBOX_PATTERN);
+  if (!match) {
+    return false;
+  }
+
+  const markerFrom = line.from + String(match[1] || "").length;
+  const markerTo = markerFrom + 1;
+  const current = String(match[2] || " ").toLowerCase();
+  const next = current === "x" ? " " : "x";
+
+  view.dispatch({
+    changes: {
+      from: markerFrom,
+      to: markerTo,
+      insert: next
+    },
+    userEvent: "input"
+  });
+  view.focus();
+  return true;
+};
+
 const persistImageWidthToMarkdown = (view, blockId, widthInput) => {
   const range = resolveImageBlockRangeById(view, blockId);
   if (!range) {
@@ -1705,6 +1814,13 @@ const presentationMouseDownHandler = (event, view) => {
   const target = event.target;
   if (!(target instanceof Element)) {
     return false;
+  }
+
+  const taskToggle = target.closest("[data-task-toggle-from]");
+  if (taskToggle) {
+    event.preventDefault();
+    event.stopPropagation();
+    return true;
   }
 
   const resizeHandle = target.closest(".cm-image-widget-resize-handle");
@@ -1764,6 +1880,17 @@ const presentationClickHandler = (event, view) => {
   const target = event.target;
   if (!(target instanceof Element)) {
     return false;
+  }
+
+  const taskToggle = target.closest("[data-task-toggle-from]");
+  if (taskToggle) {
+    event.preventDefault();
+    event.stopPropagation();
+    const lineFrom = Number(taskToggle.getAttribute("data-task-toggle-from"));
+    if (Number.isFinite(lineFrom)) {
+      return toggleTaskListStateAtLine(view, lineFrom);
+    }
+    return true;
   }
 
   const imageBtn = target.closest(".cm-image-widget-btn");

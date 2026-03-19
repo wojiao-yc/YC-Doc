@@ -7,6 +7,7 @@ import { parseListLine } from "./parse-list";
 
 const OPEN_MATH_FENCE_PATTERN = /^\s{0,3}\$\$\s*$/;
 const SINGLE_LINE_MATH_PATTERN = /^\s{0,3}\$\$(.+?)\$\$\s*$/;
+const BLOCKQUOTE_LINE_PATTERN = /^\s{0,3}>\s?/;
 
 const normalizeMarkdown = (markdown) => String(markdown || "").replace(/\r\n/g, "\n");
 
@@ -138,22 +139,6 @@ const extractFenceFromRaw = (rawInput) => {
   const line = String(rawInput || "").split("\n")[0] || "";
   const trimmed = line.trimStart();
   return trimmed.startsWith("~~~") ? "~~~" : "```";
-};
-
-const countIndent = (lineText) => {
-  let count = 0;
-  for (const char of String(lineText || "")) {
-    if (char === " ") {
-      count += 1;
-      continue;
-    }
-    if (char === "\t") {
-      count += 2;
-      continue;
-    }
-    break;
-  }
-  return count;
 };
 
 const firstLineOf = (raw) => String(raw || "").split("\n")[0] || "";
@@ -379,53 +364,113 @@ const parseParagraphRangeToBlocks = (markdown, from, to) => {
 
 const extractListBlocksFromRange = (markdown, from, to) => {
   const lines = buildLinesForRange(markdown, from, to);
-  const items = [];
+  if (!lines.length) {
+    return [];
+  }
 
-  let index = 0;
-  while (index < lines.length) {
-    const line = lines[index];
+  const blocks = [];
+  let plainFrom = -1;
+  let plainTo = -1;
+
+  const flushPlain = () => {
+    if (plainFrom < 0 || plainTo <= plainFrom) {
+      plainFrom = -1;
+      plainTo = -1;
+      return;
+    }
+    blocks.push(...parseParagraphRangeToBlocks(markdown, plainFrom, plainTo));
+    plainFrom = -1;
+    plainTo = -1;
+  };
+
+  for (const line of lines) {
     const parsed = parseListLine(line.text);
     if (!parsed) {
-      index += 1;
+      if (plainFrom < 0) {
+        plainFrom = line.from;
+      }
+      plainTo = line.to;
       continue;
     }
 
-    const currentIndent = Number(parsed?.attrs?.indent || 0);
-    let endIndex = index;
-    let cursor = index + 1;
-
-    while (cursor < lines.length) {
-      const nextLine = lines[cursor];
-      if (parseListLine(nextLine.text)) {
-        break;
-      }
-
-      const trimmed = String(nextLine.text || "").trim();
-      if (!trimmed) {
-        endIndex = cursor;
-        cursor += 1;
-        continue;
-      }
-
-      if (countIndent(nextLine.text) <= currentIndent) {
-        break;
-      }
-
-      endIndex = cursor;
-      cursor += 1;
+    flushPlain();
+    const blockTo = lineContentEnd(line);
+    if (blockTo > line.from) {
+      blocks.push({
+        type: parsed.type,
+        attrs: parsed.attrs || {},
+        from: line.from,
+        to: blockTo
+      });
     }
-
-    items.push({
-      type: parsed.type,
-      attrs: parsed.attrs || {},
-      from: line.from,
-      to: lines[endIndex].to
-    });
-
-    index = endIndex + 1;
   }
 
-  return items;
+  flushPlain();
+  return blocks;
+};
+
+const parseBlockquoteRangeToBlocks = (markdown, from, to) => {
+  const lines = buildLinesForRange(markdown, from, to);
+  if (!lines.length) {
+    return [];
+  }
+
+  const blocks = [];
+  let quoteFrom = -1;
+  let quoteTo = -1;
+  let plainFrom = -1;
+  let plainTo = -1;
+
+  const flushQuote = () => {
+    if (quoteFrom < 0 || quoteTo <= quoteFrom) {
+      quoteFrom = -1;
+      quoteTo = -1;
+      return;
+    }
+    const trimmedTo = trimTrailingBlankLinesInRange(markdown, quoteFrom, quoteTo);
+    if (trimmedTo > quoteFrom) {
+      blocks.push({
+        type: BLOCK_TYPES.BLOCKQUOTE,
+        from: quoteFrom,
+        to: trimmedTo,
+        attrs: {}
+      });
+    }
+    quoteFrom = -1;
+    quoteTo = -1;
+  };
+
+  const flushPlain = () => {
+    if (plainFrom < 0 || plainTo <= plainFrom) {
+      plainFrom = -1;
+      plainTo = -1;
+      return;
+    }
+    blocks.push(...parseParagraphRangeToBlocks(markdown, plainFrom, plainTo));
+    plainFrom = -1;
+    plainTo = -1;
+  };
+
+  for (const line of lines) {
+    if (BLOCKQUOTE_LINE_PATTERN.test(String(line.text || ""))) {
+      flushPlain();
+      if (quoteFrom < 0) {
+        quoteFrom = line.from;
+      }
+      quoteTo = line.to;
+      continue;
+    }
+
+    flushQuote();
+    if (plainFrom < 0) {
+      plainFrom = line.from;
+    }
+    plainTo = line.to;
+  }
+
+  flushQuote();
+  flushPlain();
+  return blocks;
 };
 
 const pushBlock = (blocks, markdown, lineStarts, type, from, to, attrs = {}) => {
@@ -562,7 +607,22 @@ export const parseMarkdownToBlocks = (markdownInput) => {
     }
 
     if (type === "blockquote") {
-      pushBlock(blocks, markdown, lineStarts, BLOCK_TYPES.BLOCKQUOTE, range.from, range.to, {});
+      const quoteBlocks = parseBlockquoteRangeToBlocks(markdown, range.from, range.to);
+      if (!quoteBlocks.length) {
+        pushBlock(blocks, markdown, lineStarts, BLOCK_TYPES.BLOCKQUOTE, range.from, range.to, {});
+        continue;
+      }
+      for (const quoteBlock of quoteBlocks) {
+        pushBlock(
+          blocks,
+          markdown,
+          lineStarts,
+          quoteBlock.type,
+          quoteBlock.from,
+          quoteBlock.to,
+          quoteBlock.attrs || {}
+        );
+      }
       continue;
     }
 

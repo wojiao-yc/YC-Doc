@@ -25,3 +25,11 @@
   border-bottom-right-radius: 10px;
   padding-bottom: 1.05rem;
 }
+
+.yc-editor-host .cm-line.cm-block-code-block.cm-block-current {
+  background: rgba(241, 245, 249, 0.95);
+}
+
+.yc-editor-shell.is-dark .yc-editor-host .cm-line.cm-block-code-block.cm-block-current {
+  background: rgba(15, 23, 42, 0.96);
+}

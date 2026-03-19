@@ -68,12 +68,33 @@
   text-underline-offset: 0.12em;
 }
 
+.yc-editor-host .cm-inline-mark {
+  background: rgba(250, 204, 21, 0.36);
+  border-radius: 4px;
+  padding: 0 0.06em;
+  box-decoration-break: clone;
+  -webkit-box-decoration-break: clone;
+}
+
+.yc-editor-host .cm-inline-comment {
+  color: #64748b;
+  font-style: italic;
+}
+
 .yc-editor-shell.is-dark .yc-editor-host .cm-inline-link {
   color: #93c5fd;
 }
 
 .yc-editor-shell.is-dark .yc-editor-host .cm-inline-del {
   text-decoration-color: rgba(251, 113, 133, 0.78);
+}
+
+.yc-editor-shell.is-dark .yc-editor-host .cm-inline-mark {
+  background: rgba(250, 204, 21, 0.24);
+}
+
+.yc-editor-shell.is-dark .yc-editor-host .cm-inline-comment {
+  color: #94a3b8;
 }
 
 .yc-editor-host .cm-source-image-delim,

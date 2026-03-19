@@ -3,6 +3,7 @@ import { markdown, markdownKeymap } from "@codemirror/lang-markdown";
 import { keymap } from "@codemirror/view";
 
 const OPEN_FENCE_PATTERN = /^\s{0,3}(`{3,}|~{3,})(.*)$/;
+const EMPTY_BLOCKQUOTE_LINE_PATTERN = /^\s{0,3}>\s*$/;
 
 const closeFencePatternFor = (fenceToken) => {
   const marker = fenceToken[0] === "~" ? "~" : "`";
@@ -93,10 +94,43 @@ export const exitUnclosedFenceOnEmptyLine = (view) => {
   return true;
 };
 
+export const exitBlockquoteOnEmptyQuoteLine = (view) => {
+  const selection = view?.state?.selection?.main;
+  if (!selection?.empty || view.state.selection.ranges.length !== 1) {
+    return false;
+  }
+
+  const doc = view.state.doc;
+  const cursor = selection.head;
+  const line = doc.lineAt(cursor);
+  const text = String(line.text || "");
+  if (!EMPTY_BLOCKQUOTE_LINE_PATTERN.test(text)) {
+    return false;
+  }
+
+  view.dispatch({
+    changes: {
+      from: line.from,
+      to: line.to,
+      insert: ""
+    },
+    selection: {
+      anchor: line.from
+    },
+    scrollIntoView: true,
+    userEvent: "input"
+  });
+  return true;
+};
+
 export const markdownExtensions = [
   markdown(),
   Prec.high(
     keymap.of([
+      {
+        key: "Enter",
+        run: exitBlockquoteOnEmptyQuoteLine
+      },
       {
         key: "Enter",
         run: exitUnclosedFenceOnEmptyLine

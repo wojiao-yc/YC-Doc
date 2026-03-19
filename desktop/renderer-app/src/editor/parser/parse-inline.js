@@ -13,7 +13,10 @@ const INLINE_BLOCK_TYPES = new Set([
 const MARK_TOKEN_TYPES = new Set(["em", "strong", "codespan", "del", "link"]);
 const INNER_TEXT_RANGE_TOKEN_TYPES = new Set(["em", "strong", "codespan", "del", "link", "escape"]);
 const INLINE_MATH_TOKEN_TYPE = "math_inline";
+const INLINE_HIGHLIGHT_TOKEN_TYPE = "mark";
+const INLINE_COMMENT_TOKEN_TYPE = "comment";
 const INLINE_MATH_EXCLUDED_TOKEN_TYPES = new Set(["codespan"]);
+const INLINE_MARK_EXCLUDED_TOKEN_TYPES = new Set(["codespan"]);
 
 const HEADING_PREFIX_PATTERN = /^\s{0,3}#{1,6}[ \t]+/;
 const LIST_PREFIX_PATTERN = /^(\s*)(?:[-+*]\s+\[(?: |x|X)\]\s+|[-+*]\s+|\d+[.)]\s+)/;
@@ -370,6 +373,118 @@ const buildInlineMathTokens = ({
   return tokens;
 };
 
+const isDelimiterAt = (source, indexInput, delimiter) => {
+  const index = Number(indexInput || 0);
+  const delim = String(delimiter || "");
+  if (!delim) {
+    return false;
+  }
+  if (index < 0 || index + delim.length > source.length) {
+    return false;
+  }
+  if (source.slice(index, index + delim.length) !== delim) {
+    return false;
+  }
+  return !isEscapedAt(source, index);
+};
+
+const buildDelimitedInlineTokens = ({
+  source,
+  baseFrom,
+  line,
+  lineFrom,
+  state,
+  delimiter,
+  tokenType,
+  excludedRanges = []
+}) => {
+  const tokens = [];
+  const delim = String(delimiter || "");
+  const type = String(tokenType || "");
+  if (!source || !delim || !type) {
+    return tokens;
+  }
+  if (!source.includes(delim)) {
+    return tokens;
+  }
+
+  const safeBaseFrom = Number(baseFrom || 0);
+  const safeLine = Math.max(1, Number(line || 1));
+  const safeLineFrom = Number(lineFrom || 0);
+  const delimLength = delim.length;
+  let cursor = 0;
+
+  while (cursor <= source.length - delimLength) {
+    if (!isDelimiterAt(source, cursor, delim)) {
+      cursor += 1;
+      continue;
+    }
+
+    const openOffset = cursor;
+    const openPos = safeBaseFrom + openOffset;
+    const openTo = openPos + delimLength;
+    if (offsetInAnyRange(openPos, excludedRanges) || rangeIntersectsAny(openPos, openTo, excludedRanges)) {
+      cursor += 1;
+      continue;
+    }
+
+    let closeOffset = -1;
+    for (let next = openOffset + delimLength; next <= source.length - delimLength; next += 1) {
+      if (!isDelimiterAt(source, next, delim)) {
+        continue;
+      }
+
+      const closePos = safeBaseFrom + next;
+      const candidateTo = closePos + delimLength;
+      if (offsetInAnyRange(closePos, excludedRanges) || rangeIntersectsAny(openPos, candidateTo, excludedRanges)) {
+        continue;
+      }
+
+      closeOffset = next;
+      break;
+    }
+
+    if (closeOffset < 0) {
+      cursor += 1;
+      continue;
+    }
+
+    const rawFrom = openPos;
+    const rawTo = safeBaseFrom + closeOffset + delimLength;
+    const textFrom = rawFrom + delimLength;
+    const textTo = Math.max(textFrom, rawTo - delimLength);
+    const innerText = source.slice(openOffset + delimLength, closeOffset);
+    if (!innerText) {
+      cursor = closeOffset + delimLength;
+      continue;
+    }
+
+    tokens.push({
+      id: `it_${state.nextTokenId}`,
+      type,
+      marks: [],
+      rawFrom,
+      rawTo,
+      textFrom,
+      textTo,
+      line: safeLine,
+      columnRawFrom: Math.max(0, rawFrom - safeLineFrom),
+      columnRawTo: Math.max(0, rawTo - safeLineFrom),
+      columnTextFrom: Math.max(0, textFrom - safeLineFrom),
+      columnTextTo: Math.max(0, textTo - safeLineFrom),
+      rawText: source.slice(openOffset, closeOffset + delimLength),
+      text: innerText,
+      attrs: {},
+      rangeResolved: true,
+      children: []
+    });
+    state.nextTokenId += 1;
+    cursor = closeOffset + delimLength;
+  }
+
+  return tokens;
+};
+
 const collectTokenNodes = ({
   source,
   tokens,
@@ -619,9 +734,44 @@ const parseInlineModelFromLine = ({ lineText, from, line, lineFrom, state }) => 
     });
   };
 
+  const addInlineMarkTokens = (tokensInput) => {
+    const tokensList = Array.isArray(tokensInput) ? tokensInput : [];
+    const excludedRanges = collectTokenRangesByType(tokensList, INLINE_MARK_EXCLUDED_TOKEN_TYPES);
+    const highlightTokens = buildDelimitedInlineTokens({
+      source,
+      baseFrom: safeFrom,
+      line: safeLine,
+      lineFrom: safeLineFrom,
+      state,
+      delimiter: "==",
+      tokenType: INLINE_HIGHLIGHT_TOKEN_TYPE,
+      excludedRanges
+    });
+    const commentTokens = buildDelimitedInlineTokens({
+      source,
+      baseFrom: safeFrom,
+      line: safeLine,
+      lineFrom: safeLineFrom,
+      state,
+      delimiter: "%%",
+      tokenType: INLINE_COMMENT_TOKEN_TYPE,
+      excludedRanges
+    });
+    if (!highlightTokens.length && !commentTokens.length) {
+      return tokensList;
+    }
+    return [...tokensList, ...highlightTokens, ...commentTokens].sort((left, right) => {
+      if (left.rawFrom !== right.rawFrom) {
+        return left.rawFrom - right.rawFrom;
+      }
+      return left.rawTo - right.rawTo;
+    });
+  };
+
   if (inlineTokens.length && inlineSegments.length) {
+    const withMarkTokens = addInlineMarkTokens(inlineTokens);
     return {
-      inlineTokens: addInlineMathTokens(inlineTokens),
+      inlineTokens: addInlineMathTokens(withMarkTokens),
       inlineSegments
     };
   }
@@ -633,7 +783,7 @@ const parseInlineModelFromLine = ({ lineText, from, line, lineFrom, state }) => 
     lineFrom: safeLineFrom,
     state
   });
-  fallback.inlineTokens = addInlineMathTokens(fallback.inlineTokens);
+  fallback.inlineTokens = addInlineMathTokens(addInlineMarkTokens(fallback.inlineTokens));
   return fallback;
 };
 

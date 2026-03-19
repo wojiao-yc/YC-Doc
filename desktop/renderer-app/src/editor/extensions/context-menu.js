@@ -38,7 +38,7 @@ const replaceSelection = (view, insert, selection = null) => {
   return true;
 };
 
-const surroundSelection = (view, { prefix = "", suffix = "", placeholder = "文本" } = {}) => {
+const surroundSelection = (view, { prefix = "", suffix = "", placeholder = "" } = {}) => {
   const range = selectionRangeOf(view);
   const selectedText = view.state.sliceDoc(range.from, range.to);
   const inner = range.empty ? String(placeholder || "") : selectedText;
@@ -103,31 +103,29 @@ const applyParagraphStyle = (view, style) => {
   const headingLevel = headingMatch ? Number(headingMatch[1]) : 0;
 
   return replaceSelectedLines(view, (line) => {
-    if (!line.trim()) {
-      return line;
-    }
     const normalized = stripParagraphPrefix(line);
     const content = normalized.trimStart();
+    const hasContent = Boolean(content);
 
     if (style === "paragraph") {
       return normalized;
     }
     if (style === "bullet") {
-      return `- ${content}`;
+      return hasContent ? `- ${content}` : "- ";
     }
     if (style === "ordered") {
-      const text = `${orderedIndex}. ${content}`;
+      const text = hasContent ? `${orderedIndex}. ${content}` : `${orderedIndex}. `;
       orderedIndex += 1;
       return text;
     }
     if (style === "task") {
-      return `- [ ] ${content}`;
+      return hasContent ? `- [ ] ${content}` : "- [ ] ";
     }
     if (style === "quote") {
-      return `> ${content}`;
+      return hasContent ? `> ${content}` : "> ";
     }
     if (headingLevel >= 1 && headingLevel <= 6) {
-      return `${"#".repeat(headingLevel)} ${content}`;
+      return hasContent ? `${"#".repeat(headingLevel)} ${content}` : `${"#".repeat(headingLevel)} `;
     }
     return line;
   });
@@ -173,10 +171,10 @@ const promptLinkUrl = (defaultValue = DEFAULT_LINK_URL) => {
   return window.prompt("请输入链接地址", defaultValue);
 };
 
-const commandInsertLink = (view, { external = false } = {}) => {
+const commandInsertLink = (view) => {
   const range = selectionRangeOf(view);
   const selectedText = view.state.sliceDoc(range.from, range.to).trim();
-  const linkText = selectedText || (external ? "外部链接" : "链接文本");
+  const linkText = selectedText || "";
   const suggestedUrl = /^https?:\/\//i.test(selectedText) ? selectedText : DEFAULT_LINK_URL;
   const prompted = promptLinkUrl(suggestedUrl);
   if (prompted == null) {
@@ -217,11 +215,11 @@ const commandInsertFootnote = (view) => {
 const commandInsertTable = (view) =>
   replaceSelection(
     view,
-    "| 列 1 | 列 2 | 列 3 |\n| --- | --- | --- |\n| 内容 A | 内容 B | 内容 C |"
+    "|  |  |\n| --- | --- |\n|  |  |"
   );
 
 const commandInsertCallout = (view) =>
-  replaceSelection(view, "> [!NOTE]\n> 标注内容");
+  replaceSelection(view, "> [!NOTE]\n> ");
 
 const commandInsertDivider = (view) =>
   replaceSelection(view, "\n---\n");
@@ -229,21 +227,19 @@ const commandInsertDivider = (view) =>
 const commandInsertCodeBlock = (view) =>
   insertBlockTemplate(view, {
     prefixLine: "```",
-    suffixLine: "```",
-    placeholder: "code"
+    suffixLine: "```"
   });
 
 const commandInsertMathBlock = (view) =>
   insertBlockTemplate(view, {
     prefixLine: "$$",
-    suffixLine: "$$",
-    placeholder: "a^2+b^2=c^2"
+    suffixLine: "$$"
   });
 
 const commandInsertDatabase = (view) =>
   replaceSelection(
     view,
-    "| 名称 | 类型 | 状态 | 备注 |\n| --- | --- | --- | --- |\n| 记录 1 | 文本 | 待处理 |  |"
+    "|  |  |  |  |\n| --- | --- | --- | --- |\n|  |  |  |  |"
   );
 
 const writeClipboardText = async (text) => {
@@ -326,21 +322,21 @@ const executeCommand = async (view, commandId) => {
       case "add-link":
         return commandInsertLink(view);
       case "add-external-link":
-        return commandInsertLink(view, { external: true });
+        return commandInsertLink(view);
       case "format-bold":
-        return surroundSelection(view, { prefix: "**", suffix: "**", placeholder: "加粗文本" });
+        return surroundSelection(view, { prefix: "**", suffix: "**" });
       case "format-italic":
-        return surroundSelection(view, { prefix: "*", suffix: "*", placeholder: "倾斜文本" });
+        return surroundSelection(view, { prefix: "*", suffix: "*" });
       case "format-strike":
-        return surroundSelection(view, { prefix: "~~", suffix: "~~", placeholder: "删除线文本" });
+        return surroundSelection(view, { prefix: "~~", suffix: "~~" });
       case "format-highlight":
-        return surroundSelection(view, { prefix: "==", suffix: "==", placeholder: "高亮文本" });
+        return surroundSelection(view, { prefix: "==", suffix: "==" });
       case "format-code":
-        return surroundSelection(view, { prefix: "`", suffix: "`", placeholder: "code" });
+        return surroundSelection(view, { prefix: "`", suffix: "`" });
       case "format-math":
-        return surroundSelection(view, { prefix: "$", suffix: "$", placeholder: "x+y" });
+        return surroundSelection(view, { prefix: "$", suffix: "$" });
       case "format-comment":
-        return surroundSelection(view, { prefix: "%%", suffix: "%%", placeholder: "注释" });
+        return surroundSelection(view, { prefix: "%%", suffix: "%%" });
       case "format-clear":
         return commandClearFormat(view);
       case "paragraph-bullet":

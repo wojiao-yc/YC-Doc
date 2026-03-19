@@ -1,7 +1,11 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { EditorState } from "@codemirror/state";
-import { exitUnclosedFenceOnEmptyLine, findUnclosedFenceAtLine } from "../extensions/markdown";
+import {
+  exitBlockquoteOnEmptyQuoteLine,
+  exitUnclosedFenceOnEmptyLine,
+  findUnclosedFenceAtLine
+} from "../extensions/markdown";
 
 const runEnter = (doc, anchor) => {
   const state = EditorState.create({
@@ -17,6 +21,36 @@ const runEnter = (doc, anchor) => {
   };
 
   const handled = exitUnclosedFenceOnEmptyLine(view);
+  if (!handled) {
+    return {
+      handled,
+      doc: state.doc.toString(),
+      anchor: state.selection.main.anchor
+    };
+  }
+
+  const transaction = state.update(dispatched);
+  return {
+    handled,
+    doc: transaction.state.doc.toString(),
+    anchor: transaction.state.selection.main.anchor
+  };
+};
+
+const runBlockquoteEnter = (doc, anchor) => {
+  const state = EditorState.create({
+    doc,
+    selection: { anchor }
+  });
+  let dispatched = null;
+  const view = {
+    state,
+    dispatch: (spec) => {
+      dispatched = spec;
+    }
+  };
+
+  const handled = exitBlockquoteOnEmptyQuoteLine(view);
   if (!handled) {
     return {
       handled,
@@ -67,4 +101,22 @@ test("auto-close keeps fence marker type and indentation", () => {
 
   assert.equal(result.handled, true);
   assert.equal(result.doc, ["  ~~~python", "  ~~~", "tail"].join("\n"));
+});
+
+test("Enter on empty blockquote line exits quote in one keypress", () => {
+  const markdown = ["> quote", "> ", "tail"].join("\n");
+  const anchor = markdown.indexOf("\n> \n") + 3;
+  const result = runBlockquoteEnter(markdown, anchor);
+
+  assert.equal(result.handled, true);
+  assert.equal(result.doc, ["> quote", "", "tail"].join("\n"));
+});
+
+test("Enter on non-empty blockquote line keeps default behavior", () => {
+  const markdown = ["> quote", "tail"].join("\n");
+  const anchor = markdown.indexOf("quote") + 2;
+  const result = runBlockquoteEnter(markdown, anchor);
+
+  assert.equal(result.handled, false);
+  assert.equal(result.doc, markdown);
 });
