@@ -14,8 +14,7 @@ const SOURCE_VISIBLE_BLOCK_TYPES = new Set([
   "ordered_list_item",
   "task_list_item",
   "blockquote",
-  "thematic_break",
-  "table"
+  "thematic_break"
 ]);
 
 const safePosForLineLookup = (doc, pos) => {
@@ -81,11 +80,63 @@ const normalizePresentationData = (input = {}) => ({
 });
 
 const clampPos = (value, length) => Math.max(0, Math.min(Number(length || 0), Number(value || 0)));
+const blockIdentityOf = (block) => {
+  const explicitId = String(block?.id || "");
+  if (explicitId) {
+    return explicitId;
+  }
+  const blockType = String(block?.type || "paragraph");
+  const blockFrom = Math.max(0, Number(block?.from || 0));
+  return `${blockType}:${blockFrom}`;
+};
 const mathExpandKeyOf = (block) => {
   if (String(block?.type || "") !== "math_block") {
     return "";
   }
   return `math_block:${Math.max(0, Number(block?.from || 0))}`;
+};
+const imageExpandKeyOf = (block) => {
+  if (String(block?.type || "") !== "image") {
+    return "";
+  }
+  return `image:${Math.max(0, Number(block?.from || 0))}`;
+};
+const tableExpandKeyOf = (block) => {
+  if (String(block?.type || "") !== "table") {
+    return "";
+  }
+  return `table:${Math.max(0, Number(block?.from || 0))}`;
+};
+const DEFAULT_IMAGE_WIDTH = 520;
+const MIN_IMAGE_WIDTH = 160;
+const MAX_IMAGE_WIDTH = 1400;
+const normalizeImageWidth = (value, fallback = DEFAULT_IMAGE_WIDTH) => {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) {
+    return fallback;
+  }
+  const rounded = Math.round(numeric);
+  return Math.max(MIN_IMAGE_WIDTH, Math.min(MAX_IMAGE_WIDTH, rounded));
+};
+
+const pickBlockIdentityAtPos = (blocks, posInput, docLength) => {
+  const pos = clampPos(posInput, docLength);
+  let pickedId = "";
+  let pickedSpan = Number.POSITIVE_INFINITY;
+  for (const block of Array.isArray(blocks) ? blocks : []) {
+    const from = clampPos(block?.from, docLength);
+    const to = clampPos(block?.to, docLength);
+    const boundedTo = Math.max(from, to);
+    if (pos < from || pos > boundedTo) {
+      continue;
+    }
+    const span = Math.max(0, boundedTo - from);
+    if (span <= pickedSpan) {
+      pickedSpan = span;
+      pickedId = blockIdentityOf(block);
+    }
+  }
+  return pickedId;
 };
 
 const escapeHtml = (value) =>
@@ -115,6 +166,70 @@ const renderMathHtml = (formulaInput, displayMode = false) => {
   }
 
   return `<span class="cm-math-fallback">${escapeHtml(formula)}</span>`;
+};
+
+const splitTableCells = (lineText) =>
+  String(lineText || "")
+    .trim()
+    .replace(/^\|/, "")
+    .replace(/\|$/, "")
+    .split("|")
+    .map((cell) => String(cell || "").trim());
+
+const isTableDelimiterCell = (cellText) => /^:?-{3,}:?$/.test(String(cellText || "").trim());
+
+const tableCellAlign = (delimiterCellText) => {
+  const cell = String(delimiterCellText || "").trim();
+  if (!isTableDelimiterCell(cell)) {
+    return "";
+  }
+  const left = cell.startsWith(":");
+  const right = cell.endsWith(":");
+  if (left && right) {
+    return "center";
+  }
+  if (right) {
+    return "right";
+  }
+  if (left) {
+    return "left";
+  }
+  return "";
+};
+
+const parseMarkdownTableRaw = (rawText) => {
+  const lines = String(rawText || "")
+    .split("\n")
+    .map((line) => String(line || "").trim())
+    .filter(Boolean);
+  if (lines.length < 2) {
+    return null;
+  }
+
+  const headers = splitTableCells(lines[0]);
+  const delimiter = splitTableCells(lines[1]);
+  if (!headers.length || delimiter.length < headers.length) {
+    return null;
+  }
+
+  const alignments = headers.map((_, index) => tableCellAlign(delimiter[index]));
+  for (let index = 0; index < headers.length; index += 1) {
+    if (!isTableDelimiterCell(delimiter[index])) {
+      return null;
+    }
+  }
+
+  const rows = lines
+    .slice(2)
+    .map((line) => splitTableCells(line))
+    .filter((cells) => cells.length > 0)
+    .map((cells) => headers.map((_, index) => String(cells[index] || "").trim()));
+
+  return {
+    headers: headers.map((cell) => String(cell || "")),
+    rows,
+    alignments
+  };
 };
 
 class ListPrefixWidget extends WidgetType {
@@ -179,13 +294,14 @@ const normalizeImageSrc = (src) => {
 };
 
 class ImageWidget extends WidgetType {
-  constructor({ src = "", alt = "", title = "", blockId = "", isExpanded = false } = {}) {
+  constructor({ src = "", alt = "", title = "", blockId = "", isExpanded = false, width = DEFAULT_IMAGE_WIDTH } = {}) {
     super();
     this.src = String(src || "");
     this.alt = String(alt || "");
     this.title = title != null ? String(title || "") : "";
     this.blockId = String(blockId || "");
     this.isExpanded = Boolean(isExpanded);
+    this.width = normalizeImageWidth(width);
   }
 
   eq(other) {
@@ -196,6 +312,7 @@ class ImageWidget extends WidgetType {
       && other.title === this.title
       && other.blockId === this.blockId
       && other.isExpanded === this.isExpanded
+      && other.width === this.width
     );
   }
 
@@ -203,6 +320,8 @@ class ImageWidget extends WidgetType {
     const wrapper = document.createElement("span");
     wrapper.className = "cm-image-widget";
     wrapper.setAttribute("data-image-block-id", this.blockId);
+    const frame = document.createElement("span");
+    frame.className = "cm-image-widget-frame";
 
     const img = document.createElement("img");
     img.src = normalizeImageSrc(this.src);
@@ -211,25 +330,41 @@ class ImageWidget extends WidgetType {
       img.title = this.title;
     }
     img.className = "cm-image-widget-img";
+    img.style.width = `${this.width}px`;
 
     // Fallback text for broken images.
     img.onerror = () => {
       img.style.display = "none";
       const errorMsg = document.createElement("span");
       errorMsg.className = "cm-image-widget-error";
-      errorMsg.textContent = "[图片加载失败]";
-      wrapper.appendChild(errorMsg);
+      errorMsg.textContent = "[Image load failed]";
+      frame.appendChild(errorMsg);
+    };
+
+    const toolbar = document.createElement("span");
+    toolbar.className = "cm-image-widget-toolbar";
+
+    const handle = document.createElement("span");
+    handle.className = "cm-image-widget-resize-handle";
+    handle.setAttribute("title", "Drag to resize image");
+    handle.setAttribute("data-image-block-id", this.blockId);
+    handle.setAttribute("data-image-width", String(this.width));
+    handle.ondragstart = (event) => {
+      event.preventDefault();
     };
 
     // Toggle source visibility for this image block.
     const btn = document.createElement("span");
     btn.className = "cm-image-widget-btn";
-    btn.textContent = this.isExpanded ? "收起源码" : "展开源码";
-    btn.setAttribute("title", this.isExpanded ? "收起源码" : "展开源码");
+    btn.textContent = this.isExpanded ? "Hide source" : "Show source";
+    btn.setAttribute("title", this.isExpanded ? "Hide source" : "Show source");
     btn.setAttribute("data-image-block-id", this.blockId);
 
-    wrapper.appendChild(img);
-    wrapper.appendChild(btn);
+    toolbar.appendChild(btn);
+    frame.appendChild(img);
+    frame.appendChild(toolbar);
+    frame.appendChild(handle);
+    wrapper.appendChild(frame);
     return wrapper;
   }
 
@@ -273,6 +408,89 @@ class MathBlockWidget extends WidgetType {
     btn.textContent = this.isExpanded ? "Hide source" : "Show source";
     btn.setAttribute("title", this.isExpanded ? "Hide source" : "Show source");
     btn.setAttribute("data-math-block-id", this.blockId);
+
+    wrapper.appendChild(content);
+    wrapper.appendChild(btn);
+    return wrapper;
+  }
+
+  ignoreEvent() {
+    return false;
+  }
+}
+
+class TableBlockWidget extends WidgetType {
+  constructor({ rawText = "", blockId = "", isExpanded = false } = {}) {
+    super();
+    this.rawText = String(rawText || "");
+    this.blockId = String(blockId || "");
+    this.isExpanded = Boolean(isExpanded);
+  }
+
+  eq(other) {
+    return (
+      other instanceof TableBlockWidget
+      && other.rawText === this.rawText
+      && other.blockId === this.blockId
+      && other.isExpanded === this.isExpanded
+    );
+  }
+
+  toDOM() {
+    const wrapper = document.createElement("span");
+    wrapper.className = "cm-table-widget";
+    wrapper.setAttribute("data-table-block-id", this.blockId);
+
+    const content = document.createElement("span");
+    content.className = "cm-table-widget-content";
+
+    const parsed = parseMarkdownTableRaw(this.rawText);
+    if (!parsed) {
+      const fallback = document.createElement("span");
+      fallback.className = "cm-math-fallback";
+      fallback.textContent = "Invalid markdown table";
+      content.appendChild(fallback);
+    } else {
+      const tableEl = document.createElement("table");
+      tableEl.className = "cm-table-widget-table";
+
+      const thead = document.createElement("thead");
+      const headerRow = document.createElement("tr");
+      parsed.headers.forEach((cellText, index) => {
+        const th = document.createElement("th");
+        const align = parsed.alignments[index];
+        if (align) {
+          th.style.textAlign = align;
+        }
+        th.textContent = cellText;
+        headerRow.appendChild(th);
+      });
+      thead.appendChild(headerRow);
+      tableEl.appendChild(thead);
+
+      const tbody = document.createElement("tbody");
+      parsed.rows.forEach((row) => {
+        const tr = document.createElement("tr");
+        row.forEach((cellText, index) => {
+          const td = document.createElement("td");
+          const align = parsed.alignments[index];
+          if (align) {
+            td.style.textAlign = align;
+          }
+          td.textContent = cellText;
+          tr.appendChild(td);
+        });
+        tbody.appendChild(tr);
+      });
+      tableEl.appendChild(tbody);
+      content.appendChild(tableEl);
+    }
+
+    const btn = document.createElement("span");
+    btn.className = "cm-table-widget-btn";
+    btn.textContent = this.isExpanded ? "Hide source" : "Show source";
+    btn.setAttribute("title", this.isExpanded ? "Hide source" : "Show source");
+    btn.setAttribute("data-table-block-id", this.blockId);
 
     wrapper.appendChild(content);
     wrapper.appendChild(btn);
@@ -623,9 +841,12 @@ const addInlineMathPreviewDecorationForToken = (decorations, doc, token, docLeng
 
 export const setPresentationDataEffect = StateEffect.define();
 
-// Toggle hidden-source preview for image and math blocks.
+// Toggle hidden-source preview for image/math/table blocks.
 export const toggleImageExpandEffect = StateEffect.define();
 export const toggleMathExpandEffect = StateEffect.define();
+export const toggleTableExpandEffect = StateEffect.define();
+export const setImageWidthEffect = StateEffect.define();
+export const setContextHighlightBlockEffect = StateEffect.define();
 
 const presentationDataField = StateField.define({
   create: () => normalizePresentationData(),
@@ -640,7 +861,7 @@ const presentationDataField = StateField.define({
   }
 });
 
-// Expanded image block ids.
+// Expanded image block keys.
 const imageExpandField = StateField.define({
   create: () => new Set(),
   update: (value, transaction) => {
@@ -659,13 +880,62 @@ const imageExpandField = StateField.define({
         const blocks = Array.isArray(effect.value?.blocks) ? effect.value.blocks : [];
         const validImageIds = new Set(
           blocks
-            .filter((block) => String(block?.type || "") === "image")
-            .map((block) => String(block?.id || ""))
+            .map((block) => imageExpandKeyOf(block))
             .filter(Boolean)
         );
         next = validImageIds.size
           ? new Set([...next].filter((id) => validImageIds.has(id)))
           : new Set();
+      }
+    }
+    return next;
+  }
+});
+
+const contextHighlightField = StateField.define({
+  create: () => "",
+  update: (value, transaction) => {
+    let next = String(value || "");
+    for (const effect of transaction.effects) {
+      if (effect.is(setContextHighlightBlockEffect)) {
+        next = String(effect.value || "");
+        continue;
+      }
+      if (effect.is(setPresentationDataEffect)) {
+        const blocks = Array.isArray(effect.value?.blocks) ? effect.value.blocks : [];
+        const validBlockIds = new Set(blocks.map((block) => blockIdentityOf(block)).filter(Boolean));
+        if (!validBlockIds.has(next)) {
+          next = "";
+        }
+      }
+    }
+    return next;
+  }
+});
+
+const imageWidthField = StateField.define({
+  create: () => new Map(),
+  update: (value, transaction) => {
+    let next = new Map(value);
+    for (const effect of transaction.effects) {
+      if (effect.is(setImageWidthEffect)) {
+        const blockId = String(effect.value?.blockId || "");
+        const width = normalizeImageWidth(effect.value?.width, Number.NaN);
+        if (blockId && Number.isFinite(width)) {
+          next.set(blockId, width);
+        }
+        continue;
+      }
+      if (effect.is(setPresentationDataEffect)) {
+        const blocks = Array.isArray(effect.value?.blocks) ? effect.value.blocks : [];
+        const validImageIds = new Set(
+          blocks
+            .map((block) => imageExpandKeyOf(block))
+            .filter(Boolean)
+        );
+        next = validImageIds.size
+          ? new Map([...next.entries()].filter(([id]) => validImageIds.has(id)))
+          : new Map();
       }
     }
     return next;
@@ -702,7 +972,44 @@ const mathExpandField = StateField.define({
   }
 });
 
-const classesForBlockLine = (block, currentBlockId, lineNumber, lineRange, sourceVisible = false) => {
+const tableExpandField = StateField.define({
+  create: () => new Set(),
+  update: (value, transaction) => {
+    let next = new Set(value);
+    for (const effect of transaction.effects) {
+      if (effect.is(toggleTableExpandEffect)) {
+        const tableId = String(effect.value || "");
+        if (next.has(tableId)) {
+          next.delete(tableId);
+        } else {
+          next.add(tableId);
+        }
+        continue;
+      }
+      if (effect.is(setPresentationDataEffect)) {
+        const blocks = Array.isArray(effect.value?.blocks) ? effect.value.blocks : [];
+        const validTableIds = new Set(
+          blocks
+            .map((block) => tableExpandKeyOf(block))
+            .filter(Boolean)
+        );
+        next = validTableIds.size
+          ? new Set([...next].filter((id) => validTableIds.has(id)))
+          : new Set();
+      }
+    }
+    return next;
+  }
+});
+
+const classesForBlockLine = (
+  block,
+  currentBlockId,
+  contextHighlightBlockId,
+  lineNumber,
+  lineRange,
+  sourceVisible = false
+) => {
   const classes = [
     "cm-block",
     `cm-block-${String(block.type || "paragraph").replace(/_/g, "-")}`
@@ -716,6 +1023,9 @@ const classesForBlockLine = (block, currentBlockId, lineNumber, lineRange, sourc
   }
   if (String(block.id) === String(currentBlockId || "")) {
     classes.push("cm-block-current");
+  }
+  if (blockIdentityOf(block) === String(contextHighlightBlockId || "")) {
+    classes.push("cm-block-context-current");
   }
   if (sourceVisible) {
     classes.push("cm-block-source-visible");
@@ -742,33 +1052,55 @@ const buildDecorations = (view, blocks, currentBlockId) => {
   const docLength = Number(doc.length || 0);
   const selection = selectionSnapshotOf(view.state);
   const activeInlineToken = pickActiveInlineSyntaxToken(blocks, selection, docLength);
+  const contextHighlightBlockId = view.state.field(contextHighlightField) || "";
   const imageExpandSet = view.state.field(imageExpandField) || new Set();
+  const imageWidthMap = view.state.field(imageWidthField) || new Map();
   const mathExpandSet = view.state.field(mathExpandField) || new Set();
+  const tableExpandSet = view.state.field(tableExpandField) || new Set();
 
   for (const block of blocks) {
     try {
       const blockFrom = clampPos(block?.from, docLength);
       const blockTo = clampPos(block?.to, docLength);
       const blockType = String(block?.type || "");
-      const blockId = String(block?.id || "");
+      const imageExpandKey = imageExpandKeyOf({ type: blockType, from: blockFrom });
       const mathExpandKey = mathExpandKeyOf({ type: blockType, from: blockFrom });
-      const isImageExpanded = imageExpandSet.has(blockId);
+      const tableExpandKey = tableExpandKeyOf({ type: blockType, from: blockFrom });
+      const isImageExpanded = imageExpandSet.has(imageExpandKey);
       const isMathExpanded = mathExpandSet.has(mathExpandKey);
+      const isTableExpanded = tableExpandSet.has(tableExpandKey);
       // Keep source visible for focused source-first block types or expanded media/math blocks.
       const blockKeepsSourceVisible = (SOURCE_VISIBLE_BLOCK_TYPES.has(blockType)
-        && selectionIntersectsRange(selection, blockFrom, blockTo)) || isImageExpanded || isMathExpanded;
+        && selectionIntersectsRange(selection, blockFrom, blockTo)) || isImageExpanded || isMathExpanded || isTableExpanded;
+      const hideImageSourceLines = blockType === "image" && !blockKeepsSourceVisible;
       const hideMathSourceLines = blockType === "math_block" && !blockKeepsSourceVisible;
+      const hideTableSourceLines = blockType === "table" && !blockKeepsSourceVisible;
 
       const lineRange = resolveLineRange(doc, block);
       for (let lineNumber = lineRange.fromLine; lineNumber <= lineRange.toLine; lineNumber += 1) {
         const line = doc.line(lineNumber);
-        const baseClass = classesForBlockLine(block, currentBlockId, lineNumber, lineRange, blockKeepsSourceVisible);
+        const baseClass = classesForBlockLine(
+          block,
+          currentBlockId,
+          contextHighlightBlockId,
+          lineNumber,
+          lineRange,
+          blockKeepsSourceVisible
+        );
+        const isImageSourceAnchorLine = hideImageSourceLines && lineNumber === lineRange.fromLine;
+        const isImageSourceHiddenLine = hideImageSourceLines && !isImageSourceAnchorLine;
         const isMathSourceAnchorLine = hideMathSourceLines && lineNumber === lineRange.fromLine;
         const isMathSourceHiddenLine = hideMathSourceLines && !isMathSourceAnchorLine;
+        const isTableSourceAnchorLine = hideTableSourceLines && lineNumber === lineRange.fromLine;
+        const isTableSourceHiddenLine = hideTableSourceLines && !isTableSourceAnchorLine;
         const className = [
           baseClass,
+          isImageSourceAnchorLine ? "cm-block-image-source-anchor" : "",
+          isImageSourceHiddenLine ? "cm-block-image-source-hidden" : "",
           isMathSourceAnchorLine ? "cm-block-math-source-anchor" : "",
-          isMathSourceHiddenLine ? "cm-block-math-source-hidden" : ""
+          isMathSourceHiddenLine ? "cm-block-math-source-hidden" : "",
+          isTableSourceAnchorLine ? "cm-block-table-source-anchor" : "",
+          isTableSourceHiddenLine ? "cm-block-table-source-hidden" : ""
         ]
           .filter(Boolean)
           .join(" ");
@@ -797,7 +1129,7 @@ const buildDecorations = (view, blocks, currentBlockId) => {
           addBlockquotePrefixDecorationsForBlock(decorations, doc, block, docLength);
         } else if (blockType === "thematic_break") {
           addHiddenSyntaxRangeDecoration(decorations, blockFrom, blockTo);
-        } else if (blockType === "image" || blockType === "math_block") {
+        } else if (blockType === "image" || blockType === "math_block" || blockType === "table") {
           addHiddenSyntaxRangeDecorationsByLine(decorations, doc, blockFrom, blockTo, docLength);
         }
       }
@@ -808,12 +1140,22 @@ const buildDecorations = (view, blocks, currentBlockId) => {
         const src = String(attrs.src || "");
         const alt = String(attrs.alt || "");
         const title = attrs.title != null ? String(attrs.title || "") : "";
+        const imageWidth = normalizeImageWidth(imageWidthMap.get(imageExpandKey));
+        const widgetPos = isImageExpanded ? blockTo : blockFrom;
+        const widgetSide = isImageExpanded ? 1 : -1;
         if (src) {
           decorations.push(
             Decoration.widget({
-              widget: new ImageWidget({ src, alt, title, blockId, isExpanded: isImageExpanded }),
-              side: 1
-            }).range(blockTo)
+              widget: new ImageWidget({
+                src,
+                alt,
+                title,
+                blockId: imageExpandKey,
+                isExpanded: isImageExpanded,
+                width: imageWidth
+              }),
+              side: widgetSide
+            }).range(widgetPos)
           );
         }
       }
@@ -826,6 +1168,18 @@ const buildDecorations = (view, blocks, currentBlockId) => {
         decorations.push(
           Decoration.widget({
             widget: new MathBlockWidget({ formula, blockId: mathExpandKey, isExpanded: isMathExpanded }),
+            side: widgetSide
+          }).range(widgetPos)
+        );
+      }
+
+      if (blockType === "table") {
+        const rawText = String(block?.rawText || "");
+        const widgetPos = isTableExpanded ? blockTo : blockFrom;
+        const widgetSide = isTableExpanded ? 1 : -1;
+        decorations.push(
+          Decoration.widget({
+            widget: new TableBlockWidget({ rawText, blockId: tableExpandKey, isExpanded: isTableExpanded }),
             side: widgetSide
           }).range(widgetPos)
         );
@@ -897,15 +1251,25 @@ class BlockPresentationPlugin {
     const blocksChanged = nextBlocks !== this.blocks;
     const currentChanged = nextCurrentBlockId !== this.currentBlockId;
     const selectionChanged = update.selectionSet;
+    const contextHighlightChanged = updateHasEffect(update, setContextHighlightBlockEffect);
     const imageExpandChanged = updateHasEffect(update, toggleImageExpandEffect);
+    const imageWidthChanged = updateHasEffect(update, setImageWidthEffect);
     const mathExpandChanged = updateHasEffect(update, toggleMathExpandEffect);
+    const tableExpandChanged = updateHasEffect(update, toggleTableExpandEffect);
 
     if (!blocksChanged && !currentChanged) {
       if (update.docChanged) {
         // Any document edit can invalidate old ranges; wait for semantic snapshot instead of remapping stale blocks.
         this.blocks = [];
         this.decorations = buildDecorations(update.view, this.blocks, this.currentBlockId);
-      } else if (selectionChanged || imageExpandChanged || mathExpandChanged) {
+      } else if (
+        selectionChanged
+        || contextHighlightChanged
+        || imageExpandChanged
+        || imageWidthChanged
+        || mathExpandChanged
+        || tableExpandChanged
+      ) {
         this.decorations = buildDecorations(update.view, this.blocks, this.currentBlockId);
       }
       return;
@@ -916,6 +1280,125 @@ class BlockPresentationPlugin {
     this.decorations = buildDecorations(update.view, this.blocks, this.currentBlockId);
   }
 }
+
+const resolveContextBlockIdentityFromWidget = (target, blocks, docLength) => {
+  const imageBlockKey = String(target.closest("[data-image-block-id]")?.getAttribute("data-image-block-id") || "");
+  if (imageBlockKey) {
+    for (const block of blocks) {
+      const from = clampPos(block?.from, docLength);
+      if (imageExpandKeyOf({ type: block?.type, from }) === imageBlockKey) {
+        return blockIdentityOf(block);
+      }
+    }
+  }
+
+  const mathBlockKey = String(target.closest("[data-math-block-id]")?.getAttribute("data-math-block-id") || "");
+  if (mathBlockKey) {
+    for (const block of blocks) {
+      const from = clampPos(block?.from, docLength);
+      if (mathExpandKeyOf({ type: block?.type, from }) === mathBlockKey) {
+        return blockIdentityOf(block);
+      }
+    }
+  }
+
+  const tableBlockKey = String(target.closest("[data-table-block-id]")?.getAttribute("data-table-block-id") || "");
+  if (tableBlockKey) {
+    for (const block of blocks) {
+      const from = clampPos(block?.from, docLength);
+      if (tableExpandKeyOf({ type: block?.type, from }) === tableBlockKey) {
+        return blockIdentityOf(block);
+      }
+    }
+  }
+
+  return "";
+};
+
+const presentationContextMenuHandler = (event, view) => {
+  const target = event.target;
+  if (!(target instanceof Element)) {
+    return false;
+  }
+
+  const data = view.state.field(presentationDataField);
+  const blocks = Array.isArray(data?.blocks) ? data.blocks : [];
+  const docLength = Number(view.state.doc.length || 0);
+
+  let highlightedBlockId = resolveContextBlockIdentityFromWidget(target, blocks, docLength);
+  if (!highlightedBlockId) {
+    const pos = view.posAtCoords({
+      x: Number(event.clientX || 0),
+      y: Number(event.clientY || 0)
+    });
+    if (Number.isFinite(pos)) {
+      highlightedBlockId = pickBlockIdentityAtPos(blocks, pos, docLength);
+    }
+  }
+
+  if (view.state.field(contextHighlightField) !== highlightedBlockId) {
+    view.dispatch({
+      effects: setContextHighlightBlockEffect.of(highlightedBlockId)
+    });
+  }
+  return false;
+};
+
+const presentationMouseDownHandler = (event, view) => {
+  const target = event.target;
+  if (!(target instanceof Element)) {
+    return false;
+  }
+
+  const resizeHandle = target.closest(".cm-image-widget-resize-handle");
+  if (!resizeHandle) {
+    if (Number(event.button) === 0 && view.state.field(contextHighlightField)) {
+      view.dispatch({
+        effects: setContextHighlightBlockEffect.of("")
+      });
+    }
+    return false;
+  }
+
+  event.preventDefault();
+  event.stopPropagation();
+
+  const blockId = String(resizeHandle.getAttribute("data-image-block-id") || "");
+  const startWidthRaw = Number(resizeHandle.getAttribute("data-image-width"));
+  if (!blockId || !Number.isFinite(startWidthRaw)) {
+    return true;
+  }
+
+  const startWidth = normalizeImageWidth(startWidthRaw);
+  const startClientX = Number(event.clientX || 0);
+  let lastWidth = startWidth;
+
+  const onMouseMove = (moveEvent) => {
+    moveEvent.preventDefault();
+    const deltaX = Number(moveEvent.clientX || 0) - startClientX;
+    const nextWidth = normalizeImageWidth(startWidth + deltaX);
+    if (nextWidth === lastWidth) {
+      return;
+    }
+    lastWidth = nextWidth;
+    view.dispatch({
+      effects: setImageWidthEffect.of({
+        blockId,
+        width: nextWidth
+      })
+    });
+  };
+
+  const onMouseUp = () => {
+    window.removeEventListener("mousemove", onMouseMove, true);
+    window.removeEventListener("mouseup", onMouseUp, true);
+  };
+
+  window.addEventListener("mousemove", onMouseMove, true);
+  window.addEventListener("mouseup", onMouseUp, true);
+  view.focus();
+  return true;
+};
 
 const presentationClickHandler = (event, view) => {
   const target = event.target;
@@ -949,6 +1432,19 @@ const presentationClickHandler = (event, view) => {
     }
   }
 
+  const tableBtn = target.closest(".cm-table-widget-btn");
+  if (tableBtn) {
+    event.preventDefault();
+    event.stopPropagation();
+    const blockId = tableBtn.getAttribute("data-table-block-id");
+    if (blockId) {
+      view.dispatch({
+        effects: toggleTableExpandEffect.of(blockId)
+      });
+      return true;
+    }
+  }
+
   const inlineMath = target.closest(".cm-inline-math-widget");
   if (inlineMath) {
     const from = Number(inlineMath.getAttribute("data-math-inline-from"));
@@ -973,14 +1469,19 @@ const presentationClickHandler = (event, view) => {
 
 export const presentationExtensions = [
   presentationDataField,
+  contextHighlightField,
   imageExpandField,
+  imageWidthField,
   mathExpandField,
+  tableExpandField,
   EditorView.baseTheme({
     ".cm-line.cm-block": {
       transition: "background-color 120ms ease, color 120ms ease"
     }
   }),
   EditorView.domEventHandlers({
+    contextmenu: presentationContextMenuHandler,
+    mousedown: presentationMouseDownHandler,
     click: presentationClickHandler
   }),
   ViewPlugin.fromClass(BlockPresentationPlugin, {

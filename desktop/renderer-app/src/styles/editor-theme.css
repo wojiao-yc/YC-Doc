@@ -22,11 +22,19 @@
 }
 
 .yc-editor-host .cm-line.cm-block-current {
-  background-color: rgba(251, 146, 60, 0.1);
+  background-color: transparent;
 }
 
 .yc-editor-shell.is-dark .yc-editor-host .cm-line.cm-block-current {
-  background-color: rgba(251, 146, 60, 0.14);
+  background-color: transparent;
+}
+
+.yc-editor-host .cm-line.cm-block-context-current {
+  background: rgba(251, 146, 60, 0.1) !important;
+}
+
+.yc-editor-shell.is-dark .yc-editor-host .cm-line.cm-block-context-current {
+  background: rgba(251, 146, 60, 0.14) !important;
 }
 
 .yc-editor-host .cm-searchMatch {

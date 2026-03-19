@@ -50,6 +50,10 @@
   border-radius: 0;
 }
 
+.yc-editor-host .cm-line.cm-block-image.cm-block-current {
+  background: transparent !important;
+}
+
 /* 保留 math-block 和 html-block 的圆角样式 */
 .yc-editor-host .cm-line.cm-block-math-block.cm-block-start,
 .yc-editor-host .cm-line.cm-block-html-block.cm-block-start {
@@ -79,58 +83,101 @@
 
 /* 图片 Widget 样式 */
 .yc-editor-host .cm-image-widget {
-  display: inline-block;
-  vertical-align: middle;
-  margin-left: 8px;
-  max-width: 400px;
+  display: block;
+  margin: 6px 0;
+  width: fit-content;
+  max-width: 100%;
   position: relative;
+}
+
+.yc-editor-host .cm-image-widget-frame {
+  display: inline-block;
+  position: relative;
+  max-width: 100%;
+}
+
+.yc-editor-host .cm-image-widget-img {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  border-radius: 4px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  transition: box-shadow 0.2s ease;
 }
 
 .yc-editor-host .cm-image-widget:hover .cm-image-widget-img {
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
 }
 
-.yc-editor-host .cm-image-widget-img {
-  max-width: 100%;
-  max-height: 300px;
-  display: block;
-  border-radius: 4px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-  transition: box-shadow 0.2s ease;
+.yc-editor-host .cm-image-widget-toolbar {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s ease;
 }
 
-/* 显示源码按钮 */
+.yc-editor-host .cm-image-widget:hover .cm-image-widget-toolbar {
+  opacity: 1;
+  pointer-events: auto;
+}
+
 .yc-editor-host .cm-image-widget-btn {
-  position: absolute;
-  top: 4px;
-  right: 4px;
+  display: inline-flex;
+  align-items: center;
   font-size: 12px;
   font-family: monospace;
-  font-weight: bold;
+  font-weight: 600;
   color: white;
   background: rgba(0, 0, 0, 0.6);
-  padding: 2px 6px;
+  padding: 3px 7px;
   border-radius: 4px;
   cursor: pointer;
-  opacity: 0;
-  transition: opacity 0.2s ease;
   user-select: none;
-  line-height: 1;
-}
-
-.yc-editor-host .cm-image-widget:hover .cm-image-widget-btn {
-  opacity: 1;
+  line-height: 1.15;
 }
 
 .yc-editor-host .cm-image-widget-btn:hover {
   background: rgba(0, 0, 0, 0.8);
 }
 
+.yc-editor-shell.is-dark .yc-editor-host .cm-image-widget-btn {
+  background: rgba(15, 23, 42, 0.78);
+}
+
+.yc-editor-shell.is-dark .yc-editor-host .cm-image-widget-btn:hover {
+  background: rgba(15, 23, 42, 0.95);
+}
+
+.yc-editor-host .cm-image-widget-resize-handle {
+  position: absolute;
+  right: 6px;
+  bottom: 6px;
+  width: 14px;
+  height: 14px;
+  border-right: 2px solid rgba(15, 23, 42, 0.72);
+  border-bottom: 2px solid rgba(15, 23, 42, 0.72);
+  border-radius: 2px;
+  cursor: nwse-resize;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s ease;
+}
+
+.yc-editor-host .cm-image-widget:hover .cm-image-widget-resize-handle {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.yc-editor-shell.is-dark .yc-editor-host .cm-image-widget-resize-handle {
+  border-right-color: rgba(226, 232, 240, 0.82);
+  border-bottom-color: rgba(226, 232, 240, 0.82);
+}
+
 /* 行内图片样式 */
 .yc-editor-host .cm-line .cm-image-widget {
   margin-left: 0;
-  margin-top: 4px;
-  margin-bottom: 4px;
 }
 
 /* 图片加载错误 */
@@ -145,6 +192,27 @@
 .yc-editor-shell.is-dark .yc-editor-host .cm-image-widget-error {
   background: #450a0a;
   color: #fca5a5;
+}
+
+.yc-editor-host .cm-line.cm-block-image-source-hidden {
+  height: 0 !important;
+  min-height: 0 !important;
+  line-height: 0 !important;
+  font-size: 0 !important;
+  padding-top: 0 !important;
+  padding-bottom: 0 !important;
+  border: 0 !important;
+  margin: 0 !important;
+  overflow: hidden !important;
+  pointer-events: none;
+}
+
+.yc-editor-host .cm-line.cm-block-image-source-anchor {
+  background: transparent !important;
+  box-shadow: none !important;
+  padding-top: 0 !important;
+  padding-bottom: 0 !important;
+  border: 0 !important;
 }
 
 .yc-editor-host .cm-line.cm-block-math-source-hidden {
@@ -168,6 +236,27 @@
   border: 0 !important;
 }
 
+.yc-editor-host .cm-line.cm-block-table-source-hidden {
+  height: 0 !important;
+  min-height: 0 !important;
+  line-height: 0 !important;
+  font-size: 0 !important;
+  padding-top: 0 !important;
+  padding-bottom: 0 !important;
+  border: 0 !important;
+  margin: 0 !important;
+  overflow: hidden !important;
+  pointer-events: none;
+}
+
+.yc-editor-host .cm-line.cm-block-table-source-anchor {
+  background: transparent !important;
+  box-shadow: none !important;
+  padding-top: 0 !important;
+  padding-bottom: 0 !important;
+  border: 0 !important;
+}
+
 .yc-editor-host .cm-line.cm-block-math-block.cm-block-source-visible {
   background: transparent !important;
   box-shadow: none !important;
@@ -180,6 +269,14 @@
 .yc-editor-host .cm-line.cm-block-math-block.cm-block-source-visible.cm-block-end,
 .yc-editor-host .cm-line.cm-block-math-block.cm-block-source-visible.cm-block-start.cm-block-end {
   box-shadow: none !important;
+  border-radius: 0 !important;
+}
+
+.yc-editor-host .cm-line.cm-block-table.cm-block-source-visible {
+  background: transparent !important;
+  box-shadow: none !important;
+  padding-left: inherit !important;
+  padding-right: inherit !important;
   border-radius: 0 !important;
 }
 
@@ -234,6 +331,85 @@
 }
 
 .yc-editor-shell.is-dark .yc-editor-host .cm-math-widget-btn:hover {
+  background: rgba(71, 85, 105, 0.9);
+}
+
+.yc-editor-host .cm-table-widget {
+  display: block;
+  position: relative;
+  margin: 6px 0;
+  padding-right: 90px;
+}
+
+.yc-editor-host .cm-table-widget-content {
+  display: block;
+  overflow-x: auto;
+  padding: 6px 0;
+}
+
+.yc-editor-host .cm-table-widget-table {
+  border-collapse: collapse;
+  width: 100%;
+  table-layout: fixed;
+  font-size: 0.93rem;
+}
+
+.yc-editor-host .cm-table-widget-table th,
+.yc-editor-host .cm-table-widget-table td {
+  border: 1px solid #cbd5e1;
+  padding: 6px 8px;
+  vertical-align: top;
+  word-break: break-word;
+}
+
+.yc-editor-host .cm-table-widget-table th {
+  background: rgba(241, 245, 249, 0.9);
+  font-weight: 600;
+}
+
+.yc-editor-shell.is-dark .yc-editor-host .cm-table-widget-table th,
+.yc-editor-shell.is-dark .yc-editor-host .cm-table-widget-table td {
+  border-color: #334155;
+}
+
+.yc-editor-shell.is-dark .yc-editor-host .cm-table-widget-table th {
+  background: rgba(30, 41, 59, 0.82);
+}
+
+.yc-editor-host .cm-table-widget-btn {
+  position: absolute;
+  top: 0;
+  right: 0;
+  font-size: 12px;
+  font-family: monospace;
+  font-weight: 600;
+  color: #0f172a;
+  background: rgba(148, 163, 184, 0.18);
+  padding: 2px 6px;
+  border-radius: 4px;
+  cursor: pointer;
+  user-select: none;
+  line-height: 1.2;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.15s ease, background-color 0.15s ease;
+}
+
+.yc-editor-host .cm-table-widget:hover .cm-table-widget-btn {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.yc-editor-host .cm-table-widget-btn:hover {
+  background: rgba(148, 163, 184, 0.35);
+}
+
+.yc-editor-shell.is-dark .yc-editor-host .cm-table-widget-btn {
+  color: #e2e8f0;
+  background: rgba(51, 65, 85, 0.65);
+}
+
+.yc-editor-shell.is-dark .yc-editor-host .cm-table-widget-btn:hover {
   background: rgba(71, 85, 105, 0.9);
 }
 
