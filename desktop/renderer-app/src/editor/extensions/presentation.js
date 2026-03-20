@@ -5,6 +5,7 @@ import { parseImageLine, serializeImageLine } from "../parser/parse-image";
 
 const HEADING_PREFIX_PATTERN = /^\s{0,3}#{1,6}[ \t]+/;
 const BLOCKQUOTE_PREFIX_PATTERN = /^\s{0,3}>\s?/;
+const CALLOUT_MARKER_WITH_PREFIX_PATTERN = /^(\s{0,3}>\s*)\[!([A-Za-z][A-Za-z0-9_-]*)\](?:[ \t]+)?/;
 const TASK_LIST_PREFIX_PATTERN = /^(\s*)([-+*])\s+\[( |x|X)\]\s+/;
 const BULLET_LIST_PREFIX_PATTERN = /^(\s*)([-+*])\s+/;
 const ORDERED_LIST_PREFIX_PATTERN = /^(\s*)(\d+)([.)])\s+/;
@@ -124,6 +125,41 @@ const MAX_IMAGE_WIDTH = 1400;
 const SOURCE_TOGGLE_ICON_COLLAPSED = "</>";
 const SOURCE_TOGGLE_ICON_EXPANDED = ">/<";
 const sourceToggleTitle = (isExpanded) => (isExpanded ? "Hide source" : "Show source");
+const CALLOUT_LABELS = {
+  note: "NOTE",
+  tip: "TIP",
+  info: "INFO",
+  warning: "WARNING",
+  caution: "CAUTION",
+  danger: "DANGER",
+  important: "IMPORTANT"
+};
+const CALLOUT_ICONS = {
+  note: "✎",
+  tip: "✦",
+  info: "ℹ",
+  warning: "⚠",
+  caution: "⚠",
+  danger: "⛔",
+  important: "❗"
+};
+
+const normalizeCalloutType = (typeInput) =>
+  String(typeInput || "note")
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9_-]/g, "")
+    || "note";
+
+const calloutLabelForType = (typeInput) => {
+  const normalized = normalizeCalloutType(typeInput);
+  return CALLOUT_LABELS[normalized] || normalized.toUpperCase();
+};
+const calloutIconForType = (typeInput) => {
+  const normalized = normalizeCalloutType(typeInput);
+  return CALLOUT_ICONS[normalized] || "✎";
+};
+
 const normalizeImageWidth = (value, fallback = DEFAULT_IMAGE_WIDTH) => {
   const numeric = Number(value);
   if (!Number.isFinite(numeric)) {
@@ -273,6 +309,49 @@ class ListPrefixWidget extends WidgetType {
 
   ignoreEvent() {
     return false;
+  }
+}
+
+class CalloutLabelWidget extends WidgetType {
+  constructor({ type = "note", showText = false } = {}) {
+    super();
+    this.type = normalizeCalloutType(type);
+    this.label = calloutLabelForType(type);
+    this.icon = calloutIconForType(type);
+    this.showText = Boolean(showText);
+  }
+
+  eq(other) {
+    return (
+      other instanceof CalloutLabelWidget
+      && other.type === this.type
+      && other.label === this.label
+      && other.icon === this.icon
+      && other.showText === this.showText
+    );
+  }
+
+  toDOM() {
+    const span = document.createElement("span");
+    span.className = `cm-callout-label-widget cm-callout-label-${this.type}`;
+    span.setAttribute("aria-hidden", "true");
+
+    const icon = document.createElement("span");
+    icon.className = "cm-callout-label-icon";
+    icon.textContent = this.icon;
+    span.appendChild(icon);
+
+    if (this.showText) {
+      const text = document.createElement("span");
+      text.className = "cm-callout-label-text";
+      text.textContent = this.label;
+      span.appendChild(text);
+    }
+    return span;
+  }
+
+  ignoreEvent() {
+    return true;
   }
 }
 
@@ -846,6 +925,9 @@ const addBlockquotePrefixDecorationsForBlock = (decorations, doc, block, docLeng
   }
   const fromLine = doc.lineAt(fromPos).number;
   const toLine = doc.lineAt(Math.max(fromPos, toPos - 1)).number;
+  const isCallout = Boolean(block?.attrs?.callout);
+  const calloutType = normalizeCalloutType(block?.attrs?.calloutType);
+  const calloutTitle = String(block?.attrs?.calloutTitle || "").trim();
 
   for (let lineNumber = fromLine; lineNumber <= toLine; lineNumber += 1) {
     const line = doc.line(lineNumber);
@@ -856,6 +938,34 @@ const addBlockquotePrefixDecorationsForBlock = (decorations, doc, block, docLeng
     const prefixFrom = line.from;
     const prefixTo = Math.min(line.to, line.from + match[0].length);
     addHiddenSyntaxRangeDecoration(decorations, prefixFrom, prefixTo);
+
+    if (!isCallout || lineNumber !== fromLine) {
+      continue;
+    }
+
+    const calloutMatch = String(line.text || "").match(CALLOUT_MARKER_WITH_PREFIX_PATTERN);
+    if (!calloutMatch) {
+      continue;
+    }
+
+    const quotePrefix = String(calloutMatch[1] || "");
+    const fullMarker = String(calloutMatch[0] || "");
+    const markerFrom = Math.min(line.to, line.from + quotePrefix.length);
+    const markerTo = Math.min(line.to, line.from + fullMarker.length);
+    if (markerTo <= markerFrom) {
+      continue;
+    }
+
+    addHiddenSyntaxRangeDecoration(decorations, markerFrom, markerTo);
+    decorations.push(
+      Decoration.widget({
+        widget: new CalloutLabelWidget({
+          type: calloutType,
+          showText: !calloutTitle
+        }),
+        side: -1
+      }).range(markerTo)
+    );
   }
 };
 
@@ -1394,6 +1504,14 @@ const classesForBlockLine = (
   if (block.type === "bullet_list_item" || block.type === "ordered_list_item" || block.type === "task_list_item") {
     const level = Math.max(1, Math.min(6, Number(block?.attrs?.level || 1)));
     classes.push(`cm-list-level-${level}`);
+  }
+  if (block.type === "blockquote" && block?.attrs?.callout) {
+    const calloutType = normalizeCalloutType(block?.attrs?.calloutType);
+    classes.push("cm-block-callout");
+    classes.push(`cm-block-callout-${calloutType}`);
+    if (lineNumber === lineRange.fromLine) {
+      classes.push("cm-block-callout-head");
+    }
   }
 
   return classes.join(" ");

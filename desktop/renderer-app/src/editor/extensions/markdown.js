@@ -1,9 +1,10 @@
 import { Prec } from "@codemirror/state";
 import { markdown, markdownKeymap } from "@codemirror/lang-markdown";
-import { keymap } from "@codemirror/view";
+import { EditorView, keymap } from "@codemirror/view";
 
 const OPEN_FENCE_PATTERN = /^\s{0,3}(`{3,}|~{3,})(.*)$/;
-const EMPTY_BLOCKQUOTE_LINE_PATTERN = /^\s{0,3}>\s*$/;
+const ZERO_WIDTH_CHAR_PATTERN = /[\u200B-\u200D\u2060\uFEFF]/g;
+const EMPTY_BLOCKQUOTE_LINE_PATTERN = /^\s{0,3}(?:>\s*)+$/;
 
 const closeFencePatternFor = (fenceToken) => {
   const marker = fenceToken[0] === "~" ? "~" : "`";
@@ -14,6 +15,16 @@ const closeFencePatternFor = (fenceToken) => {
 const getLineIndent = (lineText) => {
   const match = String(lineText || "").match(/^\s{0,3}/);
   return match ? match[0] : "";
+};
+
+const normalizeQuoteLineText = (lineText) => String(lineText || "").replace(ZERO_WIDTH_CHAR_PATTERN, "");
+
+export const isEmptyBlockquoteLine = (lineText) => {
+  const normalized = normalizeQuoteLineText(lineText);
+  if (!EMPTY_BLOCKQUOTE_LINE_PATTERN.test(normalized)) {
+    return false;
+  }
+  return normalized.replace(/^\s{0,3}(?:>\s*)+/, "").trim().length === 0;
 };
 
 export const findUnclosedFenceAtLine = (doc, lineNumberInput) => {
@@ -103,8 +114,7 @@ export const exitBlockquoteOnEmptyQuoteLine = (view) => {
   const doc = view.state.doc;
   const cursor = selection.head;
   const line = doc.lineAt(cursor);
-  const text = String(line.text || "");
-  if (!EMPTY_BLOCKQUOTE_LINE_PATTERN.test(text)) {
+  if (!isEmptyBlockquoteLine(line.text)) {
     return false;
   }
 
@@ -123,6 +133,34 @@ export const exitBlockquoteOnEmptyQuoteLine = (view) => {
   return true;
 };
 
+const shouldInterceptEnterForBlockquoteExit = (event) => {
+  if (!event || event.defaultPrevented) {
+    return false;
+  }
+  if (event.isComposing) {
+    return false;
+  }
+  if (event.key !== "Enter") {
+    return false;
+  }
+  if (event.shiftKey || event.altKey || event.ctrlKey || event.metaKey) {
+    return false;
+  }
+  return true;
+};
+
+const handleBlockquoteEnterDomFallback = (event, view) => {
+  if (!shouldInterceptEnterForBlockquoteExit(event)) {
+    return false;
+  }
+  if (!exitBlockquoteOnEmptyQuoteLine(view)) {
+    return false;
+  }
+  event.preventDefault();
+  event.stopPropagation();
+  return true;
+};
+
 export const markdownExtensions = [
   markdown(),
   Prec.high(
@@ -137,5 +175,10 @@ export const markdownExtensions = [
       },
       ...markdownKeymap
     ])
+  ),
+  Prec.high(
+    EditorView.domEventHandlers({
+      keydown: (event, view) => handleBlockquoteEnterDomFallback(event, view)
+    })
   )
 ];

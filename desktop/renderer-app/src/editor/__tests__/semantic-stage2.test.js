@@ -137,6 +137,17 @@ test("other block syntaxes keep stable line spans around separator blank lines",
   assert.equal(tail?.lineEnd, 9);
 });
 
+test("blockquote callout header is parsed into callout attrs", () => {
+  const markdown = ["> [!WARNING] Backup first", "> Continue carefully"].join("\n");
+  const blocks = parseMarkdownToBlocks(markdown);
+  const quote = blocks.find((block) => block.type === "blockquote");
+
+  assert.equal(Boolean(quote), true);
+  assert.equal(quote?.attrs?.callout, true);
+  assert.equal(quote?.attrs?.calloutType, "warning");
+  assert.equal(quote?.attrs?.calloutTitle, "Backup first");
+});
+
 test("findBlockContextByPos returns no current block for inter-block gaps", () => {
   const blocks = parseMarkdownToBlocks("A\n\nB");
   const gapPos = 2;

@@ -8,6 +8,7 @@ import { parseListLine } from "./parse-list";
 const OPEN_MATH_FENCE_PATTERN = /^\s{0,3}\$\$\s*$/;
 const SINGLE_LINE_MATH_PATTERN = /^\s{0,3}\$\$(.+?)\$\$\s*$/;
 const BLOCKQUOTE_LINE_PATTERN = /^\s{0,3}>\s?/;
+const CALLOUT_HEADER_PATTERN = /^\s{0,3}>\s*\[!([A-Za-z][A-Za-z0-9_-]*)\](?:[ \t]+(.*))?\s*$/;
 
 const normalizeMarkdown = (markdown) => String(markdown || "").replace(/\r\n/g, "\n");
 
@@ -139,6 +140,26 @@ const extractFenceFromRaw = (rawInput) => {
   const line = String(rawInput || "").split("\n")[0] || "";
   const trimmed = line.trimStart();
   return trimmed.startsWith("~~~") ? "~~~" : "```";
+};
+
+const normalizeCalloutType = (typeInput) =>
+  String(typeInput || "note")
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9_-]/g, "")
+    || "note";
+
+const blockquoteAttrsFromRaw = (rawInput) => {
+  const firstLine = String(rawInput || "").split("\n")[0] || "";
+  const match = firstLine.match(CALLOUT_HEADER_PATTERN);
+  if (!match) {
+    return {};
+  }
+  return {
+    callout: true,
+    calloutType: normalizeCalloutType(match[1]),
+    calloutTitle: String(match[2] || "").trim()
+  };
 };
 
 const firstLineOf = (raw) => String(raw || "").split("\n")[0] || "";
@@ -429,11 +450,12 @@ const parseBlockquoteRangeToBlocks = (markdown, from, to) => {
     }
     const trimmedTo = trimTrailingBlankLinesInRange(markdown, quoteFrom, quoteTo);
     if (trimmedTo > quoteFrom) {
+      const raw = markdown.slice(quoteFrom, trimmedTo);
       blocks.push({
         type: BLOCK_TYPES.BLOCKQUOTE,
         from: quoteFrom,
         to: trimmedTo,
-        attrs: {}
+        attrs: blockquoteAttrsFromRaw(raw)
       });
     }
     quoteFrom = -1;

@@ -2,6 +2,8 @@ import { EditorView, ViewPlugin } from "@codemirror/view";
 
 const MENU_GAP = 8;
 const SUBMENU_GAP = 2;
+const SUBMENU_OPEN_DELAY_MS = 140;
+const SUBMENU_CLOSE_DELAY_MS = 240;
 const DEFAULT_LINK_URL = "https://";
 
 const safeNumber = (value, fallback = 0) => {
@@ -400,7 +402,7 @@ const MENU_DEFINITION = [
   { type: "separator" },
   {
     id: "format",
-    icon: "✎",
+    icon: "✏",
     label: "文本格式",
     children: [
       { id: "format-bold", icon: "B", label: "加粗" },
@@ -409,7 +411,7 @@ const MENU_DEFINITION = [
       { id: "format-highlight", icon: "H", label: "高亮" },
       { type: "separator" },
       { id: "format-code", icon: "</>", label: "代码" },
-      { id: "format-math", icon: "Σ", label: "数学" },
+      { id: "format-math", icon: "∑", label: "数学" },
       { id: "format-comment", icon: "%", label: "注释" },
       { type: "separator" },
       { id: "format-clear", icon: "⌫", label: "清除格式" }
@@ -441,13 +443,13 @@ const MENU_DEFINITION = [
     label: "插入",
     children: [
       { id: "insert-footnote", icon: "¤", label: "脚注" },
-      { id: "insert-table", icon: "▦", label: "表格" },
+      { id: "insert-table", icon: "▣", label: "表格" },
       { id: "insert-callout", icon: "❞", label: "标注" },
       { id: "insert-divider", icon: "—", label: "分隔线" },
       { type: "separator" },
       { id: "insert-code-block", icon: "<>", label: "代码块" },
       { id: "insert-math-block", icon: "∑", label: "数学块" },
-      { id: "insert-database", icon: "☷", label: "新建数据库" }
+      { id: "insert-database", icon: "◍", label: "新建数据库" }
     ]
   },
   { type: "separator" },
@@ -455,7 +457,7 @@ const MENU_DEFINITION = [
   { id: "clipboard-copy", icon: "⧉", label: "复制" },
   { id: "clipboard-paste", icon: "⎘", label: "粘贴" },
   { id: "clipboard-paste-plain", icon: "T", label: "以纯文本形式粘贴" },
-  { id: "select-all", icon: "□", label: "全选" }
+  { id: "select-all", icon: "◻", label: "全选" }
 ];
 
 const withDisabledState = (items, view) => {
@@ -494,6 +496,10 @@ class EditorContextMenuController {
     this.rootMenuEl = null;
     this.subMenuEl = null;
     this.activeSubmenuItemEl = null;
+    this.submenuOpenTimer = null;
+    this.submenuCloseTimer = null;
+    this.pointerInRootMenu = false;
+    this.pointerInSubmenu = false;
 
     this.onOutsideMouseDown = this.onOutsideMouseDown.bind(this);
     this.onWindowResize = this.onWindowResize.bind(this);
@@ -542,6 +548,8 @@ class EditorContextMenuController {
 
   openMenu(clientX, clientY) {
     this.closeMenu();
+    this.pointerInRootMenu = false;
+    this.pointerInSubmenu = false;
     const items = withDisabledState(MENU_DEFINITION, this.view);
     this.rootMenuEl = this.buildMenuElement(items, false);
     if (!this.rootMenuEl) {
@@ -553,6 +561,7 @@ class EditorContextMenuController {
   }
 
   closeMenu() {
+    this.clearSubmenuTimers();
     if (this.subMenuEl) {
       this.subMenuEl.remove();
       this.subMenuEl = null;
@@ -562,6 +571,8 @@ class EditorContextMenuController {
       this.rootMenuEl = null;
     }
     this.activeSubmenuItemEl = null;
+    this.pointerInRootMenu = false;
+    this.pointerInSubmenu = false;
     this.unbindGlobalCloseEvents();
   }
 
@@ -606,7 +617,59 @@ class EditorContextMenuController {
     }
   }
 
+  clearSubmenuOpenTimer() {
+    if (!this.submenuOpenTimer) {
+      return;
+    }
+    window.clearTimeout(this.submenuOpenTimer);
+    this.submenuOpenTimer = null;
+  }
+
+  clearSubmenuCloseTimer() {
+    if (!this.submenuCloseTimer) {
+      return;
+    }
+    window.clearTimeout(this.submenuCloseTimer);
+    this.submenuCloseTimer = null;
+  }
+
+  clearSubmenuTimers() {
+    this.clearSubmenuOpenTimer();
+    this.clearSubmenuCloseTimer();
+  }
+
+  scheduleOpenSubmenu(item, itemEl) {
+    if (!item?.children?.length || !(itemEl instanceof HTMLElement)) {
+      return;
+    }
+    this.clearSubmenuCloseTimer();
+    if (this.activeSubmenuItemEl === itemEl && this.subMenuEl) {
+      return;
+    }
+    this.clearSubmenuOpenTimer();
+    this.submenuOpenTimer = window.setTimeout(() => {
+      this.submenuOpenTimer = null;
+      this.openSubmenuForItem(item, itemEl);
+    }, SUBMENU_OPEN_DELAY_MS);
+  }
+
+  scheduleCloseSubmenu() {
+    if (!this.subMenuEl && !this.activeSubmenuItemEl && !this.submenuOpenTimer) {
+      return;
+    }
+    this.clearSubmenuOpenTimer();
+    this.clearSubmenuCloseTimer();
+    this.submenuCloseTimer = window.setTimeout(() => {
+      this.submenuCloseTimer = null;
+      if (this.pointerInRootMenu || this.pointerInSubmenu) {
+        return;
+      }
+      this.closeSubMenu();
+    }, SUBMENU_CLOSE_DELAY_MS);
+  }
+
   closeSubMenu() {
+    this.clearSubmenuTimers();
     if (this.subMenuEl) {
       this.subMenuEl.remove();
       this.subMenuEl = null;
@@ -615,6 +678,7 @@ class EditorContextMenuController {
       this.activeSubmenuItemEl.classList.remove("is-open");
       this.activeSubmenuItemEl = null;
     }
+    this.pointerInSubmenu = false;
   }
 
   async runItemCommand(item) {
@@ -631,6 +695,8 @@ class EditorContextMenuController {
     if (!item?.children?.length || !(itemEl instanceof HTMLElement) || !this.rootMenuEl) {
       return;
     }
+    this.clearSubmenuOpenTimer();
+    this.clearSubmenuCloseTimer();
 
     if (this.activeSubmenuItemEl === itemEl && this.subMenuEl) {
       return;
@@ -683,6 +749,29 @@ class EditorContextMenuController {
       event.preventDefault();
       event.stopPropagation();
     });
+    menu.addEventListener("mouseenter", () => {
+      if (isSubmenu) {
+        this.pointerInSubmenu = true;
+      } else {
+        this.pointerInRootMenu = true;
+      }
+      this.clearSubmenuCloseTimer();
+    });
+    menu.addEventListener("mouseleave", (event) => {
+      const related = event?.relatedTarget;
+      if (isSubmenu) {
+        this.pointerInSubmenu = false;
+        if (related instanceof Node && this.rootMenuEl?.contains(related)) {
+          return;
+        }
+      } else {
+        this.pointerInRootMenu = false;
+        if (related instanceof Node && this.subMenuEl?.contains(related)) {
+          return;
+        }
+      }
+      this.scheduleCloseSubmenu();
+    });
 
     for (const item of list) {
       if (item?.type === "separator") {
@@ -721,7 +810,14 @@ class EditorContextMenuController {
         button.appendChild(arrow);
 
         button.addEventListener("mouseenter", () => {
-          this.openSubmenuForItem(item, button);
+          this.scheduleOpenSubmenu(item, button);
+        });
+        button.addEventListener("mouseleave", (event) => {
+          const related = event?.relatedTarget;
+          if (related instanceof Node && this.subMenuEl?.contains(related)) {
+            return;
+          }
+          this.scheduleCloseSubmenu();
         });
         button.addEventListener("click", (event) => {
           event.preventDefault();
@@ -729,6 +825,9 @@ class EditorContextMenuController {
           this.openSubmenuForItem(item, button);
         });
       } else {
+        button.addEventListener("mouseenter", () => {
+          this.scheduleCloseSubmenu();
+        });
         button.addEventListener("click", async (event) => {
           event.preventDefault();
           event.stopPropagation();

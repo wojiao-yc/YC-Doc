@@ -4,7 +4,8 @@ import { EditorState } from "@codemirror/state";
 import {
   exitBlockquoteOnEmptyQuoteLine,
   exitUnclosedFenceOnEmptyLine,
-  findUnclosedFenceAtLine
+  findUnclosedFenceAtLine,
+  isEmptyBlockquoteLine
 } from "../extensions/markdown";
 
 const runEnter = (doc, anchor) => {
@@ -119,4 +120,19 @@ test("Enter on non-empty blockquote line keeps default behavior", () => {
 
   assert.equal(result.handled, false);
   assert.equal(result.doc, markdown);
+});
+
+test("empty blockquote matcher ignores zero-width characters and nested quote prefixes", () => {
+  assert.equal(isEmptyBlockquoteLine("> \u200B"), true);
+  assert.equal(isEmptyBlockquoteLine("> > \u2060"), true);
+  assert.equal(isEmptyBlockquoteLine("> note"), false);
+});
+
+test("Enter exits nested empty blockquote line in one keypress", () => {
+  const markdown = ["> quote", "> > ", "tail"].join("\n");
+  const anchor = markdown.indexOf("\n> > \n") + 4;
+  const result = runBlockquoteEnter(markdown, anchor);
+
+  assert.equal(result.handled, true);
+  assert.equal(result.doc, ["> quote", "", "tail"].join("\n"));
 });

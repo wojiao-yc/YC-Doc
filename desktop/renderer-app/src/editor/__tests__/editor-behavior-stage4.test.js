@@ -129,10 +129,10 @@ test("editor includes custom right-click context menu extension with grouped com
   assert.match(createEditor, /contextMenuExtensions/);
   assert.match(createEditor, /\.\.\.contextMenuExtensions/);
 
-  assert.match(menuExtension, /新增链接/);
-  assert.match(menuExtension, /文本格式/);
-  assert.match(menuExtension, /段落设置/);
-  assert.match(menuExtension, /插入/);
+  assert.match(menuExtension, /id:\s*"add-link"/);
+  assert.match(menuExtension, /id:\s*"format"/);
+  assert.match(menuExtension, /id:\s*"paragraph"/);
+  assert.match(menuExtension, /id:\s*"insert"/);
   assert.match(menuExtension, /clipboard-cut/);
   assert.match(menuExtension, /select-all/);
 });
