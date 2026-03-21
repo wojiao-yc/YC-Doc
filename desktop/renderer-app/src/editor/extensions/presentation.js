@@ -282,6 +282,248 @@ const parseMarkdownTableRaw = (rawText) => {
   };
 };
 
+const tableIndentOfRaw = (rawText) => {
+  const lines = String(rawText || "").split("\n");
+  for (const line of lines) {
+    const text = String(line || "");
+    if (!text.trim()) {
+      continue;
+    }
+    return text.match(/^\s*/u)?.[0] || "";
+  }
+  return "";
+};
+
+const parseMarkdownTableModel = (rawText) => {
+  const parsed = parseMarkdownTableRaw(rawText);
+  if (!parsed) {
+    return null;
+  }
+
+  const columnCount = Math.max(1, Number(parsed.headers?.length || 0));
+  const headers = Array.from({ length: columnCount }, (_, index) => String(parsed.headers[index] || ""));
+  const alignments = Array.from({ length: columnCount }, (_, index) => String(parsed.alignments[index] || ""));
+  const rows = (Array.isArray(parsed.rows) ? parsed.rows : []).map((row) =>
+    Array.from({ length: columnCount }, (_, index) => String(row?.[index] || ""))
+  );
+
+  return {
+    headers,
+    alignments,
+    rows,
+    indent: tableIndentOfRaw(rawText)
+  };
+};
+
+const normalizeTableCellText = (value) =>
+  String(value ?? "")
+    .replace(/\r?\n/g, " ")
+    .trim();
+
+const tableDelimiterCellFromAlign = (alignInput) => {
+  const align = String(alignInput || "").trim().toLowerCase();
+  if (align === "center") {
+    return ":---:";
+  }
+  if (align === "right") {
+    return "---:";
+  }
+  if (align === "left") {
+    return ":---";
+  }
+  return "---";
+};
+
+const serializeMarkdownTableModel = (modelInput) => {
+  const headersSource = Array.isArray(modelInput?.headers) ? modelInput.headers : [];
+  const columnCount = Math.max(1, Number(headersSource.length || 0));
+  const headers = Array.from({ length: columnCount }, (_, index) => normalizeTableCellText(headersSource[index]));
+  const alignmentsSource = Array.isArray(modelInput?.alignments) ? modelInput.alignments : [];
+  const delimiterCells = Array.from({ length: columnCount }, (_, index) =>
+    tableDelimiterCellFromAlign(alignmentsSource[index])
+  );
+  const rowsSource = Array.isArray(modelInput?.rows) ? modelInput.rows : [];
+  const rows = rowsSource.map((row) =>
+    Array.from({ length: columnCount }, (_, index) => normalizeTableCellText(row?.[index]))
+  );
+  const indent = String(modelInput?.indent || "");
+  const lineOf = (cells) => `${indent}| ${cells.join(" | ")} |`;
+  return [lineOf(headers), lineOf(delimiterCells), ...rows.map((row) => lineOf(row))].join("\n");
+};
+
+const clampIndex = (valueInput, minInput, maxInput) => {
+  const min = Number.isFinite(minInput) ? minInput : 0;
+  const max = Number.isFinite(maxInput) ? maxInput : min;
+  const numeric = Number(valueInput);
+  if (!Number.isFinite(numeric)) {
+    return min;
+  }
+  return Math.max(min, Math.min(max, Math.round(numeric)));
+};
+
+const moveArrayItem = (itemsInput, fromIndexInput, toIndexInput) => {
+  const items = Array.isArray(itemsInput) ? itemsInput.slice() : [];
+  if (!items.length) {
+    return items;
+  }
+
+  const fromIndex = clampIndex(fromIndexInput, 0, items.length - 1);
+  const toIndex = clampIndex(toIndexInput, 0, items.length - 1);
+  if (fromIndex === toIndex) {
+    return items;
+  }
+
+  const [moved] = items.splice(fromIndex, 1);
+  items.splice(toIndex, 0, moved);
+  return items;
+};
+
+const appendTableColumnRight = (modelInput) => {
+  const columnCount = Math.max(1, Number(modelInput?.headers?.length || 0));
+  const headers = Array.from({ length: columnCount }, (_, index) => String(modelInput?.headers?.[index] || ""));
+  const alignments = Array.from({ length: columnCount }, (_, index) => String(modelInput?.alignments?.[index] || ""));
+  const rows = Array.isArray(modelInput?.rows) ? modelInput.rows : [];
+
+  return {
+    ...modelInput,
+    headers: [...headers, ""],
+    alignments: [...alignments, ""],
+    rows: rows.map((row) => [...Array.from({ length: columnCount }, (_, index) => String(row?.[index] || "")), ""])
+  };
+};
+
+const appendTableRowBottom = (modelInput) => {
+  const columnCount = Math.max(1, Number(modelInput?.headers?.length || 0));
+  const rows = Array.isArray(modelInput?.rows) ? modelInput.rows : [];
+  const normalizedRows = rows.map((row) =>
+    Array.from({ length: columnCount }, (_, index) => String(row?.[index] || ""))
+  );
+
+  return {
+    ...modelInput,
+    rows: [...normalizedRows, Array.from({ length: columnCount }, () => "")]
+  };
+};
+
+const moveTableRow = (modelInput, fromIndexInput, toIndexInput) => {
+  const rows = Array.isArray(modelInput?.rows) ? modelInput.rows : [];
+  if (rows.length <= 1) {
+    return modelInput;
+  }
+
+  const columnCount = Math.max(1, Number(modelInput?.headers?.length || 0));
+  const normalizedRows = rows.map((row) =>
+    Array.from({ length: columnCount }, (_, index) => String(row?.[index] || ""))
+  );
+  const fromIndex = clampIndex(fromIndexInput, 0, normalizedRows.length - 1);
+  const toIndex = clampIndex(toIndexInput, 0, normalizedRows.length - 1);
+  if (fromIndex === toIndex) {
+    return modelInput;
+  }
+
+  return {
+    ...modelInput,
+    rows: moveArrayItem(normalizedRows, fromIndex, toIndex)
+  };
+};
+
+const moveTableColumn = (modelInput, fromIndexInput, toIndexInput) => {
+  const columnCount = Math.max(1, Number(modelInput?.headers?.length || 0));
+  if (columnCount <= 1) {
+    return modelInput;
+  }
+
+  const fromIndex = clampIndex(fromIndexInput, 0, columnCount - 1);
+  const toIndex = clampIndex(toIndexInput, 0, columnCount - 1);
+  if (fromIndex === toIndex) {
+    return modelInput;
+  }
+
+  const headers = Array.from({ length: columnCount }, (_, index) => String(modelInput?.headers?.[index] || ""));
+  const alignments = Array.from({ length: columnCount }, (_, index) => String(modelInput?.alignments?.[index] || ""));
+  const rows = Array.isArray(modelInput?.rows) ? modelInput.rows : [];
+  const normalizedRows = rows.map((row) =>
+    Array.from({ length: columnCount }, (_, index) => String(row?.[index] || ""))
+  );
+
+  return {
+    ...modelInput,
+    headers: moveArrayItem(headers, fromIndex, toIndex),
+    alignments: moveArrayItem(alignments, fromIndex, toIndex),
+    rows: normalizedRows.map((row) => moveArrayItem(row, fromIndex, toIndex))
+  };
+};
+
+const normalizeTableCellEditorText = (textInput) =>
+  String(textInput ?? "")
+    .replace(/\u00A0/g, " ")
+    .replace(/\r?\n/g, " ");
+
+const updateTableCellByPosition = (
+  modelInput,
+  {
+    section = "body",
+    rowIndex: rowIndexInput = 0,
+    colIndex: colIndexInput = 0,
+    text = ""
+  } = {}
+) => {
+  const headers = Array.isArray(modelInput?.headers) ? modelInput.headers : [];
+  const columnCount = Math.max(1, Number(headers.length || 0));
+  const colIndex = clampIndex(colIndexInput, 0, columnCount - 1);
+  const nextText = normalizeTableCellEditorText(text);
+
+  if (section === "header") {
+    const nextHeaders = Array.from({ length: columnCount }, (_, index) => String(headers[index] || ""));
+    if (nextHeaders[colIndex] === nextText) {
+      return modelInput;
+    }
+    nextHeaders[colIndex] = nextText;
+    return {
+      ...modelInput,
+      headers: nextHeaders
+    };
+  }
+
+  const rows = Array.isArray(modelInput?.rows) ? modelInput.rows : [];
+  if (!rows.length) {
+    return modelInput;
+  }
+
+  const rowIndex = clampIndex(rowIndexInput, 0, rows.length - 1);
+  const nextRows = rows.map((row) =>
+    Array.from({ length: columnCount }, (_, index) => String(row?.[index] || ""))
+  );
+  if (nextRows[rowIndex][colIndex] === nextText) {
+    return modelInput;
+  }
+  nextRows[rowIndex][colIndex] = nextText;
+  return {
+    ...modelInput,
+    rows: nextRows
+  };
+};
+
+const bindTableCellEditorDomEvents = (cellEditor) => {
+  if (!(cellEditor instanceof HTMLElement)) {
+    return;
+  }
+
+  const stopBubble = (event) => {
+    event.stopPropagation();
+  };
+
+  cellEditor.addEventListener("mousedown", stopBubble);
+  cellEditor.addEventListener("click", stopBubble);
+  cellEditor.addEventListener("keydown", (event) => {
+    event.stopPropagation();
+    if (event.key === "Enter" && !event.shiftKey && !event.altKey && !event.ctrlKey && !event.metaKey) {
+      event.preventDefault();
+      cellEditor.blur();
+    }
+  });
+};
+
 class ListPrefixWidget extends WidgetType {
   constructor({ blockType = "", text = "", checked = false } = {}) {
     super();
@@ -567,8 +809,8 @@ class TableBlockWidget extends WidgetType {
     const content = document.createElement("span");
     content.className = "cm-table-widget-content";
 
-    const parsed = parseMarkdownTableRaw(this.rawText);
-    if (!parsed) {
+    const model = parseMarkdownTableModel(this.rawText);
+    if (!model) {
       const fallback = document.createElement("span");
       fallback.className = "cm-math-fallback";
       fallback.textContent = "Invalid markdown table";
@@ -579,34 +821,111 @@ class TableBlockWidget extends WidgetType {
 
       const thead = document.createElement("thead");
       const headerRow = document.createElement("tr");
-      parsed.headers.forEach((cellText, index) => {
+      model.headers.forEach((cellText, index) => {
         const th = document.createElement("th");
-        const align = parsed.alignments[index];
+        const align = model.alignments[index];
         if (align) {
           th.style.textAlign = align;
         }
-        th.textContent = cellText;
+
+        const cellEditor = document.createElement("span");
+        cellEditor.className = "cm-table-widget-cell-editor";
+        cellEditor.contentEditable = "true";
+        cellEditor.spellcheck = false;
+        cellEditor.tabIndex = 0;
+        cellEditor.setAttribute("data-table-edit", "true");
+        cellEditor.setAttribute("data-table-block-id", this.blockId);
+        cellEditor.setAttribute("data-table-section", "header");
+        cellEditor.setAttribute("data-table-col-index", String(index));
+        cellEditor.textContent = cellText;
+        bindTableCellEditorDomEvents(cellEditor);
+        th.appendChild(cellEditor);
+
+        const colHandle = document.createElement("button");
+        colHandle.type = "button";
+        colHandle.className = "cm-table-widget-col-handle";
+        colHandle.textContent = "";
+        colHandle.setAttribute("title", "Drag to move this column");
+        colHandle.setAttribute("aria-label", "Drag to move this column");
+        colHandle.setAttribute("data-table-col-handle", "true");
+        colHandle.setAttribute("data-table-block-id", this.blockId);
+        colHandle.setAttribute("data-table-col-index", String(index));
+        th.appendChild(colHandle);
+
         headerRow.appendChild(th);
       });
       thead.appendChild(headerRow);
       tableEl.appendChild(thead);
 
       const tbody = document.createElement("tbody");
-      parsed.rows.forEach((row) => {
+      model.rows.forEach((row, rowIndex) => {
         const tr = document.createElement("tr");
         row.forEach((cellText, index) => {
           const td = document.createElement("td");
-          const align = parsed.alignments[index];
+          const align = model.alignments[index];
           if (align) {
             td.style.textAlign = align;
           }
-          td.textContent = cellText;
+
+          const cellEditor = document.createElement("span");
+          cellEditor.className = "cm-table-widget-cell-editor";
+          cellEditor.contentEditable = "true";
+          cellEditor.spellcheck = false;
+          cellEditor.tabIndex = 0;
+          cellEditor.setAttribute("data-table-edit", "true");
+          cellEditor.setAttribute("data-table-block-id", this.blockId);
+          cellEditor.setAttribute("data-table-section", "body");
+          cellEditor.setAttribute("data-table-row-index", String(rowIndex));
+          cellEditor.setAttribute("data-table-col-index", String(index));
+          cellEditor.textContent = cellText;
+          bindTableCellEditorDomEvents(cellEditor);
+          td.appendChild(cellEditor);
+
+          if (index === 0) {
+            td.classList.add("cm-table-widget-row-anchor");
+            const rowHandle = document.createElement("button");
+            rowHandle.type = "button";
+            rowHandle.className = "cm-table-widget-row-handle";
+            rowHandle.textContent = "";
+            rowHandle.setAttribute("title", "Drag to move this row");
+            rowHandle.setAttribute("aria-label", "Drag to move this row");
+            rowHandle.setAttribute("data-table-row-handle", "true");
+            rowHandle.setAttribute("data-table-block-id", this.blockId);
+            rowHandle.setAttribute("data-table-row-index", String(rowIndex));
+            td.appendChild(rowHandle);
+          }
+
           tr.appendChild(td);
         });
         tbody.appendChild(tr);
       });
       tableEl.appendChild(tbody);
       content.appendChild(tableEl);
+
+      const addColumnBtn = document.createElement("button");
+      addColumnBtn.type = "button";
+      addColumnBtn.className = "cm-table-widget-edge-btn cm-table-widget-add-col-btn";
+      addColumnBtn.textContent = "+";
+      addColumnBtn.setAttribute("title", "Insert one column on the right");
+      addColumnBtn.setAttribute("aria-label", "Insert one column on the right");
+      addColumnBtn.setAttribute("data-table-action", "add-column-right");
+      addColumnBtn.setAttribute("data-table-block-id", this.blockId);
+      wrapper.appendChild(addColumnBtn);
+
+      const addRowBtn = document.createElement("button");
+      addRowBtn.type = "button";
+      addRowBtn.className = "cm-table-widget-edge-btn cm-table-widget-add-row-btn";
+      addRowBtn.textContent = "+";
+      addRowBtn.setAttribute("title", "Insert one row below");
+      addRowBtn.setAttribute("aria-label", "Insert one row below");
+      addRowBtn.setAttribute("data-table-action", "add-row-bottom");
+      addRowBtn.setAttribute("data-table-block-id", this.blockId);
+      wrapper.appendChild(addRowBtn);
+
+      const dropIndicator = document.createElement("span");
+      dropIndicator.className = "cm-table-widget-drop-indicator";
+      dropIndicator.setAttribute("data-table-drop-indicator", "true");
+      wrapper.appendChild(dropIndicator);
     }
 
     const btn = document.createElement("span");
@@ -1850,6 +2169,290 @@ const resolveImageBlockRangeById = (view, blockId) => {
   return null;
 };
 
+const resolveTableBlockRangeById = (view, blockId) => {
+  const targetBlockId = String(blockId || "");
+  if (!targetBlockId) {
+    return null;
+  }
+
+  const data = view.state.field(presentationDataField);
+  const blocks = Array.isArray(data?.blocks) ? data.blocks : [];
+  const doc = view.state.doc;
+  const docLength = Number(doc.length || 0);
+  for (const block of blocks) {
+    const from = clampPos(block?.from, docLength);
+    const to = Math.max(from, clampPos(block?.to, docLength));
+    if (tableExpandKeyOf({ type: block?.type, from }) === targetBlockId) {
+      return {
+        from,
+        to,
+        rawText: doc.sliceString(from, to)
+      };
+    }
+  }
+  return null;
+};
+
+const persistTableByBlockId = (view, blockId, transformTableModel) => {
+  if (typeof transformTableModel !== "function") {
+    return false;
+  }
+
+  const range = resolveTableBlockRangeById(view, blockId);
+  if (!range) {
+    return false;
+  }
+
+  const model = parseMarkdownTableModel(range.rawText);
+  if (!model) {
+    return false;
+  }
+
+  const nextModel = transformTableModel(model);
+  if (!nextModel) {
+    return false;
+  }
+
+  const nextRaw = serializeMarkdownTableModel(nextModel);
+  if (!nextRaw || nextRaw === range.rawText) {
+    return false;
+  }
+
+  view.dispatch({
+    changes: {
+      from: range.from,
+      to: range.to,
+      insert: nextRaw
+    },
+    userEvent: "input"
+  });
+  view.focus();
+  return true;
+};
+
+const tableInsertIndexFromRects = (rects, pointer, axis) => {
+  const axisKey = axis === "x" ? "left" : "top";
+  const sizeKey = axis === "x" ? "right" : "bottom";
+  for (let index = 0; index < rects.length; index += 1) {
+    const rect = rects[index];
+    const center = (Number(rect[axisKey]) + Number(rect[sizeKey])) / 2;
+    if (pointer < center) {
+      return index;
+    }
+  }
+  return rects.length;
+};
+
+const tableDropLinePosFromInsertIndex = (rects, insertIndexInput, axis) => {
+  if (!rects.length) {
+    return 0;
+  }
+
+  const insertIndex = clampIndex(insertIndexInput, 0, rects.length);
+  if (axis === "x") {
+    if (insertIndex <= 0) {
+      return Number(rects[0].left || 0);
+    }
+    if (insertIndex >= rects.length) {
+      return Number(rects[rects.length - 1].right || 0);
+    }
+    return Number(rects[insertIndex].left || 0);
+  }
+
+  if (insertIndex <= 0) {
+    return Number(rects[0].top || 0);
+  }
+  if (insertIndex >= rects.length) {
+    return Number(rects[rects.length - 1].bottom || 0);
+  }
+  return Number(rects[insertIndex].top || 0);
+};
+
+const targetIndexFromInsertIndex = (sourceIndexInput, insertIndexInput, itemCountInput) => {
+  const itemCount = Math.max(1, Number(itemCountInput || 0));
+  const sourceIndex = clampIndex(sourceIndexInput, 0, itemCount - 1);
+  const insertIndex = clampIndex(insertIndexInput, 0, itemCount);
+  const targetIndex = insertIndex > sourceIndex ? insertIndex - 1 : insertIndex;
+  return clampIndex(targetIndex, 0, itemCount - 1);
+};
+
+const startTableDragReorder = (event, view, handle, axis) => {
+  const wrapper = handle.closest(".cm-table-widget");
+  if (!(wrapper instanceof HTMLElement)) {
+    return true;
+  }
+
+  const tableEl = wrapper.querySelector(".cm-table-widget-table");
+  if (!(tableEl instanceof HTMLElement)) {
+    return true;
+  }
+
+  const indicator = wrapper.querySelector("[data-table-drop-indicator]");
+  if (!(indicator instanceof HTMLElement)) {
+    return true;
+  }
+
+  const blockId = String(handle.getAttribute("data-table-block-id") || "");
+  if (!blockId) {
+    return true;
+  }
+
+  const isColumnDrag = axis === "column";
+  const indexAttr = isColumnDrag ? "data-table-col-index" : "data-table-row-index";
+  const sourceIndexRaw = Number(handle.getAttribute(indexAttr));
+  if (!Number.isFinite(sourceIndexRaw)) {
+    return true;
+  }
+
+  const itemElements = isColumnDrag
+    ? Array.from(tableEl.querySelectorAll("thead th"))
+    : Array.from(tableEl.querySelectorAll("tbody tr"));
+  if (itemElements.length <= 1) {
+    return true;
+  }
+
+  const sourceIndex = clampIndex(sourceIndexRaw, 0, itemElements.length - 1);
+  let lastInsertIndex = sourceIndex;
+  const axisKey = isColumnDrag ? "x" : "y";
+  const dragSourceElements = isColumnDrag
+    ? Array.from(
+      tableEl.querySelectorAll(`thead th:nth-child(${sourceIndex + 1}), tbody td:nth-child(${sourceIndex + 1})`)
+    )
+    : [itemElements[sourceIndex]].filter(Boolean);
+
+  const setDragSourceActive = (active) => {
+    for (const element of dragSourceElements) {
+      if (!(element instanceof Element)) {
+        continue;
+      }
+      element.classList.toggle("is-drag-source", Boolean(active));
+    }
+  };
+
+  const measureRects = () => itemElements.map((item) => item.getBoundingClientRect());
+
+  const updateDropIndicator = (insertIndex) => {
+    const itemRects = measureRects();
+    const wrapperRect = wrapper.getBoundingClientRect();
+    const tableRect = tableEl.getBoundingClientRect();
+    const dropPos = tableDropLinePosFromInsertIndex(itemRects, insertIndex, axisKey);
+
+    indicator.classList.add("is-active");
+    indicator.classList.toggle("is-column", isColumnDrag);
+    indicator.classList.toggle("is-row", !isColumnDrag);
+    if (isColumnDrag) {
+      indicator.style.left = `${Math.round(dropPos - wrapperRect.left)}px`;
+      indicator.style.top = `${Math.round(tableRect.top - wrapperRect.top)}px`;
+      indicator.style.height = `${Math.round(tableRect.height)}px`;
+      indicator.style.width = "";
+    } else {
+      indicator.style.top = `${Math.round(dropPos - wrapperRect.top)}px`;
+      indicator.style.left = `${Math.round(tableRect.left - wrapperRect.left)}px`;
+      indicator.style.width = `${Math.round(tableRect.width)}px`;
+      indicator.style.height = "";
+    }
+  };
+
+  const pointerValueOf = (moveEvent) =>
+    Number(isColumnDrag ? moveEvent.clientX : moveEvent.clientY);
+
+  const onMouseMove = (moveEvent) => {
+    moveEvent.preventDefault();
+    const itemRects = measureRects();
+    const pointerValue = pointerValueOf(moveEvent);
+    const insertIndex = tableInsertIndexFromRects(itemRects, pointerValue, axisKey);
+    lastInsertIndex = insertIndex;
+    updateDropIndicator(insertIndex);
+  };
+
+  const endDrag = () => {
+    window.removeEventListener("mousemove", onMouseMove, true);
+    window.removeEventListener("mouseup", onMouseUp, true);
+    wrapper.classList.remove("is-table-dragging", "is-table-row-dragging", "is-table-column-dragging");
+    indicator.classList.remove("is-active", "is-row", "is-column");
+    indicator.style.left = "";
+    indicator.style.top = "";
+    indicator.style.width = "";
+    indicator.style.height = "";
+    setDragSourceActive(false);
+    document.body.style.userSelect = previousUserSelect;
+  };
+
+  const onMouseUp = (upEvent) => {
+    upEvent.preventDefault();
+    endDrag();
+    const targetIndex = targetIndexFromInsertIndex(sourceIndex, lastInsertIndex, itemElements.length);
+    if (targetIndex === sourceIndex) {
+      view.focus();
+      return;
+    }
+
+    persistTableByBlockId(
+      view,
+      blockId,
+      isColumnDrag
+        ? (model) => moveTableColumn(model, sourceIndex, targetIndex)
+        : (model) => moveTableRow(model, sourceIndex, targetIndex)
+    );
+  };
+
+  const previousUserSelect = document.body.style.userSelect;
+  document.body.style.userSelect = "none";
+  wrapper.classList.add("is-table-dragging");
+  wrapper.classList.toggle("is-table-column-dragging", isColumnDrag);
+  wrapper.classList.toggle("is-table-row-dragging", !isColumnDrag);
+  setDragSourceActive(true);
+
+  const initialRects = measureRects();
+  const initialPointer = pointerValueOf(event);
+  lastInsertIndex = tableInsertIndexFromRects(initialRects, initialPointer, axisKey);
+  updateDropIndicator(lastInsertIndex);
+
+  window.addEventListener("mousemove", onMouseMove, true);
+  window.addEventListener("mouseup", onMouseUp, true);
+  view.focus();
+  return true;
+};
+
+const handleTableAction = (view, blockId, actionInput) => {
+  const action = String(actionInput || "");
+  if (!action || !blockId) {
+    return false;
+  }
+
+  if (action === "add-column-right") {
+    return persistTableByBlockId(view, blockId, (model) => appendTableColumnRight(model));
+  }
+  if (action === "add-row-bottom") {
+    return persistTableByBlockId(view, blockId, (model) => appendTableRowBottom(model));
+  }
+  return false;
+};
+
+const commitTableCellEdit = (view, editableCell) => {
+  if (!(editableCell instanceof HTMLElement)) {
+    return false;
+  }
+
+  const blockId = String(editableCell.getAttribute("data-table-block-id") || "");
+  const section = String(editableCell.getAttribute("data-table-section") || "body").toLowerCase();
+  const rowIndex = Number(editableCell.getAttribute("data-table-row-index"));
+  const colIndex = Number(editableCell.getAttribute("data-table-col-index"));
+  const text = normalizeTableCellEditorText(editableCell.textContent || "");
+  if (!blockId || !Number.isFinite(colIndex)) {
+    return false;
+  }
+
+  return persistTableByBlockId(view, blockId, (model) =>
+    updateTableCellByPosition(model, {
+      section,
+      rowIndex: Number.isFinite(rowIndex) ? rowIndex : 0,
+      colIndex,
+      text
+    })
+  );
+};
+
 const toggleTaskListStateAtLine = (view, lineFromInput) => {
   const doc = view.state.doc;
   const docLength = Number(doc.length || 0);
@@ -1941,6 +2544,33 @@ const presentationMouseDownHandler = (event, view) => {
     return true;
   }
 
+  const tableEditableCell = target.closest("[data-table-edit='true']");
+  if (tableEditableCell) {
+    event.stopPropagation();
+    return false;
+  }
+
+  const tableActionButton = target.closest("[data-table-action]");
+  if (tableActionButton) {
+    event.preventDefault();
+    event.stopPropagation();
+    return true;
+  }
+
+  const tableRowHandle = target.closest("[data-table-row-handle]");
+  if (tableRowHandle instanceof Element) {
+    event.preventDefault();
+    event.stopPropagation();
+    return startTableDragReorder(event, view, tableRowHandle, "row");
+  }
+
+  const tableColumnHandle = target.closest("[data-table-col-handle]");
+  if (tableColumnHandle instanceof Element) {
+    event.preventDefault();
+    event.stopPropagation();
+    return startTableDragReorder(event, view, tableColumnHandle, "column");
+  }
+
   const resizeHandle = target.closest(".cm-image-widget-resize-handle");
   if (!resizeHandle) {
     if (Number(event.button) === 0 && view.state.field(contextHighlightField)) {
@@ -1994,6 +2624,43 @@ const presentationMouseDownHandler = (event, view) => {
   return true;
 };
 
+const presentationKeyDownHandler = (event, view) => {
+  const target = event.target;
+  if (!(target instanceof Element)) {
+    return false;
+  }
+
+  const tableEditableCell = target.closest("[data-table-edit='true']");
+  if (!tableEditableCell) {
+    return false;
+  }
+
+  event.stopPropagation();
+  if (event.key === "Enter" && !event.shiftKey && !event.altKey && !event.ctrlKey && !event.metaKey) {
+    event.preventDefault();
+    if (tableEditableCell instanceof HTMLElement) {
+      tableEditableCell.blur();
+    }
+    return true;
+  }
+  return false;
+};
+
+const presentationFocusOutHandler = (event, view) => {
+  const target = event.target;
+  if (!(target instanceof Element)) {
+    return false;
+  }
+
+  const tableEditableCell = target.closest("[data-table-edit='true']");
+  if (!(tableEditableCell instanceof HTMLElement)) {
+    return false;
+  }
+
+  commitTableCellEdit(view, tableEditableCell);
+  return false;
+};
+
 const presentationClickHandler = (event, view) => {
   const target = event.target;
   if (!(target instanceof Element)) {
@@ -2008,6 +2675,22 @@ const presentationClickHandler = (event, view) => {
     if (Number.isFinite(lineFrom)) {
       return toggleTaskListStateAtLine(view, lineFrom);
     }
+    return true;
+  }
+
+  const tableActionButton = target.closest("[data-table-action]");
+  if (tableActionButton) {
+    event.preventDefault();
+    event.stopPropagation();
+    const action = String(tableActionButton.getAttribute("data-table-action") || "");
+    const blockId = String(tableActionButton.getAttribute("data-table-block-id") || "");
+    return handleTableAction(view, blockId, action);
+  }
+
+  const tableDragHandle = target.closest("[data-table-row-handle], [data-table-col-handle]");
+  if (tableDragHandle) {
+    event.preventDefault();
+    event.stopPropagation();
     return true;
   }
 
@@ -2087,6 +2770,8 @@ export const presentationExtensions = [
   EditorView.domEventHandlers({
     contextmenu: presentationContextMenuHandler,
     mousedown: presentationMouseDownHandler,
+    keydown: presentationKeyDownHandler,
+    focusout: presentationFocusOutHandler,
     click: presentationClickHandler
   }),
   ViewPlugin.fromClass(BlockPresentationPlugin, {
