@@ -21,6 +21,10 @@
   border-left-color: #fb923c;
 }
 
+.yc-editor-host .cm-line.cm-block {
+  transition: background-color var(--yc-block-transition-duration, 120ms) ease, color var(--yc-block-transition-duration, 120ms) ease;
+}
+
 .yc-editor-host .cm-line.cm-block-current {
   background-color: transparent;
 }

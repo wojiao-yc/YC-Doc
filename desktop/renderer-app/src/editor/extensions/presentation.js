@@ -908,6 +908,7 @@ class ImageWidget extends WidgetType {
     const wrapper = document.createElement("span");
     wrapper.className = "cm-image-widget";
     wrapper.setAttribute("data-image-block-id", this.blockId);
+    wrapper.style.setProperty("--yc-image-width", `${this.width}px`);
     const frame = document.createElement("span");
     frame.className = "cm-image-widget-frame";
 
@@ -918,15 +919,16 @@ class ImageWidget extends WidgetType {
       img.title = this.title;
     }
     img.className = "cm-image-widget-img";
-    img.style.width = `${this.width}px`;
 
     // Fallback text for broken images.
     img.onerror = () => {
-      img.style.display = "none";
-      const errorMsg = document.createElement("span");
-      errorMsg.className = "cm-image-widget-error";
-      errorMsg.textContent = "[Image load failed]";
-      frame.appendChild(errorMsg);
+      frame.classList.add("is-image-error");
+      if (!frame.querySelector(".cm-image-widget-error")) {
+        const errorMsg = document.createElement("span");
+        errorMsg.className = "cm-image-widget-error";
+        errorMsg.textContent = "[Image load failed]";
+        frame.appendChild(errorMsg);
+      }
     };
 
     const toolbar = document.createElement("span");
@@ -1048,7 +1050,7 @@ class TableBlockWidget extends WidgetType {
         const th = document.createElement("th");
         const align = model.alignments[index];
         if (align) {
-          th.style.textAlign = align;
+          th.setAttribute("data-table-align", align);
         }
 
         const cellEditor = document.createElement("span");
@@ -1087,7 +1089,7 @@ class TableBlockWidget extends WidgetType {
           const td = document.createElement("td");
           const align = model.alignments[index];
           if (align) {
-            td.style.textAlign = align;
+            td.setAttribute("data-table-align", align);
           }
 
           const cellEditor = document.createElement("span");
@@ -3045,11 +3047,6 @@ export const presentationExtensions = [
   imageWidthField,
   mathExpandField,
   tableExpandField,
-  EditorView.baseTheme({
-    ".cm-line.cm-block": {
-      transition: "background-color 120ms ease, color 120ms ease"
-    }
-  }),
   EditorView.domEventHandlers({
     contextmenu: presentationContextMenuHandler,
     mousedown: presentationMouseDownHandler,

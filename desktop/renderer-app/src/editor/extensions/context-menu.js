@@ -978,7 +978,7 @@ const promptLinkUrl = (defaultValue = DEFAULT_LINK_URL) => {
   if (typeof window === "undefined" || typeof window.prompt !== "function") {
     return defaultValue;
   }
-  return window.prompt("Enter link URL", defaultValue);
+  return window.prompt("请输入链接地址", defaultValue);
 };
 
 const commandInsertLink = (view) => {
@@ -1245,113 +1245,113 @@ const executeCommand = async (view, commandId, menuContext = {}) => {
 };
 
 const MENU_DEFINITION = [
-  { id: "add-link", icon: "+", label: "Add Link" },
-  { id: "add-external-link", icon: "->", label: "Add External Link" },
+  { id: "add-link", icon: "+", label: "新增链接" },
+  { id: "add-external-link", icon: "->", label: "新增外部链接" },
   { type: "separator" },
   {
     id: "format",
     icon: "Aa",
-    label: "Text Format",
+    label: "文本格式",
     children: [
-      { id: "format-bold", icon: "B", label: "Bold" },
-      { id: "format-italic", icon: "I", label: "Italic" },
-      { id: "format-strike", icon: "S", label: "Strike" },
-      { id: "format-highlight", icon: "H", label: "Highlight" },
+      { id: "format-bold", icon: "B", label: "粗体" },
+      { id: "format-italic", icon: "I", label: "斜体" },
+      { id: "format-strike", icon: "S", label: "删除线" },
+      { id: "format-highlight", icon: "H", label: "高亮" },
       { type: "separator" },
-      { id: "format-code", icon: "</>", label: "Code" },
-      { id: "format-math", icon: "M", label: "Math" },
-      { id: "format-comment", icon: "%", label: "Comment" },
+      { id: "format-code", icon: "</>", label: "代码" },
+      { id: "format-math", icon: "M", label: "数学" },
+      { id: "format-comment", icon: "%", label: "注释" },
       { type: "separator" },
-      { id: "format-clear", icon: "X", label: "Clear Format" }
+      { id: "format-clear", icon: "X", label: "清除格式" }
     ]
   },
   {
     id: "paragraph",
     icon: "P",
-    label: "Paragraph",
+    label: "段落设置",
     children: [
-      { id: "paragraph-bullet", icon: "*", label: "Bullet List" },
-      { id: "paragraph-ordered", icon: "1.", label: "Ordered List" },
-      { id: "paragraph-task", icon: "[]", label: "Task List" },
+      { id: "paragraph-bullet", icon: "*", label: "无序列表" },
+      { id: "paragraph-ordered", icon: "1.", label: "有序列表" },
+      { id: "paragraph-task", icon: "[]", label: "任务列表" },
       { type: "separator" },
-      { id: "paragraph-h1", icon: "H1", label: "Heading 1" },
-      { id: "paragraph-h2", icon: "H2", label: "Heading 2" },
-      { id: "paragraph-h3", icon: "H3", label: "Heading 3" },
-      { id: "paragraph-h4", icon: "H4", label: "Heading 4" },
-      { id: "paragraph-h5", icon: "H5", label: "Heading 5" },
-      { id: "paragraph-h6", icon: "H6", label: "Heading 6" },
-      { id: "paragraph-text", icon: "T", label: "Plain Text" },
+      { id: "paragraph-h1", icon: "H1", label: "标题 1" },
+      { id: "paragraph-h2", icon: "H2", label: "标题 2" },
+      { id: "paragraph-h3", icon: "H3", label: "标题 3" },
+      { id: "paragraph-h4", icon: "H4", label: "标题 4" },
+      { id: "paragraph-h5", icon: "H5", label: "标题 5" },
+      { id: "paragraph-h6", icon: "H6", label: "标题 6" },
+      { id: "paragraph-text", icon: "T", label: "正文" },
       { type: "separator" },
-      { id: "paragraph-quote", icon: ">", label: "Quote" }
+      { id: "paragraph-quote", icon: ">", label: "引用" }
     ]
   },
   {
     id: "insert",
     icon: "+",
-    label: "Insert",
+    label: "插入",
     children: [
-      { id: "insert-footnote", icon: "fn", label: "Footnote" },
-      { id: "insert-table", icon: "tbl", label: "Table" },
-      { id: "insert-callout", icon: "!", label: "Callout" },
-      { id: "insert-divider", icon: "-", label: "Divider" },
+      { id: "insert-footnote", icon: "fn", label: "脚注" },
+      { id: "insert-table", icon: "tbl", label: "表格" },
+      { id: "insert-callout", icon: "!", label: "标注" },
+      { id: "insert-divider", icon: "-", label: "分隔线" },
       { type: "separator" },
-      { id: "insert-code-block", icon: "{}", label: "Code Block" },
-      { id: "insert-math-block", icon: "M", label: "Math Block" },
-      { id: "insert-database", icon: "db", label: "Database" }
+      { id: "insert-code-block", icon: "{}", label: "代码块" },
+      { id: "insert-math-block", icon: "M", label: "数学块" },
+      { id: "insert-database", icon: "db", label: "新建数据库" }
     ]
   },
   { type: "separator" },
-  { id: "clipboard-cut", icon: "cut", label: "Cut" },
-  { id: "clipboard-copy", icon: "cpy", label: "Copy" },
-  { id: "clipboard-paste", icon: "pst", label: "Paste" },
-  { id: "clipboard-paste-plain", icon: "T", label: "Paste as Plain Text" },
+  { id: "clipboard-cut", icon: "cut", label: "剪切" },
+  { id: "clipboard-copy", icon: "cpy", label: "复制" },
+  { id: "clipboard-paste", icon: "pst", label: "粘贴" },
+  { id: "clipboard-paste-plain", icon: "T", label: "以纯文本形式粘贴" },
   { type: "separator" },
-  { id: "select-block", icon: "[]", label: "Select Block" },
-  { id: "select-all", icon: "*", label: "Select All" }
+  { id: "select-block", icon: "[]", label: "选中块" },
+  { id: "select-all", icon: "*", label: "全选" }
 ];
 
 const TABLE_ROW_ACTIONS = [
-  { id: "table-row-insert-above", icon: "^", label: "Insert Row Above" },
-  { id: "table-row-insert-below", icon: "v", label: "Insert Row Below" },
+  { id: "table-row-insert-above", icon: "^", label: "在上方新增行" },
+  { id: "table-row-insert-below", icon: "v", label: "在下方新增行" },
   { type: "separator" },
-  { id: "table-row-move-up", icon: "up", label: "Move Row Up" },
-  { id: "table-row-move-down", icon: "dn", label: "Move Row Down" },
+  { id: "table-row-move-up", icon: "up", label: "向上移动行" },
+  { id: "table-row-move-down", icon: "dn", label: "向下移动行" },
   { type: "separator" },
-  { id: "table-row-copy", icon: "cpy", label: "Copy Row" },
-  { id: "table-row-delete", icon: "del", label: "Delete Row" }
+  { id: "table-row-copy", icon: "cpy", label: "复制行" },
+  { id: "table-row-delete", icon: "del", label: "删除行" }
 ];
 
 const TABLE_COLUMN_ACTIONS = [
-  { id: "table-col-insert-left", icon: "<", label: "Insert Column Left" },
-  { id: "table-col-insert-right", icon: ">", label: "Insert Column Right" },
+  { id: "table-col-insert-left", icon: "<", label: "在左侧新增列" },
+  { id: "table-col-insert-right", icon: ">", label: "在右侧新增列" },
   { type: "separator" },
-  { id: "table-col-move-left", icon: "<-", label: "Move Column Left" },
-  { id: "table-col-move-right", icon: "->", label: "Move Column Right" },
+  { id: "table-col-move-left", icon: "<-", label: "向左移动列" },
+  { id: "table-col-move-right", icon: "->", label: "向右移动列" },
   { type: "separator" },
-  { id: "table-col-align-left", icon: "L", label: "Align Left" },
-  { id: "table-col-align-center", icon: "C", label: "Align Center" },
-  { id: "table-col-align-right", icon: "R", label: "Align Right" },
+  { id: "table-col-align-left", icon: "L", label: "左对齐" },
+  { id: "table-col-align-center", icon: "C", label: "居中对齐" },
+  { id: "table-col-align-right", icon: "R", label: "右对齐" },
   { type: "separator" },
-  { id: "table-col-copy", icon: "cpy", label: "Copy Column" },
-  { id: "table-col-delete", icon: "del", label: "Delete Column" }
+  { id: "table-col-copy", icon: "cpy", label: "复制列" },
+  { id: "table-col-delete", icon: "del", label: "删除列" }
 ];
 
 const TABLE_SORT_ACTIONS = [
-  { id: "table-sort-asc", icon: "A^", label: "Sort Asc (A-Z)" },
-  { id: "table-sort-desc", icon: "Zv", label: "Sort Desc (Z-A)" }
+  { id: "table-sort-asc", icon: "A^", label: "按列升序 (A-Z)" },
+  { id: "table-sort-desc", icon: "Zv", label: "按列降序 (Z-A)" }
 ];
 
 const TABLE_MENU_DEFINITION = [
   {
     id: "table-row",
     icon: "row",
-    label: "Row",
+    label: "行",
     children: TABLE_ROW_ACTIONS
   },
   {
     id: "table-col",
     icon: "col",
-    label: "Column",
+    label: "列",
     children: TABLE_COLUMN_ACTIONS
   },
   { type: "separator" },
@@ -1745,7 +1745,7 @@ class EditorContextMenuController {
       if (Array.isArray(item?.children) && item.children.length) {
         const arrow = document.createElement("span");
         arrow.className = "yc-editor-context-arrow";
-        arrow.textContent = ">";
+        arrow.textContent = "";
         button.appendChild(arrow);
 
         button.addEventListener("mouseenter", () => {

@@ -83,6 +83,7 @@
 
 /* 图片 Widget 样式 */
 .yc-editor-host .cm-image-widget {
+  --yc-image-width: auto;
   display: block;
   margin: 6px 0;
   width: fit-content;
@@ -98,11 +99,16 @@
 
 .yc-editor-host .cm-image-widget-img {
   display: block;
+  width: var(--yc-image-width);
   max-width: 100%;
   height: auto;
   border-radius: 4px;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
   transition: box-shadow 0.2s ease;
+}
+
+.yc-editor-host .cm-image-widget-frame.is-image-error .cm-image-widget-img {
+  display: none;
 }
 
 .yc-editor-host .cm-image-widget:hover .cm-image-widget-img {
@@ -391,6 +397,7 @@
   padding: 6px 8px;
   vertical-align: top;
   word-break: break-word;
+  text-align: left;
 }
 
 .yc-editor-host .cm-table-widget-table th {
@@ -403,9 +410,25 @@
   min-height: 1.2em;
   white-space: pre-wrap;
   word-break: break-word;
+  text-align: inherit;
   cursor: text;
   outline: none;
   line-height: 1.45;
+}
+
+.yc-editor-host .cm-table-widget-table th[data-table-align="left"],
+.yc-editor-host .cm-table-widget-table td[data-table-align="left"] {
+  text-align: left;
+}
+
+.yc-editor-host .cm-table-widget-table th[data-table-align="center"],
+.yc-editor-host .cm-table-widget-table td[data-table-align="center"] {
+  text-align: center;
+}
+
+.yc-editor-host .cm-table-widget-table th[data-table-align="right"],
+.yc-editor-host .cm-table-widget-table td[data-table-align="right"] {
+  text-align: right;
 }
 
 .yc-editor-host .cm-table-widget-cell-editor:focus {
