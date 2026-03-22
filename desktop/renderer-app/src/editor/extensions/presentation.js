@@ -1,6 +1,7 @@
 import { Decoration, EditorView, ViewPlugin, WidgetType } from "@codemirror/view";
 import { StateEffect, StateField } from "@codemirror/state";
 import katex from "katex";
+import { marked } from "marked";
 import { parseImageLine, serializeImageLine } from "../parser/parse-image";
 
 const HEADING_PREFIX_PATTERN = /^\s{0,3}#{1,6}[ \t]+/;
@@ -320,6 +321,140 @@ const normalizeTableCellText = (value) =>
     .replace(/\r?\n/g, " ")
     .trim();
 
+const TABLE_INLINE_ALLOWED_TAGS = new Set([
+  "STRONG",
+  "B",
+  "EM",
+  "I",
+  "U",
+  "CODE",
+  "DEL",
+  "S",
+  "MARK",
+  "SUP",
+  "SUB",
+  "A",
+  "BR"
+]);
+
+const safeTableLinkHref = (hrefInput) => {
+  const href = String(hrefInput || "").trim();
+  if (!href) {
+    return "";
+  }
+  if (/^(https?:|mailto:|#|\/|\.\/|\.\.\/)/i.test(href)) {
+    return href;
+  }
+  return "";
+};
+
+const sanitizeTableInlineHtml = (htmlInput) => {
+  const html = String(htmlInput || "");
+  if (!html) {
+    return "";
+  }
+
+  if (typeof document === "undefined" || typeof Node === "undefined") {
+    return escapeHtml(html);
+  }
+
+  const template = document.createElement("template");
+  template.innerHTML = html;
+
+  const sanitizeChildren = (parentNode) => {
+    const children = Array.from(parentNode.childNodes || []);
+    for (const child of children) {
+      if (child.nodeType === Node.COMMENT_NODE) {
+        child.remove();
+        continue;
+      }
+      if (child.nodeType !== Node.ELEMENT_NODE) {
+        continue;
+      }
+
+      const element = child;
+      sanitizeChildren(element);
+      const tag = String(element.tagName || "").toUpperCase();
+      if (!TABLE_INLINE_ALLOWED_TAGS.has(tag)) {
+        element.replaceWith(...Array.from(element.childNodes || []));
+        continue;
+      }
+
+      if (tag === "A") {
+        const href = safeTableLinkHref(element.getAttribute("href"));
+        const title = String(element.getAttribute("title") || "").trim();
+        if (href) {
+          element.setAttribute("href", href);
+        } else {
+          element.removeAttribute("href");
+        }
+        if (title) {
+          element.setAttribute("title", title);
+        } else {
+          element.removeAttribute("title");
+        }
+        for (const attr of Array.from(element.attributes || [])) {
+          if (attr.name !== "href" && attr.name !== "title") {
+            element.removeAttribute(attr.name);
+          }
+        }
+      } else if (tag !== "BR") {
+        for (const attr of Array.from(element.attributes || [])) {
+          element.removeAttribute(attr.name);
+        }
+      }
+    }
+  };
+
+  sanitizeChildren(template.content);
+  return template.innerHTML;
+};
+
+const applyTableMarkSyntax = (htmlInput) => {
+  const html = String(htmlInput || "");
+  if (!html || !html.includes("==")) {
+    return html;
+  }
+
+  const codeBlocks = [];
+  const withCodePlaceholders = html.replace(/<code\b[^>]*>[\s\S]*?<\/code>/gi, (match) => {
+    const index = codeBlocks.push(match) - 1;
+    return `\u0000TABLE_CODE_${index}\u0000`;
+  });
+
+  const withMarks = withCodePlaceholders.replace(/==(?=\S)([\s\S]*?\S)==/g, "<mark>$1</mark>");
+  return withMarks.replace(/\u0000TABLE_CODE_(\d+)\u0000/g, (_, indexText) => {
+    const index = Number(indexText);
+    if (!Number.isFinite(index) || index < 0 || index >= codeBlocks.length) {
+      return "";
+    }
+    return codeBlocks[index] || "";
+  });
+};
+
+const renderTableCellInlineHtml = (cellTextInput) => {
+  const source = String(cellTextInput ?? "");
+  if (!source) {
+    return "";
+  }
+
+  try {
+    if (typeof marked?.parseInline === "function") {
+      const parsed = String(
+        marked.parseInline(source, {
+          gfm: true,
+          breaks: true
+        }) || ""
+      );
+      return sanitizeTableInlineHtml(applyTableMarkSyntax(parsed));
+    }
+  } catch {
+    // fall through
+  }
+
+  return escapeHtml(source);
+};
+
 const tableDelimiterCellFromAlign = (alignInput) => {
   const align = String(alignInput || "").trim().toLowerCase();
   if (align === "center") {
@@ -514,7 +649,12 @@ const bindTableCellEditorDomEvents = (cellEditor) => {
   };
 
   cellEditor.addEventListener("mousedown", stopBubble);
-  cellEditor.addEventListener("click", stopBubble);
+  cellEditor.addEventListener("click", (event) => {
+    if (event.target instanceof Element && event.target.closest("a")) {
+      event.preventDefault();
+    }
+    stopBubble(event);
+  });
   cellEditor.addEventListener("keydown", (event) => {
     event.stopPropagation();
     if (event.key === "Enter" && !event.shiftKey && !event.altKey && !event.ctrlKey && !event.metaKey) {
@@ -522,6 +662,89 @@ const bindTableCellEditorDomEvents = (cellEditor) => {
       cellEditor.blur();
     }
   });
+};
+
+const tableInlineNodesToMarkdown = (nodesInput = []) => {
+  const nodes = Array.isArray(nodesInput) ? nodesInput : [];
+  let result = "";
+
+  for (const node of nodes) {
+    if (node?.nodeType === Node.TEXT_NODE) {
+      result += normalizeTableCellEditorText(node.nodeValue || "");
+      continue;
+    }
+    if (node?.nodeType !== Node.ELEMENT_NODE) {
+      continue;
+    }
+
+    const element = node;
+    const tag = String(element.tagName || "").toUpperCase();
+    const inner = tableInlineNodesToMarkdown(Array.from(element.childNodes || []));
+
+    if (tag === "BR") {
+      result += " ";
+      continue;
+    }
+    if (tag === "STRONG" || tag === "B") {
+      result += inner ? `**${inner}**` : "";
+      continue;
+    }
+    if (tag === "EM" || tag === "I") {
+      result += inner ? `*${inner}*` : "";
+      continue;
+    }
+    if (tag === "U") {
+      result += inner ? `<u>${inner}</u>` : "";
+      continue;
+    }
+    if (tag === "DEL" || tag === "S") {
+      result += inner ? `~~${inner}~~` : "";
+      continue;
+    }
+    if (tag === "MARK") {
+      result += inner ? `==${inner}==` : "";
+      continue;
+    }
+    if (tag === "SUP") {
+      result += inner ? `<sup>${inner}</sup>` : "";
+      continue;
+    }
+    if (tag === "SUB") {
+      result += inner ? `<sub>${inner}</sub>` : "";
+      continue;
+    }
+    if (tag === "CODE") {
+      const codeText = normalizeTableCellEditorText(element.textContent || inner || "");
+      result += codeText ? `\`${codeText.replace(/`/g, "\\`")}\`` : "";
+      continue;
+    }
+    if (tag === "A") {
+      const label = inner || normalizeTableCellEditorText(element.textContent || "");
+      const href = safeTableLinkHref(element.getAttribute("href"));
+      const title = String(element.getAttribute("title") || "").trim();
+      if (!href) {
+        result += label;
+        continue;
+      }
+      const titlePart = title ? ` "${title.replace(/"/g, '\\"')}"` : "";
+      result += `[${label}](${href}${titlePart})`;
+      continue;
+    }
+
+    result += inner;
+  }
+
+  return result;
+};
+
+const markdownFromTableCellEditor = (cellEditor) => {
+  if (!(cellEditor instanceof HTMLElement)) {
+    return "";
+  }
+  if (typeof Node === "undefined") {
+    return normalizeTableCellEditorText(cellEditor.textContent || "");
+  }
+  return normalizeTableCellEditorText(tableInlineNodesToMarkdown(Array.from(cellEditor.childNodes || [])));
 };
 
 class ListPrefixWidget extends WidgetType {
@@ -837,7 +1060,7 @@ class TableBlockWidget extends WidgetType {
         cellEditor.setAttribute("data-table-block-id", this.blockId);
         cellEditor.setAttribute("data-table-section", "header");
         cellEditor.setAttribute("data-table-col-index", String(index));
-        cellEditor.textContent = cellText;
+        cellEditor.innerHTML = renderTableCellInlineHtml(cellText);
         bindTableCellEditorDomEvents(cellEditor);
         th.appendChild(cellEditor);
 
@@ -877,7 +1100,7 @@ class TableBlockWidget extends WidgetType {
           cellEditor.setAttribute("data-table-section", "body");
           cellEditor.setAttribute("data-table-row-index", String(rowIndex));
           cellEditor.setAttribute("data-table-col-index", String(index));
-          cellEditor.textContent = cellText;
+          cellEditor.innerHTML = renderTableCellInlineHtml(cellText);
           bindTableCellEditorDomEvents(cellEditor);
           td.appendChild(cellEditor);
 
@@ -2122,29 +2345,9 @@ const resolveContextBlockIdentityFromWidget = (target, blocks, docLength) => {
 };
 
 const presentationContextMenuHandler = (event, view) => {
-  const target = event.target;
-  if (!(target instanceof Element)) {
-    return false;
-  }
-
-  const data = view.state.field(presentationDataField);
-  const blocks = Array.isArray(data?.blocks) ? data.blocks : [];
-  const docLength = Number(view.state.doc.length || 0);
-
-  let highlightedBlockId = resolveContextBlockIdentityFromWidget(target, blocks, docLength);
-  if (!highlightedBlockId) {
-    const pos = view.posAtCoords({
-      x: Number(event.clientX || 0),
-      y: Number(event.clientY || 0)
-    });
-    if (Number.isFinite(pos)) {
-      highlightedBlockId = pickBlockIdentityAtPos(blocks, pos, docLength);
-    }
-  }
-
-  if (view.state.field(contextHighlightField) !== highlightedBlockId) {
+  if (view.state.field(contextHighlightField)) {
     view.dispatch({
-      effects: setContextHighlightBlockEffect.of(highlightedBlockId)
+      effects: setContextHighlightBlockEffect.of("")
     });
   }
   return false;
@@ -2276,6 +2479,67 @@ const targetIndexFromInsertIndex = (sourceIndexInput, insertIndexInput, itemCoun
   return clampIndex(targetIndex, 0, itemCount - 1);
 };
 
+const clearTableHandleSelection = (view) => {
+  const root = view?.dom;
+  if (!(root instanceof Element)) {
+    return;
+  }
+
+  for (const node of root.querySelectorAll(".is-handle-selected-row")) {
+    node.classList.remove("is-handle-selected-row");
+  }
+  for (const node of root.querySelectorAll(".is-handle-selected-col")) {
+    node.classList.remove("is-handle-selected-col");
+  }
+  for (const node of root.querySelectorAll(".is-selected-handle")) {
+    node.classList.remove("is-selected-handle");
+  }
+};
+
+const selectTableHandleTarget = (view, handle, axis) => {
+  if (!(handle instanceof Element)) {
+    return;
+  }
+
+  const wrapper = handle.closest(".cm-table-widget");
+  if (!(wrapper instanceof HTMLElement)) {
+    return;
+  }
+
+  const tableEl = wrapper.querySelector(".cm-table-widget-table");
+  if (!(tableEl instanceof HTMLElement)) {
+    return;
+  }
+
+  clearTableHandleSelection(view);
+  handle.classList.add("is-selected-handle");
+
+  if (axis === "row") {
+    const rowIndex = Number(handle.getAttribute("data-table-row-index"));
+    if (!Number.isFinite(rowIndex)) {
+      return;
+    }
+    const rows = Array.from(tableEl.querySelectorAll("tbody tr"));
+    const safeIndex = clampIndex(rowIndex, 0, Math.max(0, rows.length - 1));
+    const row = rows[safeIndex];
+    if (row instanceof Element) {
+      row.classList.add("is-handle-selected-row");
+    }
+    return;
+  }
+
+  const colIndex = Number(handle.getAttribute("data-table-col-index"));
+  if (!Number.isFinite(colIndex)) {
+    return;
+  }
+  const headerCells = Array.from(tableEl.querySelectorAll("thead th"));
+  const safeColIndex = clampIndex(colIndex, 0, Math.max(0, headerCells.length - 1));
+  const colSelector = `thead th:nth-child(${safeColIndex + 1}), tbody td:nth-child(${safeColIndex + 1})`;
+  for (const cell of tableEl.querySelectorAll(colSelector)) {
+    cell.classList.add("is-handle-selected-col");
+  }
+};
+
 const startTableDragReorder = (event, view, handle, axis) => {
   const wrapper = handle.closest(".cm-table-widget");
   if (!(wrapper instanceof HTMLElement)) {
@@ -2313,6 +2577,7 @@ const startTableDragReorder = (event, view, handle, axis) => {
 
   const sourceIndex = clampIndex(sourceIndexRaw, 0, itemElements.length - 1);
   let lastInsertIndex = sourceIndex;
+  let lastTargetIndex = sourceIndex;
   const axisKey = isColumnDrag ? "x" : "y";
   const dragSourceElements = isColumnDrag
     ? Array.from(
@@ -2331,7 +2596,16 @@ const startTableDragReorder = (event, view, handle, axis) => {
 
   const measureRects = () => itemElements.map((item) => item.getBoundingClientRect());
 
-  const updateDropIndicator = (insertIndex) => {
+  const updateDropIndicator = (insertIndex, targetIndex) => {
+    if (targetIndex === sourceIndex) {
+      indicator.classList.remove("is-active", "is-row", "is-column");
+      indicator.style.left = "";
+      indicator.style.top = "";
+      indicator.style.width = "";
+      indicator.style.height = "";
+      return;
+    }
+
     const itemRects = measureRects();
     const wrapperRect = wrapper.getBoundingClientRect();
     const tableRect = tableEl.getBoundingClientRect();
@@ -2361,8 +2635,10 @@ const startTableDragReorder = (event, view, handle, axis) => {
     const itemRects = measureRects();
     const pointerValue = pointerValueOf(moveEvent);
     const insertIndex = tableInsertIndexFromRects(itemRects, pointerValue, axisKey);
+    const targetIndex = targetIndexFromInsertIndex(sourceIndex, insertIndex, itemElements.length);
     lastInsertIndex = insertIndex;
-    updateDropIndicator(insertIndex);
+    lastTargetIndex = targetIndex;
+    updateDropIndicator(insertIndex, targetIndex);
   };
 
   const endDrag = () => {
@@ -2381,7 +2657,7 @@ const startTableDragReorder = (event, view, handle, axis) => {
   const onMouseUp = (upEvent) => {
     upEvent.preventDefault();
     endDrag();
-    const targetIndex = targetIndexFromInsertIndex(sourceIndex, lastInsertIndex, itemElements.length);
+    const targetIndex = clampIndex(lastTargetIndex, 0, itemElements.length - 1);
     if (targetIndex === sourceIndex) {
       view.focus();
       return;
@@ -2406,7 +2682,8 @@ const startTableDragReorder = (event, view, handle, axis) => {
   const initialRects = measureRects();
   const initialPointer = pointerValueOf(event);
   lastInsertIndex = tableInsertIndexFromRects(initialRects, initialPointer, axisKey);
-  updateDropIndicator(lastInsertIndex);
+  lastTargetIndex = targetIndexFromInsertIndex(sourceIndex, lastInsertIndex, itemElements.length);
+  updateDropIndicator(lastInsertIndex, lastTargetIndex);
 
   window.addEventListener("mousemove", onMouseMove, true);
   window.addEventListener("mouseup", onMouseUp, true);
@@ -2438,7 +2715,7 @@ const commitTableCellEdit = (view, editableCell) => {
   const section = String(editableCell.getAttribute("data-table-section") || "body").toLowerCase();
   const rowIndex = Number(editableCell.getAttribute("data-table-row-index"));
   const colIndex = Number(editableCell.getAttribute("data-table-col-index"));
-  const text = normalizeTableCellEditorText(editableCell.textContent || "");
+  const text = markdownFromTableCellEditor(editableCell);
   if (!blockId || !Number.isFinite(colIndex)) {
     return false;
   }
@@ -2546,6 +2823,7 @@ const presentationMouseDownHandler = (event, view) => {
 
   const tableEditableCell = target.closest("[data-table-edit='true']");
   if (tableEditableCell) {
+    clearTableHandleSelection(view);
     event.stopPropagation();
     return false;
   }
@@ -2559,6 +2837,7 @@ const presentationMouseDownHandler = (event, view) => {
 
   const tableRowHandle = target.closest("[data-table-row-handle]");
   if (tableRowHandle instanceof Element) {
+    selectTableHandleTarget(view, tableRowHandle, "row");
     event.preventDefault();
     event.stopPropagation();
     return startTableDragReorder(event, view, tableRowHandle, "row");
@@ -2566,6 +2845,7 @@ const presentationMouseDownHandler = (event, view) => {
 
   const tableColumnHandle = target.closest("[data-table-col-handle]");
   if (tableColumnHandle instanceof Element) {
+    selectTableHandleTarget(view, tableColumnHandle, "column");
     event.preventDefault();
     event.stopPropagation();
     return startTableDragReorder(event, view, tableColumnHandle, "column");
@@ -2573,6 +2853,9 @@ const presentationMouseDownHandler = (event, view) => {
 
   const resizeHandle = target.closest(".cm-image-widget-resize-handle");
   if (!resizeHandle) {
+    if (Number(event.button) === 0) {
+      clearTableHandleSelection(view);
+    }
     if (Number(event.button) === 0 && view.state.field(contextHighlightField)) {
       view.dispatch({
         effects: setContextHighlightBlockEffect.of("")

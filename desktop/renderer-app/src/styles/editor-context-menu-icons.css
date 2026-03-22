@@ -1,0 +1,83 @@
+/*
+ * Editor Context Menu Icons
+ * Edit this file to customize all context menu icons.
+ * Example:
+ *   .yc-editor-context-icon[data-icon-id="format-bold"]::before { content: "B"; }
+ */
+
+.yc-editor-context-icon {
+  font-size: 0;
+  line-height: 1;
+}
+
+.yc-editor-context-icon::before {
+  content: attr(data-icon-fallback);
+  display: inline-block;
+  width: 16px;
+  text-align: center;
+  font-size: 14px;
+  line-height: 1;
+  font-family: "Cascadia Code", "JetBrains Mono", Consolas, monospace;
+}
+
+.yc-editor-context-icon[data-icon-id="add-link"]::before { content: "L"; }
+.yc-editor-context-icon[data-icon-id="add-external-link"]::before { content: "->"; }
+
+.yc-editor-context-icon[data-icon-id="format"]::before { content: "Aa"; }
+.yc-editor-context-icon[data-icon-id="format-bold"]::before { content: "B"; }
+.yc-editor-context-icon[data-icon-id="format-italic"]::before { content: "I"; }
+.yc-editor-context-icon[data-icon-id="format-strike"]::before { content: "S"; }
+.yc-editor-context-icon[data-icon-id="format-highlight"]::before { content: "H"; }
+.yc-editor-context-icon[data-icon-id="format-code"]::before { content: "</>"; }
+.yc-editor-context-icon[data-icon-id="format-math"]::before { content: "M"; }
+.yc-editor-context-icon[data-icon-id="format-comment"]::before { content: "%"; }
+.yc-editor-context-icon[data-icon-id="format-clear"]::before { content: "X"; }
+
+.yc-editor-context-icon[data-icon-id="paragraph"]::before { content: "P"; }
+.yc-editor-context-icon[data-icon-id="paragraph-bullet"]::before { content: "*"; }
+.yc-editor-context-icon[data-icon-id="paragraph-ordered"]::before { content: "1."; }
+.yc-editor-context-icon[data-icon-id="paragraph-task"]::before { content: "[]"; }
+.yc-editor-context-icon[data-icon-id="paragraph-h1"]::before { content: "H1"; }
+.yc-editor-context-icon[data-icon-id="paragraph-h2"]::before { content: "H2"; }
+.yc-editor-context-icon[data-icon-id="paragraph-h3"]::before { content: "H3"; }
+.yc-editor-context-icon[data-icon-id="paragraph-h4"]::before { content: "H4"; }
+.yc-editor-context-icon[data-icon-id="paragraph-h5"]::before { content: "H5"; }
+.yc-editor-context-icon[data-icon-id="paragraph-h6"]::before { content: "H6"; }
+.yc-editor-context-icon[data-icon-id="paragraph-text"]::before { content: "T"; }
+.yc-editor-context-icon[data-icon-id="paragraph-quote"]::before { content: ">"; }
+
+.yc-editor-context-icon[data-icon-id="insert"]::before { content: "+"; }
+.yc-editor-context-icon[data-icon-id="insert-footnote"]::before { content: "fn"; }
+.yc-editor-context-icon[data-icon-id="insert-table"]::before { content: "tb"; }
+.yc-editor-context-icon[data-icon-id="insert-callout"]::before { content: "!"; }
+.yc-editor-context-icon[data-icon-id="insert-divider"]::before { content: "-"; }
+.yc-editor-context-icon[data-icon-id="insert-code-block"]::before { content: "{}"; }
+.yc-editor-context-icon[data-icon-id="insert-math-block"]::before { content: "M"; }
+.yc-editor-context-icon[data-icon-id="insert-database"]::before { content: "db"; }
+
+.yc-editor-context-icon[data-icon-id="clipboard-cut"]::before { content: "cut"; }
+.yc-editor-context-icon[data-icon-id="clipboard-copy"]::before { content: "cpy"; }
+.yc-editor-context-icon[data-icon-id="clipboard-paste"]::before { content: "pst"; }
+.yc-editor-context-icon[data-icon-id="clipboard-paste-plain"]::before { content: "TXT"; }
+.yc-editor-context-icon[data-icon-id="select-block"]::before { content: "[]"; }
+.yc-editor-context-icon[data-icon-id="select-all"]::before { content: "all"; }
+
+.yc-editor-context-icon[data-icon-id="table-row"]::before { content: "row"; }
+.yc-editor-context-icon[data-icon-id="table-col"]::before { content: "col"; }
+.yc-editor-context-icon[data-icon-id="table-row-insert-above"]::before { content: "^"; }
+.yc-editor-context-icon[data-icon-id="table-row-insert-below"]::before { content: "v"; }
+.yc-editor-context-icon[data-icon-id="table-row-move-up"]::before { content: "up"; }
+.yc-editor-context-icon[data-icon-id="table-row-move-down"]::before { content: "dn"; }
+.yc-editor-context-icon[data-icon-id="table-row-copy"]::before { content: "cpy"; }
+.yc-editor-context-icon[data-icon-id="table-row-delete"]::before { content: "del"; }
+.yc-editor-context-icon[data-icon-id="table-col-insert-left"]::before { content: "<"; }
+.yc-editor-context-icon[data-icon-id="table-col-insert-right"]::before { content: ">"; }
+.yc-editor-context-icon[data-icon-id="table-col-move-left"]::before { content: "<-"; }
+.yc-editor-context-icon[data-icon-id="table-col-move-right"]::before { content: "->"; }
+.yc-editor-context-icon[data-icon-id="table-col-align-left"]::before { content: "L"; }
+.yc-editor-context-icon[data-icon-id="table-col-align-center"]::before { content: "C"; }
+.yc-editor-context-icon[data-icon-id="table-col-align-right"]::before { content: "R"; }
+.yc-editor-context-icon[data-icon-id="table-col-copy"]::before { content: "cpy"; }
+.yc-editor-context-icon[data-icon-id="table-col-delete"]::before { content: "del"; }
+.yc-editor-context-icon[data-icon-id="table-sort-asc"]::before { content: "A^"; }
+.yc-editor-context-icon[data-icon-id="table-sort-desc"]::before { content: "Zv"; }

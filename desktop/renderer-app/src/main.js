@@ -11,6 +11,7 @@ import "./styles/code-block.css";
 import "./styles/special-blocks.css";
 import "./styles/editor-theme.css";
 import "./styles/editor-context-menu.css";
+import "./styles/editor-context-menu-icons.css";
 import "katex/dist/katex.min.css";
 import "xterm/css/xterm.css";
 import { registerSW } from "virtual:pwa-register";
