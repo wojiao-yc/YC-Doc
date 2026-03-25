@@ -198,6 +198,9 @@ export const useMarkdownDocument = ({
     return model.sections.map((section) => ({
       title: String(section.title || "").trim(),
       content: String(section.content || ""),
+      headingStart: section.headingFrom,
+      headingEnd: section.headingTo,
+      bodyStart: section.bodyStart,
       startIndex: section.start,
       endIndex: section.end
     }));

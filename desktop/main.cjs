@@ -1029,6 +1029,29 @@ ipcMain.handle("desktop:data:delete-workspace-node", async (_event, payload = {}
   }
 });
 
+ipcMain.handle("desktop:data:confirm-workspace-delete", async (_event, payload = {}) => {
+  const kind = payload?.kind === "folder" ? "folder" : "file";
+  const typeLabel = kind === "folder" ? "文件夹" : "文件";
+  const name = String(payload?.name || "").trim();
+  const parentWindow = mainWindow && !mainWindow.isDestroyed() ? mainWindow : undefined;
+
+  const result = await dialog.showMessageBox(parentWindow, {
+    type: "warning",
+    title: "确认删除",
+    message: `确认删除${typeLabel}${name ? `“${name}”` : ""}吗？`,
+    detail: kind === "folder" ? "这会递归删除其中的所有内容，且无法恢复。" : "删除后无法恢复。",
+    buttons: ["删除", "取消"],
+    defaultId: 1,
+    cancelId: 1,
+    noLink: true
+  });
+
+  return {
+    ok: true,
+    confirmed: result.response === 0
+  };
+});
+
 ipcMain.handle("desktop:data:open-workspace-dir", async () => {
   const rootPath = ensureWorkspaceDir();
   const error = await shell.openPath(rootPath);

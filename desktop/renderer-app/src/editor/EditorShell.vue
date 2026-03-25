@@ -37,11 +37,15 @@ const focus = () => {
   editorApi?.focus();
 };
 
+const focusPosition = (position) => {
+  editorApi?.setCursor(position);
+};
+
 const openSearch = () => {
   editorApi?.openSearch();
 };
 
-defineExpose({ focus, openSearch });
+defineExpose({ focus, focusPosition, openSearch });
 
 const syncPresentationData = () => {
   editorApi?.setPresentationData({

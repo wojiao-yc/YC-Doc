@@ -1082,6 +1082,10 @@ let fileSidebarDragRaf = 0;
 let fileSidebarDragPendingWidth = null;
 let fileSidebarDragMoveHandler = null;
 let fileSidebarDragUpHandler = null;
+let desktopSplitDragMoveHandler = null;
+let desktopSplitDragUpHandler = null;
+let terminalResizeMoveHandler = null;
+let terminalResizeUpHandler = null;
 let desktopWindowMaximizeOff = null;
 
 const clamp = (value, min, max) => Math.min(max, Math.max(min, value));
@@ -1096,6 +1100,64 @@ const STORAGE_EXPANDED_STORAGE_KEY = "yc-doc.storage-expanded.v1";
 const STORAGE_SELECTED_STORAGE_KEY = "yc-doc.storage-selected.v1";
 
 const { toast, showToast } = useToast();
+
+const clearBodyInteractionStyles = () => {
+  if (typeof document === "undefined" || !document.body) {
+    return;
+  }
+  document.body.style.userSelect = "";
+  document.body.style.cursor = "";
+};
+
+const releaseTransientPointerState = ({ syncTerminal = true } = {}) => {
+  const shouldSyncTerminal = syncTerminal && terminalDragSizing && terminalOpen.value;
+
+  isSidebarDragging.value = false;
+  isFileSidebarDragging.value = false;
+  terminalDragSizing = false;
+
+  if (sidebarDragMoveHandler) {
+    window.removeEventListener("mousemove", sidebarDragMoveHandler);
+    sidebarDragMoveHandler = null;
+  }
+  if (sidebarDragUpHandler) {
+    window.removeEventListener("mouseup", sidebarDragUpHandler);
+    sidebarDragUpHandler = null;
+  }
+  if (fileSidebarDragMoveHandler) {
+    window.removeEventListener("mousemove", fileSidebarDragMoveHandler);
+    fileSidebarDragMoveHandler = null;
+  }
+  if (fileSidebarDragUpHandler) {
+    window.removeEventListener("mouseup", fileSidebarDragUpHandler);
+    fileSidebarDragUpHandler = null;
+  }
+  if (desktopSplitDragMoveHandler) {
+    window.removeEventListener("mousemove", desktopSplitDragMoveHandler);
+    desktopSplitDragMoveHandler = null;
+  }
+  if (desktopSplitDragUpHandler) {
+    window.removeEventListener("mouseup", desktopSplitDragUpHandler);
+    desktopSplitDragUpHandler = null;
+  }
+  if (terminalResizeMoveHandler) {
+    window.removeEventListener("mousemove", terminalResizeMoveHandler);
+    terminalResizeMoveHandler = null;
+  }
+  if (terminalResizeUpHandler) {
+    window.removeEventListener("mouseup", terminalResizeUpHandler);
+    terminalResizeUpHandler = null;
+  }
+
+  finishSidebarDrag();
+  finishFileSidebarDrag();
+  clearBodyInteractionStyles();
+
+  if (shouldSyncTerminal) {
+    requestDesktopTerminalSizeSync(0);
+    nextTick(scrollTerminalToBottom);
+  }
+};
 
 const {
   steps,
@@ -1141,6 +1203,22 @@ async function focusStepInEditMode(index) {
     currentId.value = targetId;
   }
   await nextTick();
+  const markdown = String(documentMarkdown.value || "");
+  const stepSections = typeof extractMarkdownSections === "function"
+    ? extractMarkdownSections(markdown)
+    : [];
+  const targetSection = Array.isArray(stepSections) ? stepSections[safeIndex] : null;
+  const focusPos = targetSection
+    ? clamp(
+        Number.isFinite(targetSection.bodyStart) ? targetSection.bodyStart : targetSection.startIndex,
+        0,
+        markdown.length
+      )
+    : 0;
+  if (typeof markdownEditorRef.value?.focusPosition === "function") {
+    markdownEditorRef.value.focusPosition(focusPos);
+    return;
+  }
   if (typeof markdownEditorRef.value?.focus === "function") {
     markdownEditorRef.value.focus();
   }
@@ -1151,6 +1229,7 @@ const {
   appendMarkdownImage,
   clearScheduledMarkdownSave,
   documentMarkdown,
+  extractMarkdownSections,
   flushPendingMarkdownSave,
   formatBytes,
   isMarkdownDirty,
@@ -1558,7 +1637,7 @@ const normalizeDesktopStorageNode = (source, isRoot = false) => {
   };
 };
 
-const loadDesktopStorageTree = async () => {
+const loadDesktopStorageTree = async ({ preferredNodeId = "", preferredMarkdownRelPath = "" } = {}) => {
   if (!isDesktopStorage) {
     return;
   }
@@ -1578,16 +1657,28 @@ const loadDesktopStorageTree = async () => {
     if (treeResult.rootPath) {
       storageRootPath.value = String(treeResult.rootPath);
     }
-    ensureSelectedStorageNodeValid();
+    const preferredId = String(preferredNodeId || "").trim();
+    if (preferredId && findStorageNodeInTree(storageTree.value, preferredId)) {
+      selectedStorageNodeId.value = preferredId;
+    } else {
+      ensureSelectedStorageNodeValid();
+    }
     const selected = findStorageNodeInTree(storageTree.value, selectedStorageNodeId.value);
-    if (canAutoLoadMarkdownNode(selected?.node)) {
-      void loadStepsFromMarkdownFile(String(selected.node.relPath || ""), false);
+    const preferredMarkdownPath = String(preferredMarkdownRelPath || "").trim();
+    if (
+      preferredMarkdownPath
+      && canAutoLoadMarkdownNode(selected?.node)
+      && String(selected?.node?.relPath || "") === preferredMarkdownPath
+    ) {
+      await loadStepsFromMarkdownFile(preferredMarkdownPath, false);
+    } else if (canAutoLoadMarkdownNode(selected?.node)) {
+      await loadStepsFromMarkdownFile(String(selected.node.relPath || ""), false);
     } else {
       const shouldAutoPickFirstMarkdown = !selected?.node || selected.node.id === STORAGE_ROOT_ID;
       const firstMarkdown = shouldAutoPickFirstMarkdown ? findFirstMarkdownNode(storageTree.value) : null;
       if (firstMarkdown?.relPath) {
         selectedStorageNodeId.value = String(firstMarkdown.id || selectedStorageNodeId.value);
-        void loadStepsFromMarkdownFile(String(firstMarkdown.relPath), false);
+        await loadStepsFromMarkdownFile(String(firstMarkdown.relPath), false);
         return;
       }
       if (selected?.node?.type === "file" && isMarkdownFileName(selected.node.name)) {
@@ -1922,11 +2013,12 @@ const createStorageFile = async () => {
       if (!result?.ok) {
         throw new Error(String(result?.error || "create_file_failed"));
       }
-      selectedStorageNodeId.value = String(result.relPath || selectedStorageNodeId.value);
-      await loadDesktopStorageTree();
-      if (String(result.name || "").toLowerCase().endsWith(".md")) {
-        await loadStepsFromMarkdownFile(String(result.relPath || ""), false);
-      }
+      const nextRelPath = String(result.relPath || "");
+      selectedStorageNodeId.value = nextRelPath || selectedStorageNodeId.value;
+      await loadDesktopStorageTree({
+        preferredNodeId: nextRelPath,
+        preferredMarkdownRelPath: String(result.name || "").toLowerCase().endsWith(".md") ? nextRelPath : ""
+      });
       persistStorageState();
       showToast(`已创建文件: ${result.name || name}`);
       return;
@@ -1974,8 +2066,9 @@ const createStorageFolder = async () => {
       if (!result?.ok) {
         throw new Error(String(result?.error || "create_folder_failed"));
       }
-      selectedStorageNodeId.value = String(result.relPath || selectedStorageNodeId.value);
-      await loadDesktopStorageTree();
+      const nextRelPath = String(result.relPath || "");
+      selectedStorageNodeId.value = nextRelPath || selectedStorageNodeId.value;
+      await loadDesktopStorageTree({ preferredNodeId: nextRelPath });
       persistStorageState();
       showToast(`已创建文件夹: ${result.name || name}`);
       return;
@@ -2107,6 +2200,30 @@ const cancelStorageRenameDialog = () => {
   };
 };
 
+const confirmStorageNodeDeletion = async (node) => {
+  const targetLabel = node.type === "folder" ? "文件夹" : "文件";
+  const nodeName = String(node?.name || "").trim();
+
+  if (isDesktopStorage && desktopDataBridge?.confirmWorkspaceDelete) {
+    try {
+      const result = await desktopDataBridge.confirmWorkspaceDelete({
+        kind: node.type,
+        name: nodeName
+      });
+      if (result?.ok) {
+        return Boolean(result.confirmed);
+      }
+    } catch {
+      // Fall back to the browser confirm below.
+    }
+  }
+
+  if (typeof window === "undefined" || typeof window.confirm !== "function") {
+    return true;
+  }
+  return window.confirm(`确认删除${targetLabel}“${nodeName}”吗？`);
+};
+
 const renameStorageNode = async (nodeId, nextName) => {
   const targetId = String(nodeId || "").trim();
   const trimmedName = String(nextName || "").trim();
@@ -2186,9 +2303,8 @@ const deleteStorageNode = async (nodeId) => {
     return;
   }
   const targetLabel = matched.node.type === "folder" ? "文件夹" : "文件";
-  const confirmed = typeof window === "undefined" || typeof window.confirm !== "function"
-    ? true
-    : window.confirm(`确认删除${targetLabel}“${matched.node.name}”吗？`);
+  releaseTransientPointerState();
+  const confirmed = await confirmStorageNodeDeletion(matched.node);
   if (!confirmed) {
     return;
   }
@@ -2434,7 +2550,7 @@ const startSidebarResizeDrag = (event) => {
 
   const onUp = () => {
     isSidebarDragging.value = false;
-    document.body.style.userSelect = "";
+    clearBodyInteractionStyles();
     window.removeEventListener("mousemove", onMove);
     window.removeEventListener("mouseup", onUp);
     sidebarDragMoveHandler = null;
@@ -2542,7 +2658,7 @@ const startFileSidebarResizeDrag = (event) => {
 
   const onUp = () => {
     isFileSidebarDragging.value = false;
-    document.body.style.userSelect = "";
+    clearBodyInteractionStyles();
     window.removeEventListener("mousemove", onMove);
     window.removeEventListener("mouseup", onUp);
     fileSidebarDragMoveHandler = null;
@@ -2806,6 +2922,15 @@ const startDesktopSplitResize = (event) => {
   document.body.style.userSelect = "none";
   document.body.style.cursor = "col-resize";
 
+  if (desktopSplitDragMoveHandler) {
+    window.removeEventListener("mousemove", desktopSplitDragMoveHandler);
+    desktopSplitDragMoveHandler = null;
+  }
+  if (desktopSplitDragUpHandler) {
+    window.removeEventListener("mouseup", desktopSplitDragUpHandler);
+    desktopSplitDragUpHandler = null;
+  }
+
   const onMove = (ev) => {
     const raw = ((ev.clientX - rect.left) / rect.width) * 100;
     desktopSplitRatio.value = clamp(Math.round(raw), 18, 82);
@@ -2814,11 +2939,14 @@ const startDesktopSplitResize = (event) => {
     });
   };
   const onUp = () => {
-    document.body.style.userSelect = "";
-    document.body.style.cursor = "";
+    clearBodyInteractionStyles();
     window.removeEventListener("mousemove", onMove);
     window.removeEventListener("mouseup", onUp);
+    desktopSplitDragMoveHandler = null;
+    desktopSplitDragUpHandler = null;
   };
+  desktopSplitDragMoveHandler = onMove;
+  desktopSplitDragUpHandler = onUp;
   window.addEventListener("mousemove", onMove);
   window.addEventListener("mouseup", onUp);
 };
@@ -3702,6 +3830,15 @@ const resizeTerminalFrom = (startY, startH) => {
   terminalDragSizing = true;
   document.body.style.userSelect = "none";
 
+  if (terminalResizeMoveHandler) {
+    window.removeEventListener("mousemove", terminalResizeMoveHandler);
+    terminalResizeMoveHandler = null;
+  }
+  if (terminalResizeUpHandler) {
+    window.removeEventListener("mouseup", terminalResizeUpHandler);
+    terminalResizeUpHandler = null;
+  }
+
   const onMove = (ev) => {
     const dy = startY - ev.clientY;
     applyTerminalDragHeight(startH + dy);
@@ -3709,15 +3846,19 @@ const resizeTerminalFrom = (startY, startH) => {
 
   const onUp = () => {
     terminalDragSizing = false;
-    document.body.style.userSelect = "";
+    clearBodyInteractionStyles();
     window.removeEventListener("mousemove", onMove);
     window.removeEventListener("mouseup", onUp);
+    terminalResizeMoveHandler = null;
+    terminalResizeUpHandler = null;
     if (terminalOpen.value) {
       requestDesktopTerminalSizeSync(0);
       nextTick(scrollTerminalToBottom);
     }
   };
 
+  terminalResizeMoveHandler = onMove;
+  terminalResizeUpHandler = onUp;
   window.addEventListener("mousemove", onMove);
   window.addEventListener("mouseup", onUp);
 };
@@ -3814,6 +3955,8 @@ onMounted(() => {
   window.addEventListener("keydown", onKeydown);
   window.addEventListener("keyup", onGlobalKeyup, true);
   window.addEventListener("mousedown", onGlobalPointerDown, true);
+  window.addEventListener("blur", releaseTransientPointerState);
+  window.addEventListener("focus", clearBodyInteractionStyles);
   window.addEventListener("blur", closeDesktopTabContextMenu);
   window.addEventListener("blur", closeStorageNodeContextMenu);
   window.addEventListener("blur", releasePasteShortcutLocks);
@@ -3842,8 +3985,7 @@ onMounted(() => {
 });
 
 onBeforeUnmount(() => {
-  isSidebarDragging.value = false;
-  isFileSidebarDragging.value = false;
+  releaseTransientPointerState({ syncTerminal: false });
   cancelDesktopRenameDialog();
   cancelStorageRenameDialog();
   if (activeMarkdownRelPath.value && !markdownHydrating.value) {
@@ -3851,33 +3993,15 @@ onBeforeUnmount(() => {
   }
   disposeDesktopTerminal();
   disposeTerminal();
-  if (sidebarDragMoveHandler) {
-    window.removeEventListener("mousemove", sidebarDragMoveHandler);
-    sidebarDragMoveHandler = null;
-  }
-  if (sidebarDragUpHandler) {
-    window.removeEventListener("mouseup", sidebarDragUpHandler);
-    sidebarDragUpHandler = null;
-  }
-  if (fileSidebarDragMoveHandler) {
-    window.removeEventListener("mousemove", fileSidebarDragMoveHandler);
-    fileSidebarDragMoveHandler = null;
-  }
-  if (fileSidebarDragUpHandler) {
-    window.removeEventListener("mouseup", fileSidebarDragUpHandler);
-    fileSidebarDragUpHandler = null;
-  }
-  finishSidebarDrag();
-  finishFileSidebarDrag();
-  document.body.style.userSelect = "";
   if (terminalResizeSyncTimer) {
     clearTimeout(terminalResizeSyncTimer);
     terminalResizeSyncTimer = null;
   }
-  terminalDragSizing = false;
   window.removeEventListener("keydown", onKeydown);
   window.removeEventListener("keyup", onGlobalKeyup, true);
   window.removeEventListener("mousedown", onGlobalPointerDown, true);
+  window.removeEventListener("blur", releaseTransientPointerState);
+  window.removeEventListener("focus", clearBodyInteractionStyles);
   window.removeEventListener("blur", closeDesktopTabContextMenu);
   window.removeEventListener("blur", closeStorageNodeContextMenu);
   window.removeEventListener("blur", releasePasteShortcutLocks);

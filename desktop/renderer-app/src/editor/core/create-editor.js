@@ -93,12 +93,26 @@ export const createMarkdownEditor = ({
     });
   };
 
+  const setCursor = (posInput = 0) => {
+    const docLength = Number(view.state.doc.length || 0);
+    const pos = Math.max(0, Math.min(docLength, Number(posInput) || 0));
+    view.dispatch({
+      selection: {
+        anchor: pos,
+        head: pos
+      },
+      scrollIntoView: true
+    });
+    view.focus();
+  };
+
   return {
     view,
     getDoc,
     setDoc,
     setDark,
     setPresentationData,
+    setCursor,
     focus: () => view.focus(),
     openSearch: () => openSearchPanel(view),
     destroy: () => view.destroy()

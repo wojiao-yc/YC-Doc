@@ -64,6 +64,7 @@ contextBridge.exposeInMainWorld("desktopData", {
   createWorkspaceFile: (payload = {}) => ipcRenderer.invoke("desktop:data:create-workspace-file", payload),
   createWorkspaceFolder: (payload = {}) => ipcRenderer.invoke("desktop:data:create-workspace-folder", payload),
   renameWorkspaceNode: (payload = {}) => ipcRenderer.invoke("desktop:data:rename-workspace-node", payload),
+  confirmWorkspaceDelete: (payload = {}) => ipcRenderer.invoke("desktop:data:confirm-workspace-delete", payload),
   deleteWorkspaceNode: (payload = {}) => ipcRenderer.invoke("desktop:data:delete-workspace-node", payload),
   readWorkspaceFile: (payload = {}) => ipcRenderer.invoke("desktop:data:read-workspace-file", payload),
   writeWorkspaceFile: (payload = {}) => ipcRenderer.invoke("desktop:data:write-workspace-file", payload),
