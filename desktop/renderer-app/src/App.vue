@@ -370,8 +370,12 @@
                       :dark="isDark"
                       :presentation-blocks="semanticBlocks"
                       :current-block-id="currentSemanticBlockId"
+                      :current-rel-path="activeMarkdownRelPath"
+                      :wiki-link-files="workspaceMarkdownFiles"
+                      :wiki-link-suggestions="getWikiLinkSuggestions"
                       @selection-change="handleEditorSelectionChange"
                       @update:model-value="updateMarkdown"
+                      @wiki-link-activate="handleEditorWikiLinkActivate"
                     />
                   </div>
                 </div>
@@ -732,6 +736,64 @@
         </div>
       </nav>
 
+      <section
+        v-if="!isInspectorSidebarCollapsed && !isInspectorSidebarHidden && activeMarkdownRelPath"
+        class="border-t px-4 py-3 space-y-3"
+        :class="isDark ? 'border-slate-800' : 'border-gray-200'"
+      >
+        <div class="flex items-center justify-between gap-2">
+          <div class="min-w-0">
+            <div class="text-sm font-semibold truncate" :class="isDark ? 'text-slate-100' : 'text-gray-800'">
+              Backlinks
+            </div>
+            <p class="text-[11px]" :class="isDark ? 'text-slate-500' : 'text-gray-500'">
+              {{ wikiLinkIndexLoading ? "索引更新中..." : `当前文档 ${currentBacklinks.length} 条反向链接` }}
+            </p>
+          </div>
+          <span
+            class="text-[11px] px-2 py-1 rounded-full border"
+            :class="isDark ? 'border-slate-700 bg-slate-900 text-slate-300' : 'border-gray-200 bg-white text-gray-600'"
+          >
+            {{ currentBacklinks.length }}
+          </span>
+        </div>
+
+        <div v-if="currentBacklinks.length" class="space-y-2 max-h-64 overflow-y-auto pr-1">
+          <button
+            v-for="(link, index) in currentBacklinks"
+            :key="`${link.sourceRelPath}:${link.rawFrom}:${index}`"
+            type="button"
+            class="wiki-backlink-card w-full rounded-xl border px-3 py-2 text-left transition-all"
+            :class="isDark
+              ? 'border-slate-800 bg-slate-900/50 hover:border-orange-400/40 hover:bg-slate-900'
+              : 'border-gray-200 bg-white hover:border-orange-300 hover:bg-orange-50/40'"
+            @click="openBacklinkEntry(link)"
+          >
+            <div class="flex items-center justify-between gap-2">
+              <span class="truncate text-sm font-medium" :class="isDark ? 'text-slate-100' : 'text-gray-800'">
+                {{ link.sourceTitle || link.sourceFileName }}
+              </span>
+              <span class="text-[11px] shrink-0" :class="isDark ? 'text-slate-500' : 'text-gray-500'">
+                L{{ link.lineNumber }}
+              </span>
+            </div>
+            <div class="mt-1 truncate text-[11px]" :class="isDark ? 'text-slate-400' : 'text-gray-500'">
+              {{ link.sourceRelPath }}
+            </div>
+            <div class="mt-2 text-xs leading-5" :class="isDark ? 'text-slate-300' : 'text-slate-600'">
+              {{ link.contextText || link.raw }}
+            </div>
+          </button>
+        </div>
+        <div
+          v-else
+          class="rounded-xl border px-3 py-4 text-xs leading-5"
+          :class="isDark ? 'border-slate-800 bg-slate-900/40 text-slate-400' : 'border-gray-200 bg-white text-gray-500'"
+        >
+          当前还没有其它文档链接到这篇笔记。
+        </div>
+      </section>
+
       <div
         v-if="isEditMode && !isInspectorSidebarCollapsed && !isInspectorSidebarHidden"
         class="border-t p-4 space-y-3"
@@ -806,6 +868,33 @@
       </button>
     </div>
 
+    <div
+      v-if="wikiLinkMenu.open"
+      class="term-context-menu"
+      :style="{ left: `${wikiLinkMenu.x}px`, top: `${wikiLinkMenu.y}px` }"
+      @mousedown.stop
+    >
+      <div class="px-3 py-2 text-[11px] border-b" :class="isDark ? 'border-slate-800 text-slate-400' : 'border-gray-100 text-gray-500'">
+        {{ wikiLinkMenuLabel }}
+      </div>
+      <template v-if="wikiLinkMenu.resolution?.ambiguous">
+        <button
+          v-for="candidate in wikiLinkMenuCandidates"
+          :key="candidate"
+          type="button"
+          class="term-context-item"
+          @click="openWikiLinkCandidate(candidate)"
+        >
+          打开 {{ candidate }}
+        </button>
+      </template>
+      <template v-else-if="wikiLinkMenu.resolution && !wikiLinkMenu.resolution.exists">
+        <button type="button" class="term-context-item" @click="handleWikiLinkCreateFromMenu">
+          创建 {{ wikiLinkMenu.resolution.suggestedRelPath || wikiLinkMenu.match?.parsed?.target || "新文档" }}
+        </button>
+      </template>
+    </div>
+
     <div v-if="desktopRenameDialog.open" class="term-rename-mask" @mousedown.self="cancelDesktopRenameDialog">
       <div class="term-rename-card" @mousedown.stop>
         <div class="term-rename-title">重命名终端</div>
@@ -847,7 +936,6 @@
 
 <script setup>
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
-import { marked } from "marked";
 import katex from "katex";
 import { FitAddon } from "@xterm/addon-fit";
 import { Terminal as XTermTerminal } from "xterm";
@@ -859,6 +947,19 @@ import { useResizable } from "./composables/useResizable";
 import { useSteps } from "./composables/useSteps";
 import { useTerminal } from "./composables/useTerminal";
 import { useToast } from "./composables/useToast";
+import { extractHeadingsFromMarkdown, findHeadingMatch, slugifyHeading } from "./utils/heading-slug";
+import { renderMarkdownToHtml } from "./utils/render-markdown";
+import { buildWikiLinkIndex } from "./utils/wiki-link-index";
+import {
+  basenameOfRelPath,
+  dirnameOfRelPath,
+  ensureMarkdownExtension,
+  normalizeRelPath,
+  preferredWikiTargetForFile,
+  resolveWikiLink,
+  stripMarkdownExtension,
+  suggestRelPathForMissing
+} from "./utils/wiki-link";
 
 // 渲染数学公式
 const renderMathFormula = (formula, displayMode) => {
@@ -1021,6 +1122,13 @@ const storageRenameDialog = ref({
   kind: "file"
 });
 const storageRenameInputRef = ref(null);
+const wikiLinkMenu = ref({
+  open: false,
+  x: 0,
+  y: 0,
+  match: null,
+  resolution: null
+});
 const desktopTabMenu = ref({
   open: false,
   x: 0,
@@ -1098,8 +1206,23 @@ const VIEW_STEPS_SIDEBAR_COLLAPSE_STORAGE_KEY = "yc-doc.view-steps-sidebar-colla
 const STORAGE_TREE_STORAGE_KEY = "yc-doc.storage-tree.v1";
 const STORAGE_EXPANDED_STORAGE_KEY = "yc-doc.storage-expanded.v1";
 const STORAGE_SELECTED_STORAGE_KEY = "yc-doc.storage-selected.v1";
+const WIKI_LINK_INDEX_DEBOUNCE_MS = 220;
 
 const { toast, showToast } = useToast();
+const createEmptyWikiLinkIndex = () => ({
+  files: [],
+  notesByPath: {},
+  contentsByPath: {},
+  forwardLinks: {},
+  backlinks: {},
+  unresolvedLinks: {},
+  ambiguousLinks: {}
+});
+const wikiLinkIndexState = ref(createEmptyWikiLinkIndex());
+const wikiLinkIndexLoading = ref(false);
+const pendingPreviewHeadingSlug = ref("");
+let wikiLinkIndexTimer = null;
+let wikiLinkIndexSeq = 0;
 
 const clearBodyInteractionStyles = () => {
   if (typeof document === "undefined" || !document.body) {
@@ -1190,9 +1313,14 @@ const renderedMarkdown = computed(() => {
   }
   const content = String(activeStep.value?.content || "");
   try {
-    return preprocessMathFormulas(content);
+    return renderMarkdownToHtml({
+      markdown: content,
+      currentRelPath: activeMarkdownRelPath.value,
+      markdownFiles: workspaceMarkdownFiles.value,
+      renderMathFormula
+    });
   } catch (e) {
-    return String(marked.parse(content, { breaks: true, gfm: true }) || "");
+    return "";
   }
 });
 
@@ -1883,6 +2011,54 @@ const visibleStorageNodes = computed(() => {
   return list;
 });
 
+const findStorageNodeByRelPath = (node, relPathInput, parentIds = []) => {
+  const targetRelPath = normalizeRelPath(relPathInput);
+  if (!node || !targetRelPath) {
+    return null;
+  }
+  if (normalizeRelPath(node.relPath || "") === targetRelPath) {
+    return {
+      node,
+      parentIds
+    };
+  }
+  if (node.type !== "folder" || !Array.isArray(node.children)) {
+    return null;
+  }
+  for (const child of node.children) {
+    const found = findStorageNodeByRelPath(child, targetRelPath, [...parentIds, node.id]);
+    if (found) {
+      return found;
+    }
+  }
+  return null;
+};
+
+const collectMarkdownNodesFromTree = (node, output = []) => {
+  if (!node) {
+    return output;
+  }
+  if (node.type === "file" && isMarkdownFileName(node.name)) {
+    output.push({
+      id: String(node.id || node.relPath || ""),
+      name: String(node.name || basenameOfRelPath(node.relPath)),
+      relPath: normalizeRelPath(node.relPath || ""),
+      fileName: String(node.name || basenameOfRelPath(node.relPath)),
+      size: Number(node.size || 0)
+    });
+    return output;
+  }
+  if (node.type !== "folder" || !Array.isArray(node.children)) {
+    return output;
+  }
+  for (const child of node.children) {
+    collectMarkdownNodesFromTree(child, output);
+  }
+  return output;
+};
+
+const workspaceMarkdownFiles = computed(() => collectMarkdownNodesFromTree(storageTree.value, []));
+
 const persistStorageState = () => {
   if (typeof window === "undefined") {
     return;
@@ -2349,6 +2525,476 @@ const deleteStorageNode = async (nodeId) => {
   showToast(`已删除${targetLabel}: ${matched.node.name}`);
 };
 
+const wikiLinkMenuCandidates = computed(() =>
+  Array.isArray(wikiLinkMenu.value?.resolution?.candidates)
+    ? wikiLinkMenu.value.resolution.candidates
+    : []
+);
+
+const wikiLinkMenuLabel = computed(() => {
+  const resolution = wikiLinkMenu.value?.resolution;
+  if (!resolution) {
+    return "";
+  }
+  if (resolution.ambiguous) {
+    return "存在多个同名文档";
+  }
+  if (!resolution.exists) {
+    return "目标文档不存在";
+  }
+  return resolution.relPath || "";
+});
+
+const currentBacklinks = computed(() => {
+  const relPath = normalizeRelPath(activeMarkdownRelPath.value);
+  if (!relPath) {
+    return [];
+  }
+  const links = wikiLinkIndexState.value?.backlinks?.[relPath];
+  return [...(Array.isArray(links) ? links : [])].sort((left, right) =>
+    String(left?.sourceRelPath || "").localeCompare(String(right?.sourceRelPath || ""), "zh-CN")
+    || (Number(left?.lineNumber || 0) - Number(right?.lineNumber || 0))
+    || (Number(left?.rawFrom || 0) - Number(right?.rawFrom || 0))
+  );
+});
+
+const closeWikiLinkMenu = () => {
+  if (!wikiLinkMenu.value.open) {
+    return;
+  }
+  wikiLinkMenu.value = {
+    open: false,
+    x: 0,
+    y: 0,
+    match: null,
+    resolution: null
+  };
+};
+
+const openWikiLinkMenuAt = (x, y, { match = null, resolution = null } = {}) => {
+  wikiLinkMenu.value = {
+    open: true,
+    x: Number(x || 0),
+    y: Number(y || 0),
+    match,
+    resolution
+  };
+};
+
+const expandStorageAncestors = (ids = []) => {
+  const nextMap = { ...storageFolderExpandedMap.value };
+  for (const id of Array.isArray(ids) ? ids : []) {
+    if (!id) {
+      continue;
+    }
+    nextMap[id] = true;
+  }
+  storageFolderExpandedMap.value = nextMap;
+};
+
+const escapeSelectorAttr = (value) =>
+  String(value || "")
+    .replace(/\\/g, "\\\\")
+    .replace(/"/g, '\\"');
+
+const getMarkdownForRelPath = (relPathInput = "") => {
+  const relPath = normalizeRelPath(relPathInput);
+  if (!relPath) {
+    return "";
+  }
+  if (relPath === normalizeRelPath(activeMarkdownRelPath.value)) {
+    return String(documentMarkdown.value || "");
+  }
+  return String(wikiLinkIndexState.value?.contentsByPath?.[relPath] || "");
+};
+
+const getNoteHeadingsForRelPath = (relPathInput = "") => {
+  const relPath = normalizeRelPath(relPathInput);
+  if (!relPath) {
+    return [];
+  }
+  if (relPath === normalizeRelPath(activeMarkdownRelPath.value)) {
+    return extractHeadingsFromMarkdown(String(documentMarkdown.value || ""));
+  }
+  const note = wikiLinkIndexState.value?.notesByPath?.[relPath];
+  return Array.isArray(note?.headings) ? note.headings : extractHeadingsFromMarkdown(getMarkdownForRelPath(relPath));
+};
+
+const findStepIndexForRawPos = (markdownInput = "", rawPosInput = 0) => {
+  const markdown = String(markdownInput || "");
+  const rawPos = clamp(Number(rawPosInput || 0), 0, markdown.length);
+  const sections = typeof extractMarkdownSections === "function"
+    ? extractMarkdownSections(markdown)
+    : [];
+  if (!Array.isArray(sections) || !sections.length) {
+    return 0;
+  }
+  for (let index = 0; index < sections.length; index += 1) {
+    const section = sections[index];
+    const sectionStart = Number.isFinite(section?.startIndex) ? section.startIndex : 0;
+    const sectionEnd = Number.isFinite(section?.endIndex) ? section.endIndex : markdown.length;
+    if (rawPos >= sectionStart && rawPos < sectionEnd) {
+      return index;
+    }
+  }
+  return clamp(sections.length - 1, 0, sections.length - 1);
+};
+
+const scrollPreviewHeadingIntoView = (anchorInput = "") => {
+  const slug = slugifyHeading(anchorInput);
+  if (!slug) {
+    return false;
+  }
+  const host = contentScrollRef.value;
+  if (!(host instanceof HTMLElement)) {
+    return false;
+  }
+  const target = host.querySelector(`[data-preview="1"] [data-heading-slug="${escapeSelectorAttr(slug)}"]`);
+  if (!(target instanceof HTMLElement)) {
+    return false;
+  }
+  target.scrollIntoView({
+    block: "center",
+    behavior: "smooth"
+  });
+  return true;
+};
+
+const jumpWithinCurrentDocument = async ({ rawPos = null, anchor = "" } = {}) => {
+  const markdown = String(documentMarkdown.value || "");
+  let targetPos = Number.isFinite(rawPos) ? clamp(Number(rawPos), 0, markdown.length) : null;
+  let headingSlug = "";
+
+  if (anchor) {
+    const headingMatch = findHeadingMatch(getNoteHeadingsForRelPath(activeMarkdownRelPath.value), anchor);
+    if (headingMatch) {
+      targetPos = clamp(Number(headingMatch.from || 0), 0, markdown.length);
+      headingSlug = String(headingMatch.slug || slugifyHeading(anchor));
+    } else {
+      headingSlug = slugifyHeading(anchor);
+    }
+  }
+
+  if (!Number.isFinite(targetPos)) {
+    targetPos = 0;
+  }
+
+  const stepIndex = findStepIndexForRawPos(markdown, targetPos);
+  currentId.value = steps.value?.[stepIndex]?.id ?? steps.value?.[0]?.id ?? currentId.value;
+
+  await nextTick();
+
+  if (isEditMode.value) {
+    if (typeof markdownEditorRef.value?.focusPosition === "function") {
+      markdownEditorRef.value.focusPosition(targetPos);
+    } else {
+      markdownEditorRef.value?.focus?.();
+    }
+    return true;
+  }
+
+  pendingPreviewHeadingSlug.value = headingSlug;
+  if (headingSlug) {
+    await nextTick();
+    scrollPreviewHeadingIntoView(headingSlug);
+  }
+  return true;
+};
+
+const openMarkdownFileByRelPath = async (relPathInput, { anchor = "", rawPos = null, showMissingToast = true } = {}) => {
+  const relPath = normalizeRelPath(relPathInput);
+  if (!relPath) {
+    return false;
+  }
+
+  if (relPath === normalizeRelPath(activeMarkdownRelPath.value)) {
+    return jumpWithinCurrentDocument({ rawPos, anchor });
+  }
+
+  let matched = findStorageNodeByRelPath(storageTree.value, relPath);
+  if (!matched && isDesktopStorage) {
+    await loadDesktopStorageTree({
+      preferredNodeId: relPath,
+      preferredMarkdownRelPath: relPath
+    });
+    matched = findStorageNodeByRelPath(storageTree.value, relPath);
+  }
+
+  if (!matched?.node) {
+    if (showMissingToast) {
+      showToast(`找不到文档: ${relPath}`);
+    }
+    return false;
+  }
+
+  expandStorageAncestors(matched.parentIds);
+  selectedStorageNodeId.value = String(matched.node.id || selectedStorageNodeId.value);
+  if (relPath !== normalizeRelPath(activeMarkdownRelPath.value)) {
+    await selectStorageNode(String(matched.node.id || ""));
+  }
+  return jumpWithinCurrentDocument({ rawPos, anchor });
+};
+
+const openBacklinkEntry = async (entry) => {
+  if (!entry?.sourceRelPath) {
+    return;
+  }
+  await openMarkdownFileByRelPath(entry.sourceRelPath, {
+    rawPos: Number(entry.rawFrom || 0)
+  });
+};
+
+const openWikiLinkResolved = async (resolutionInput = {}) => {
+  const resolution = resolutionInput && typeof resolutionInput === "object" ? resolutionInput : {};
+  if (!resolution.exists || !resolution.relPath) {
+    return false;
+  }
+  closeWikiLinkMenu();
+  return openMarkdownFileByRelPath(resolution.relPath, {
+    anchor: String(resolution.anchor || "")
+  });
+};
+
+const createNoteFromWikiLink = async (resolutionInput = {}, parsedInput = null) => {
+  const resolution = resolutionInput && typeof resolutionInput === "object" ? resolutionInput : {};
+  const parsed = parsedInput && typeof parsedInput === "object" ? parsedInput : {};
+  const target = String(parsed.target || resolution.target || "").trim();
+  const suggestedRelPath = normalizeRelPath(
+    resolution.suggestedRelPath || suggestRelPathForMissing(target, activeMarkdownRelPath.value)
+  );
+
+  if (!suggestedRelPath) {
+    return "";
+  }
+  if (!(desktopDataBridge?.createWorkspaceFile && desktopDataBridge?.writeWorkspaceFile)) {
+    showToast("当前环境不支持一键创建链接文档");
+    return "";
+  }
+
+  try {
+    const created = await desktopDataBridge.createWorkspaceFile({
+      parentRelPath: dirnameOfRelPath(suggestedRelPath),
+      name: basenameOfRelPath(suggestedRelPath)
+    });
+    if (!created?.ok) {
+      throw new Error(String(created?.error || "create_workspace_file_failed"));
+    }
+    const createdRelPath = normalizeRelPath(created.relPath || suggestedRelPath);
+    const noteTitle = stripMarkdownExtension(basenameOfRelPath(createdRelPath)) || target || "Untitled";
+    const writeResult = await desktopDataBridge.writeWorkspaceFile({
+      relPath: createdRelPath,
+      content: `# ${noteTitle}\n`
+    });
+    if (!writeResult?.ok) {
+      throw new Error(String(writeResult?.error || "write_workspace_file_failed"));
+    }
+    await loadDesktopStorageTree({
+      preferredNodeId: createdRelPath,
+      preferredMarkdownRelPath: createdRelPath
+    });
+    scheduleWikiLinkIndexRebuild();
+    showToast(`已创建文档: ${createdRelPath}`);
+    return createdRelPath;
+  } catch (error) {
+    showToast(`创建文档失败: ${String(error?.message || error || "unknown_error")}`);
+    return "";
+  }
+};
+
+const openWikiLinkCandidate = async (candidateRelPath) => {
+  const anchor = String(wikiLinkMenu.value?.match?.parsed?.anchor || wikiLinkMenu.value?.resolution?.anchor || "");
+  closeWikiLinkMenu();
+  await openMarkdownFileByRelPath(candidateRelPath, { anchor });
+};
+
+const handleWikiLinkCreateFromMenu = async () => {
+  const resolution = wikiLinkMenu.value?.resolution;
+  const match = wikiLinkMenu.value?.match;
+  closeWikiLinkMenu();
+  const createdRelPath = await createNoteFromWikiLink(resolution, match?.parsed);
+  if (!createdRelPath) {
+    return;
+  }
+  await openMarkdownFileByRelPath(createdRelPath, {
+    anchor: String(match?.parsed?.anchor || resolution?.anchor || "")
+  });
+};
+
+const handleWikiLinkActivate = async ({ clientX = 0, clientY = 0, match = null, resolution = null } = {}) => {
+  const parsed = match?.parsed || {};
+  const latestResolution = resolveWikiLink(parsed, activeMarkdownRelPath.value, workspaceMarkdownFiles.value);
+  if (latestResolution.exists && latestResolution.relPath) {
+    await openWikiLinkResolved(latestResolution);
+    return;
+  }
+  openWikiLinkMenuAt(clientX, clientY, {
+    match,
+    resolution: latestResolution || resolution
+  });
+};
+
+const handleEditorWikiLinkActivate = (payload) => {
+  void handleWikiLinkActivate(payload);
+};
+
+const getWikiLinkSuggestions = ({ mode = "file", noteQuery = "", headingQuery = "" } = {}) => {
+  const files = workspaceMarkdownFiles.value;
+  const notesByPath = wikiLinkIndexState.value?.notesByPath || {};
+  const normalizedNoteQuery = String(noteQuery || "").trim().toLowerCase();
+
+  if (mode === "heading") {
+    const baseTarget = String(noteQuery || "").trim();
+    const currentRelPath = normalizeRelPath(activeMarkdownRelPath.value);
+    const resolution = baseTarget
+      ? resolveWikiLink({ target: baseTarget }, currentRelPath, files)
+      : (currentRelPath ? { exists: true, relPath: currentRelPath } : null);
+    if (!resolution?.exists || !resolution.relPath) {
+      return [];
+    }
+
+    const normalizedHeadingQuery = String(headingQuery || "").trim().toLowerCase();
+    const insertTarget = baseTarget
+      || preferredWikiTargetForFile({ relPath: resolution.relPath, name: basenameOfRelPath(resolution.relPath) }, files)
+      || stripMarkdownExtension(basenameOfRelPath(resolution.relPath));
+
+    return getNoteHeadingsForRelPath(resolution.relPath)
+      .filter((heading) => {
+        const text = String(heading?.text || "").trim();
+        if (!text) {
+          return false;
+        }
+        return !normalizedHeadingQuery || text.toLowerCase().includes(normalizedHeadingQuery);
+      })
+      .slice(0, 8)
+      .map((heading, index) => ({
+        id: `${resolution.relPath}#${heading.slug || index}`,
+        label: String(heading.text || ""),
+        detail: resolution.relPath,
+        insertText: `${insertTarget}#${String(heading.text || "")}`,
+        tone: "default"
+      }));
+  }
+
+  const fileItems = files
+    .map((file) => {
+      const relPath = normalizeRelPath(file.relPath);
+      const note = notesByPath[relPath] || {};
+      const insertText = preferredWikiTargetForFile(file, files) || relPath;
+      const label = String(note.title || stripMarkdownExtension(file.name || basenameOfRelPath(relPath)));
+      const haystack = `${label}\n${relPath}\n${stripMarkdownExtension(file.name || "")}`.toLowerCase();
+      const insertTextLower = insertText.toLowerCase();
+      return {
+        id: relPath,
+        label,
+        detail: relPath,
+        insertText,
+        tone: "default",
+        exact: normalizedNoteQuery && (insertTextLower === normalizedNoteQuery || label.toLowerCase() === normalizedNoteQuery),
+        starts: normalizedNoteQuery && (insertTextLower.startsWith(normalizedNoteQuery) || label.toLowerCase().startsWith(normalizedNoteQuery)),
+        haystack
+      };
+    })
+    .filter((item) => !normalizedNoteQuery || item.haystack.includes(normalizedNoteQuery))
+    .sort((left, right) =>
+      Number(Boolean(right.exact)) - Number(Boolean(left.exact))
+      || Number(Boolean(right.starts)) - Number(Boolean(left.starts))
+      || String(left.detail || "").localeCompare(String(right.detail || ""), "zh-CN")
+    )
+    .slice(0, 8)
+    .map(({ exact, starts, haystack, ...item }) => item);
+
+  const rawTarget = String(noteQuery || "").trim();
+  if (!rawTarget) {
+    return fileItems;
+  }
+
+  const exactExisting = files.some((file) => {
+    const relPath = normalizeRelPath(file.relPath);
+    const preferredTarget = preferredWikiTargetForFile(file, files);
+    return String(preferredTarget || "").toLowerCase() === rawTarget.toLowerCase()
+      || relPath === normalizeRelPath(ensureMarkdownExtension(rawTarget));
+  });
+
+  if (!exactExisting) {
+    fileItems.unshift({
+      id: `create:${rawTarget}`,
+      label: `创建 ${rawTarget}`,
+      detail: suggestRelPathForMissing(rawTarget, activeMarkdownRelPath.value),
+      insertText: rawTarget,
+      tone: "warning"
+    });
+  }
+
+  return fileItems.slice(0, 8);
+};
+
+const rebuildWikiLinkIndex = async () => {
+  const files = workspaceMarkdownFiles.value;
+  if (!files.length || !desktopDataBridge?.readWorkspaceFile) {
+    wikiLinkIndexState.value = {
+      ...createEmptyWikiLinkIndex(),
+      files
+    };
+    return;
+  }
+
+  const buildSeq = ++wikiLinkIndexSeq;
+  wikiLinkIndexLoading.value = true;
+  try {
+    const activeRelPath = normalizeRelPath(activeMarkdownRelPath.value);
+    const overridesByPath = activeRelPath
+      ? {
+          [activeRelPath]: String(documentMarkdown.value || "")
+        }
+      : {};
+
+    const index = await buildWikiLinkIndex({
+      files,
+      overridesByPath,
+      readFile: async (relPathInput) => {
+        const relPath = normalizeRelPath(relPathInput);
+        if (relPath === activeRelPath) {
+          return String(documentMarkdown.value || "");
+        }
+        const result = await desktopDataBridge.readWorkspaceFile({
+          relPath
+        });
+        if (!result?.ok) {
+          throw new Error(String(result?.error || "read_workspace_file_failed"));
+        }
+        return String(result.content || "");
+      }
+    });
+
+    if (buildSeq !== wikiLinkIndexSeq) {
+      return;
+    }
+    wikiLinkIndexState.value = index;
+  } catch {
+    if (buildSeq !== wikiLinkIndexSeq) {
+      return;
+    }
+    wikiLinkIndexState.value = {
+      ...createEmptyWikiLinkIndex(),
+      files
+    };
+  } finally {
+    if (buildSeq === wikiLinkIndexSeq) {
+      wikiLinkIndexLoading.value = false;
+    }
+  }
+};
+
+const scheduleWikiLinkIndexRebuild = () => {
+  if (wikiLinkIndexTimer) {
+    clearTimeout(wikiLinkIndexTimer);
+  }
+  wikiLinkIndexTimer = setTimeout(() => {
+    wikiLinkIndexTimer = null;
+    void rebuildWikiLinkIndex();
+  }, WIKI_LINK_INDEX_DEBOUNCE_MS);
+};
+
 const openStorageRootDir = async () => {
   if (!isDesktopStorage || !desktopDataBridge?.openWorkspaceDir) {
     showToast("当前环境不支持打开真实目录");
@@ -2407,15 +3053,41 @@ const onContentScroll = () => {
 };
 
 const isPreviewInteractiveTarget = (target) => {
-  if (!(target instanceof Element)) {
+  const element = target instanceof Element
+    ? target
+    : (target?.parentElement instanceof Element ? target.parentElement : null);
+  if (!(element instanceof Element)) {
     return false;
   }
   return Boolean(
-    target.closest("a, button, input, textarea, select, label, summary, [role='button']")
+    element.closest("a, button, input, textarea, select, label, summary, [role='button']")
   );
 };
 
 const handlePreviewNavClick = (event) => {
+  const targetElement = event?.target instanceof Element
+    ? event.target
+    : (event?.target?.parentElement instanceof Element ? event.target.parentElement : null);
+  const target = targetElement?.closest(".wiki-link") || null;
+  if (target instanceof HTMLElement) {
+    event.preventDefault();
+    event.stopPropagation();
+    const match = {
+      parsed: {
+        target: String(target.dataset.wikiTarget || ""),
+        anchor: String(target.dataset.wikiAnchor || ""),
+        alias: String(target.dataset.wikiAlias || "")
+      }
+    };
+    void handleWikiLinkActivate({
+      source: "preview",
+      clientX: Number(event.clientX || 0),
+      clientY: Number(event.clientY || 0),
+      match,
+      resolution: resolveWikiLink(match.parsed, activeMarkdownRelPath.value, workspaceMarkdownFiles.value)
+    });
+    return;
+  }
   if (!(gestureNavigationEnabled.value && !isEditMode.value)) {
     return;
   }
@@ -3624,6 +4296,10 @@ watch([currentId, mode, terminalMaximized, terminalOpen, terminalPanelHeight], (
 watch(renderedMarkdown, () => {
   nextTick(() => {
     refreshContentProgress();
+    if (pendingPreviewHeadingSlug.value) {
+      scrollPreviewHeadingIntoView(pendingPreviewHeadingSlug.value);
+      pendingPreviewHeadingSlug.value = "";
+    }
   });
 });
 
@@ -3687,6 +4363,14 @@ watch(selectedStorageNodeId, () => {
   ensureSelectedStorageNodeValid();
   persistStorageState();
 });
+
+watch(
+  [workspaceMarkdownFiles, activeMarkdownRelPath, documentMarkdown],
+  () => {
+    scheduleWikiLinkIndexRebuild();
+  },
+  { deep: true }
+);
 
 watch([terminalPanelHeight, terminalMaximized], () => {
   if (!isDesktopPty.value || !terminalOpen.value || terminalTab.value !== "terminal") {
@@ -3942,6 +4626,7 @@ const onGlobalPointerDown = (event) => {
   }
   closeDesktopTabContextMenu();
   closeStorageNodeContextMenu();
+  closeWikiLinkMenu();
 };
 
 const onGlobalKeyup = (event) => {
@@ -3959,6 +4644,7 @@ onMounted(() => {
   window.addEventListener("focus", clearBodyInteractionStyles);
   window.addEventListener("blur", closeDesktopTabContextMenu);
   window.addEventListener("blur", closeStorageNodeContextMenu);
+  window.addEventListener("blur", closeWikiLinkMenu);
   window.addEventListener("blur", releasePasteShortcutLocks);
   window.addEventListener("resize", refreshContentProgress);
   if (isDesktopStorage) {
@@ -3979,6 +4665,7 @@ onMounted(() => {
     void syncDesktopMaximizeState();
     bindDesktopWindowMaximizeListener();
   }
+  scheduleWikiLinkIndexRebuild();
   nextTick(() => {
     refreshContentProgress();
   });
@@ -3988,6 +4675,11 @@ onBeforeUnmount(() => {
   releaseTransientPointerState({ syncTerminal: false });
   cancelDesktopRenameDialog();
   cancelStorageRenameDialog();
+  closeWikiLinkMenu();
+  if (wikiLinkIndexTimer) {
+    clearTimeout(wikiLinkIndexTimer);
+    wikiLinkIndexTimer = null;
+  }
   if (activeMarkdownRelPath.value && !markdownHydrating.value) {
     void flushPendingMarkdownSave(activeMarkdownRelPath.value);
   }
@@ -4004,6 +4696,7 @@ onBeforeUnmount(() => {
   window.removeEventListener("focus", clearBodyInteractionStyles);
   window.removeEventListener("blur", closeDesktopTabContextMenu);
   window.removeEventListener("blur", closeStorageNodeContextMenu);
+  window.removeEventListener("blur", closeWikiLinkMenu);
   window.removeEventListener("blur", releasePasteShortcutLocks);
   window.removeEventListener("resize", refreshContentProgress);
   if (desktopWindowMaximizeOff) {

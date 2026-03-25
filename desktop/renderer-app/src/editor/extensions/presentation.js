@@ -17,6 +17,7 @@ const INLINE_SYNTAX_TOKEN_TYPES = new Set([
   "codespan",
   "del",
   "link",
+  "wikilink",
   "math_inline",
   "mark",
   "comment"
@@ -1548,6 +1549,9 @@ const addInlineMathPreviewDecorationForToken = (decorations, doc, token, docLeng
 
 const inlineClassForSyntaxToken = (tokenTypeInput) => {
   const tokenType = String(tokenTypeInput || "");
+  if (tokenType === "wikilink") {
+    return "cm-inline-link";
+  }
   if (tokenType === "mark") {
     return "cm-inline-mark";
   }

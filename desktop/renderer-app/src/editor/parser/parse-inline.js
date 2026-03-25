@@ -1,5 +1,6 @@
 import { marked } from "marked";
 import { BLOCK_TYPES } from "../model/block-types";
+import { parseWikiLinkRaw } from "../../utils/wiki-link";
 
 const INLINE_BLOCK_TYPES = new Set([
   BLOCK_TYPES.PARAGRAPH,
@@ -15,8 +16,12 @@ const INNER_TEXT_RANGE_TOKEN_TYPES = new Set(["em", "strong", "codespan", "del",
 const INLINE_MATH_TOKEN_TYPE = "math_inline";
 const INLINE_HIGHLIGHT_TOKEN_TYPE = "mark";
 const INLINE_COMMENT_TOKEN_TYPE = "comment";
+const INLINE_WIKI_LINK_TOKEN_TYPE = "wikilink";
 const INLINE_MATH_EXCLUDED_TOKEN_TYPES = new Set(["codespan"]);
 const INLINE_MARK_EXCLUDED_TOKEN_TYPES = new Set(["codespan"]);
+const INLINE_WIKI_LINK_EXCLUDED_TOKEN_TYPES = new Set(["codespan"]);
+const WIKI_LINK_OPEN = "[[";
+const WIKI_LINK_CLOSE = "]]";
 
 const HEADING_PREFIX_PATTERN = /^\s{0,3}#{1,6}[ \t]+/;
 const LIST_PREFIX_PATTERN = /^(\s*)(?:[-+*]\s+\[(?: |x|X)\]\s+|[-+*]\s+|\d+[.)]\s+)/;
@@ -485,6 +490,104 @@ const buildDelimitedInlineTokens = ({
   return tokens;
 };
 
+const buildWikiLinkTokens = ({
+  source,
+  baseFrom,
+  line,
+  lineFrom,
+  state,
+  excludedRanges = []
+}) => {
+  const tokens = [];
+  if (!source || !source.includes(WIKI_LINK_OPEN)) {
+    return tokens;
+  }
+
+  const safeBaseFrom = Number(baseFrom || 0);
+  const safeLine = Math.max(1, Number(line || 1));
+  const safeLineFrom = Number(lineFrom || 0);
+  let cursor = 0;
+
+  while (cursor <= source.length - WIKI_LINK_OPEN.length) {
+    if (!source.startsWith(WIKI_LINK_OPEN, cursor) || isEscapedAt(source, cursor)) {
+      cursor += 1;
+      continue;
+    }
+
+    const openPos = safeBaseFrom + cursor;
+    const openTo = openPos + WIKI_LINK_OPEN.length;
+    if (offsetInAnyRange(openPos, excludedRanges) || rangeIntersectsAny(openPos, openTo, excludedRanges)) {
+      cursor += 1;
+      continue;
+    }
+
+    const closeOffset = source.indexOf(WIKI_LINK_CLOSE, cursor + WIKI_LINK_OPEN.length);
+    if (closeOffset < 0) {
+      cursor += WIKI_LINK_OPEN.length;
+      continue;
+    }
+
+    const rawFrom = openPos;
+    const rawTo = safeBaseFrom + closeOffset + WIKI_LINK_CLOSE.length;
+    if (rangeIntersectsAny(rawFrom, rawTo, excludedRanges)) {
+      cursor = closeOffset + WIKI_LINK_CLOSE.length;
+      continue;
+    }
+
+    const rawText = source.slice(cursor, closeOffset + WIKI_LINK_CLOSE.length);
+    const parsed = parseWikiLinkRaw(rawText);
+    const innerRaw = rawText.slice(WIKI_LINK_OPEN.length, rawText.length - WIKI_LINK_CLOSE.length);
+    const aliasIndex = innerRaw.indexOf("|");
+
+    let visibleStartOffset = WIKI_LINK_OPEN.length;
+    let visibleEndOffset = rawText.length - WIKI_LINK_CLOSE.length;
+    if (aliasIndex >= 0) {
+      visibleStartOffset = WIKI_LINK_OPEN.length + aliasIndex + 1;
+    }
+    while (visibleStartOffset < visibleEndOffset && /\s/.test(rawText[visibleStartOffset])) {
+      visibleStartOffset += 1;
+    }
+    while (visibleEndOffset > visibleStartOffset && /\s/.test(rawText[visibleEndOffset - 1])) {
+      visibleEndOffset -= 1;
+    }
+    if (visibleEndOffset <= visibleStartOffset) {
+      visibleStartOffset = WIKI_LINK_OPEN.length;
+      visibleEndOffset = rawText.length - WIKI_LINK_CLOSE.length;
+    }
+
+    const textFrom = rawFrom + visibleStartOffset;
+    const textTo = Math.max(textFrom, rawFrom + visibleEndOffset);
+    tokens.push({
+      id: `it_${state.nextTokenId}`,
+      type: INLINE_WIKI_LINK_TOKEN_TYPE,
+      marks: ["link"],
+      rawFrom,
+      rawTo,
+      textFrom,
+      textTo,
+      line: safeLine,
+      columnRawFrom: Math.max(0, rawFrom - safeLineFrom),
+      columnRawTo: Math.max(0, rawTo - safeLineFrom),
+      columnTextFrom: Math.max(0, textFrom - safeLineFrom),
+      columnTextTo: Math.max(0, textTo - safeLineFrom),
+      rawText,
+      text: rawText.slice(visibleStartOffset, visibleEndOffset) || parsed.displayText || innerRaw,
+      attrs: {
+        target: parsed.target,
+        anchor: parsed.anchor,
+        alias: parsed.alias,
+        body: parsed.body
+      },
+      rangeResolved: true,
+      children: []
+    });
+    state.nextTokenId += 1;
+    cursor = closeOffset + WIKI_LINK_CLOSE.length;
+  }
+
+  return tokens;
+};
+
 const collectTokenNodes = ({
   source,
   tokens,
@@ -698,6 +801,13 @@ const parseInlineModelFromLine = ({ lineText, from, line, lineFrom, state }) => 
   }
 
   const tokens = lexInlineTokens(source);
+  const sortTokensByRange = (tokensInput) =>
+    [...tokensInput].sort((left, right) => {
+      if (left.rawFrom !== right.rawFrom) {
+        return left.rawFrom - right.rawFrom;
+      }
+      return left.rawTo - right.rawTo;
+    });
   const inlineTokens = collectTokenNodes({
     source,
     tokens,
@@ -711,6 +821,23 @@ const parseInlineModelFromLine = ({ lineText, from, line, lineFrom, state }) => 
     nodes: inlineTokens,
     lineFrom: safeLineFrom
   });
+
+  const addInlineWikiLinkTokens = (tokensInput) => {
+    const tokensList = Array.isArray(tokensInput) ? tokensInput : [];
+    const excludedRanges = collectTokenRangesByType(tokensList, INLINE_WIKI_LINK_EXCLUDED_TOKEN_TYPES);
+    const wikiLinkTokens = buildWikiLinkTokens({
+      source,
+      baseFrom: safeFrom,
+      line: safeLine,
+      lineFrom: safeLineFrom,
+      state,
+      excludedRanges
+    });
+    if (!wikiLinkTokens.length) {
+      return tokensList;
+    }
+    return sortTokensByRange([...tokensList, ...wikiLinkTokens]);
+  };
 
   const addInlineMathTokens = (tokensInput) => {
     const tokensList = Array.isArray(tokensInput) ? tokensInput : [];
@@ -726,12 +853,7 @@ const parseInlineModelFromLine = ({ lineText, from, line, lineFrom, state }) => 
     if (!mathTokens.length) {
       return tokensList;
     }
-    return [...tokensList, ...mathTokens].sort((left, right) => {
-      if (left.rawFrom !== right.rawFrom) {
-        return left.rawFrom - right.rawFrom;
-      }
-      return left.rawTo - right.rawTo;
-    });
+    return sortTokensByRange([...tokensList, ...mathTokens]);
   };
 
   const addInlineMarkTokens = (tokensInput) => {
@@ -760,16 +882,12 @@ const parseInlineModelFromLine = ({ lineText, from, line, lineFrom, state }) => 
     if (!highlightTokens.length && !commentTokens.length) {
       return tokensList;
     }
-    return [...tokensList, ...highlightTokens, ...commentTokens].sort((left, right) => {
-      if (left.rawFrom !== right.rawFrom) {
-        return left.rawFrom - right.rawFrom;
-      }
-      return left.rawTo - right.rawTo;
-    });
+    return sortTokensByRange([...tokensList, ...highlightTokens, ...commentTokens]);
   };
 
   if (inlineTokens.length && inlineSegments.length) {
-    const withMarkTokens = addInlineMarkTokens(inlineTokens);
+    const withWikiTokens = addInlineWikiLinkTokens(inlineTokens);
+    const withMarkTokens = addInlineMarkTokens(withWikiTokens);
     return {
       inlineTokens: addInlineMathTokens(withMarkTokens),
       inlineSegments
@@ -783,7 +901,7 @@ const parseInlineModelFromLine = ({ lineText, from, line, lineFrom, state }) => 
     lineFrom: safeLineFrom,
     state
   });
-  fallback.inlineTokens = addInlineMathTokens(addInlineMarkTokens(fallback.inlineTokens));
+  fallback.inlineTokens = addInlineMathTokens(addInlineMarkTokens(addInlineWikiLinkTokens(fallback.inlineTokens)));
   return fallback;
 };
 

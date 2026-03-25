@@ -7,6 +7,8 @@ import { coreExtensions } from "../extensions/core";
 import { markdownExtensions } from "../extensions/markdown";
 import { presentationExtensions, setPresentationDataEffect } from "../extensions/presentation";
 import { contextMenuExtensions } from "../extensions/context-menu";
+import { createWikiLinkEventExtensions } from "../extensions/wikilink-events";
+import { createWikiLinkAutocompleteExtension } from "../extensions/wikilink-autocomplete";
 import { createEditorThemeExtension } from "../extensions/theme";
 
 export const createMarkdownEditor = ({
@@ -14,9 +16,21 @@ export const createMarkdownEditor = ({
   doc = "",
   dark = false,
   onChange = null,
-  onSelectionChange = null
+  onSelectionChange = null,
+  onWikiLinkActivate = null,
+  getWikiLinkCurrentRelPath = () => "",
+  getWikiLinkMarkdownFiles = () => [],
+  getWikiLinkSuggestions = () => []
 }) => {
   const themeCompartment = new Compartment();
+  const wikiLinkEventConfig = createWikiLinkEventExtensions({
+    getCurrentRelPath: getWikiLinkCurrentRelPath,
+    getMarkdownFiles: getWikiLinkMarkdownFiles,
+    onWikiLinkActivate
+  });
+  const wikiLinkAutocompleteExtension = createWikiLinkAutocompleteExtension({
+    getSuggestions: getWikiLinkSuggestions
+  });
   const updateListener = EditorView.updateListener.of((update) => {
     if ((update.selectionSet || update.docChanged) && typeof onSelectionChange === "function") {
       const mainSelection = update.state.selection.main;
@@ -37,6 +51,8 @@ export const createMarkdownEditor = ({
       ...coreExtensions,
       ...markdownExtensions,
       ...presentationExtensions,
+      ...wikiLinkEventConfig.extensions,
+      wikiLinkAutocompleteExtension,
       ...contextMenuExtensions,
       themeCompartment.of(createEditorThemeExtension(Boolean(dark))),
       updateListener
@@ -106,6 +122,17 @@ export const createMarkdownEditor = ({
     view.focus();
   };
 
+  const refreshWikiLinks = () => {
+    if (!wikiLinkEventConfig?.refreshEffect) {
+      return;
+    }
+    view.dispatch({
+      effects: wikiLinkEventConfig.refreshEffect.of({
+        ts: Date.now()
+      })
+    });
+  };
+
   return {
     view,
     getDoc,
@@ -113,6 +140,7 @@ export const createMarkdownEditor = ({
     setDark,
     setPresentationData,
     setCursor,
+    refreshWikiLinks,
     focus: () => view.focus(),
     openSearch: () => openSearchPanel(view),
     destroy: () => view.destroy()

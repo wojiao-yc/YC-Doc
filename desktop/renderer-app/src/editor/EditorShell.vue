@@ -25,10 +25,22 @@ const props = defineProps({
   currentBlockId: {
     type: String,
     default: ""
+  },
+  currentRelPath: {
+    type: String,
+    default: ""
+  },
+  wikiLinkFiles: {
+    type: Array,
+    default: () => []
+  },
+  wikiLinkSuggestions: {
+    type: Function,
+    default: null
   }
 });
 
-const emit = defineEmits(["update:modelValue", "selection-change"]);
+const emit = defineEmits(["update:modelValue", "selection-change", "wiki-link-activate"]);
 const editorHostRef = ref(null);
 let editorApi = null;
 let latestPresentationBlocks = Array.isArray(props.presentationBlocks) ? props.presentationBlocks : [];
@@ -45,7 +57,11 @@ const openSearch = () => {
   editorApi?.openSearch();
 };
 
-defineExpose({ focus, focusPosition, openSearch });
+const refreshWikiLinks = () => {
+  editorApi?.refreshWikiLinks?.();
+};
+
+defineExpose({ focus, focusPosition, openSearch, refreshWikiLinks });
 
 const syncPresentationData = () => {
   editorApi?.setPresentationData({
@@ -68,6 +84,17 @@ onMounted(() => {
     },
     onChange: (nextMarkdown) => {
       emit("update:modelValue", nextMarkdown);
+    },
+    onWikiLinkActivate: (payload) => {
+      emit("wiki-link-activate", payload);
+    },
+    getWikiLinkCurrentRelPath: () => props.currentRelPath,
+    getWikiLinkMarkdownFiles: () => props.wikiLinkFiles,
+    getWikiLinkSuggestions: (context) => {
+      if (typeof props.wikiLinkSuggestions !== "function") {
+        return [];
+      }
+      return props.wikiLinkSuggestions(context);
     }
   });
   syncPresentationData();
@@ -111,6 +138,14 @@ watch(
   () => {
     syncPresentationData();
   }
+);
+
+watch(
+  () => [props.currentRelPath, props.wikiLinkFiles],
+  () => {
+    editorApi?.refreshWikiLinks?.();
+  },
+  { deep: true }
 );
 
 onBeforeUnmount(() => {
