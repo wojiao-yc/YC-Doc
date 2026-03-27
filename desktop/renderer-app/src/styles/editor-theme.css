@@ -126,6 +126,11 @@
   font-weight: 600;
 }
 
+.yc-editor-host .cm-source-wikilink-delim {
+  color: #2563eb;
+  font-weight: 600;
+}
+
 .yc-editor-host .cm-source-image-alt {
   color: #b45309;
 }
@@ -161,6 +166,10 @@
 .yc-editor-shell.is-dark .yc-editor-host .cm-source-image-meta-delim,
 .yc-editor-shell.is-dark .yc-editor-host .cm-source-math-delim {
   color: #94a3b8;
+}
+
+.yc-editor-shell.is-dark .yc-editor-host .cm-source-wikilink-delim {
+  color: #93c5fd;
 }
 
 .yc-editor-shell.is-dark .yc-editor-host .cm-source-image-alt {

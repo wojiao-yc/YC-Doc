@@ -1627,6 +1627,15 @@ const addMathFormulaTokenMarks = (decorations, formulaText, formulaFrom) => {
   }
 };
 
+const addWikiLinkSourceSyntaxDecorationsForToken = (decorations, token) => {
+  const rawFrom = Number(token?.rawFrom || 0);
+  const rawTo = Number(token?.rawTo || 0);
+  if (rawTo <= rawFrom) {
+    return;
+  }
+  addSourceSyntaxMarkDecoration(decorations, rawFrom, rawTo, "cm-source-wikilink-delim");
+};
+
 const addImageSourceSyntaxDecorationsForBlock = (decorations, doc, fromInput, toInput, docLength) => {
   const from = clampPos(fromInput, docLength);
   const to = clampPos(toInput, docLength);
@@ -2240,6 +2249,9 @@ const buildDecorations = (view, blocks, currentBlockId) => {
           continue;
         }
         if (isTokenRelatedToActiveToken(token, activeInlineToken)) {
+          if (token.type === "wikilink") {
+            addWikiLinkSourceSyntaxDecorationsForToken(decorations, token);
+          }
           continue;
         }
         if (token.type === "math_inline") {

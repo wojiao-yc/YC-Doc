@@ -817,6 +817,11 @@ body {
   background: #f1f5f9;
 }
 
+.term-context-item:focus {
+  outline: none;
+  background: #f1f5f9;
+}
+
 .term-context-item.is-danger {
   color: #be123c;
 }
@@ -1191,6 +1196,11 @@ body {
 }
 
 .dark-ui .term-context-item:hover {
+  background: #1e293b;
+}
+
+.dark-ui .term-context-item:focus {
+  outline: none;
   background: #1e293b;
 }
 

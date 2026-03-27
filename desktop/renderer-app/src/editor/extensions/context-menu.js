@@ -1417,6 +1417,8 @@ class EditorContextMenuController {
     this.submenuCloseTimer = null;
     this.pointerInRootMenu = false;
     this.pointerInSubmenu = false;
+    this.rootActiveIndex = -1;
+    this.submenuActiveIndex = -1;
 
     this.onOutsideMouseDown = this.onOutsideMouseDown.bind(this);
     this.onWindowResize = this.onWindowResize.bind(this);
@@ -1436,6 +1438,110 @@ class EditorContextMenuController {
 
   isDarkMode() {
     return Boolean(this.view.dom.closest(".yc-editor-shell.is-dark"));
+  }
+
+  getMenuButtons(menuEl) {
+    if (!(menuEl instanceof HTMLElement)) {
+      return [];
+    }
+    return Array.from(menuEl.querySelectorAll(".yc-editor-context-item"))
+      .filter((button) => button instanceof HTMLButtonElement && !button.disabled);
+  }
+
+  getMenuActiveIndex(menuEl) {
+    if (menuEl === this.subMenuEl) {
+      return this.submenuActiveIndex;
+    }
+    if (menuEl === this.rootMenuEl) {
+      return this.rootActiveIndex;
+    }
+    return -1;
+  }
+
+  setMenuActiveIndex(menuEl, indexInput = -1) {
+    if (!(menuEl instanceof HTMLElement)) {
+      return false;
+    }
+    const buttons = this.getMenuButtons(menuEl);
+    if (!buttons.length) {
+      if (menuEl === this.subMenuEl) {
+        this.submenuActiveIndex = -1;
+      } else if (menuEl === this.rootMenuEl) {
+        this.rootActiveIndex = -1;
+      }
+      return false;
+    }
+    const length = buttons.length;
+    const rawIndex = Number(indexInput);
+    const nextIndex = Number.isFinite(rawIndex)
+      ? ((Math.round(rawIndex) % length) + length) % length
+      : 0;
+    if (menuEl === this.subMenuEl) {
+      this.submenuActiveIndex = nextIndex;
+    } else if (menuEl === this.rootMenuEl) {
+      this.rootActiveIndex = nextIndex;
+    }
+    this.syncMenuActiveState(menuEl);
+    return true;
+  }
+
+  syncMenuActiveState(menuEl) {
+    if (!(menuEl instanceof HTMLElement)) {
+      return;
+    }
+    const buttons = this.getMenuButtons(menuEl);
+    const activeIndex = this.getMenuActiveIndex(menuEl);
+    buttons.forEach((button, index) => {
+      button.classList.toggle("is-active", index === activeIndex);
+    });
+    if (activeIndex >= 0 && activeIndex < buttons.length) {
+      const activeButton = buttons[activeIndex];
+      if (typeof activeButton.scrollIntoView === "function") {
+        activeButton.scrollIntoView({
+          block: "nearest"
+        });
+      }
+    }
+  }
+
+  focusMenuItem(menuEl, indexInput = 0) {
+    return this.setMenuActiveIndex(menuEl, indexInput);
+  }
+
+  focusFirstMenuItem(menuEl) {
+    return this.focusMenuItem(menuEl, 0);
+  }
+
+  focusLastMenuItem(menuEl) {
+    const buttons = this.getMenuButtons(menuEl);
+    return buttons.length ? this.focusMenuItem(menuEl, buttons.length - 1) : false;
+  }
+
+  moveMenuFocus(menuEl, delta) {
+    const buttons = this.getMenuButtons(menuEl);
+    if (!buttons.length) {
+      return false;
+    }
+    const activeIndex = this.getMenuActiveIndex(menuEl);
+    const startIndex = activeIndex >= 0 ? activeIndex : (delta < 0 ? 0 : -1);
+    return this.focusMenuItem(menuEl, startIndex + delta);
+  }
+
+  getFocusedMenuItem(menuEl) {
+    const buttons = this.getMenuButtons(menuEl);
+    if (!buttons.length) {
+      return null;
+    }
+    let activeIndex = this.getMenuActiveIndex(menuEl);
+    if (activeIndex < 0 || activeIndex >= buttons.length) {
+      activeIndex = 0;
+      this.setMenuActiveIndex(menuEl, activeIndex);
+    }
+    return buttons[activeIndex] || null;
+  }
+
+  getActiveMenuElement() {
+    return this.subMenuEl || this.rootMenuEl;
   }
 
   handleContextMenu(event) {
@@ -1492,6 +1598,7 @@ class EditorContextMenuController {
     }
     document.body.appendChild(this.rootMenuEl);
     this.positionMenuElement(this.rootMenuEl, safeNumber(clientX, 0), safeNumber(clientY, 0));
+    this.focusFirstMenuItem(this.rootMenuEl);
     this.bindGlobalCloseEvents();
   }
 
@@ -1509,19 +1616,21 @@ class EditorContextMenuController {
     this.menuContext = null;
     this.pointerInRootMenu = false;
     this.pointerInSubmenu = false;
+    this.rootActiveIndex = -1;
+    this.submenuActiveIndex = -1;
     this.unbindGlobalCloseEvents();
   }
 
   bindGlobalCloseEvents() {
     document.addEventListener("mousedown", this.onOutsideMouseDown, true);
-    document.addEventListener("keydown", this.onDocumentKeyDown, true);
+    window.addEventListener("keydown", this.onDocumentKeyDown, true);
     window.addEventListener("resize", this.onWindowResize, true);
     window.addEventListener("blur", this.onWindowBlur, true);
   }
 
   unbindGlobalCloseEvents() {
     document.removeEventListener("mousedown", this.onOutsideMouseDown, true);
-    document.removeEventListener("keydown", this.onDocumentKeyDown, true);
+    window.removeEventListener("keydown", this.onDocumentKeyDown, true);
     window.removeEventListener("resize", this.onWindowResize, true);
     window.removeEventListener("blur", this.onWindowBlur, true);
   }
@@ -1547,9 +1656,108 @@ class EditorContextMenuController {
   }
 
   onDocumentKeyDown(event) {
+    if (!this.rootMenuEl) {
+      return;
+    }
+
+    const activeMenu = this.getActiveMenuElement();
+    if (!activeMenu) {
+      return;
+    }
+
+    if (event?.key === "ArrowDown") {
+      event.preventDefault();
+      event.stopPropagation();
+      if (activeMenu === this.rootMenuEl && this.subMenuEl) {
+        this.closeSubMenu();
+      }
+      this.moveMenuFocus(activeMenu, 1);
+      return;
+    }
+
+    if (event?.key === "ArrowUp") {
+      event.preventDefault();
+      event.stopPropagation();
+      if (activeMenu === this.rootMenuEl && this.subMenuEl) {
+        this.closeSubMenu();
+      }
+      this.moveMenuFocus(activeMenu, -1);
+      return;
+    }
+
+    if (event?.key === "Home") {
+      event.preventDefault();
+      event.stopPropagation();
+      if (activeMenu === this.rootMenuEl && this.subMenuEl) {
+        this.closeSubMenu();
+      }
+      this.focusFirstMenuItem(activeMenu);
+      return;
+    }
+
+    if (event?.key === "End") {
+      event.preventDefault();
+      event.stopPropagation();
+      if (activeMenu === this.rootMenuEl && this.subMenuEl) {
+        this.closeSubMenu();
+      }
+      this.focusLastMenuItem(activeMenu);
+      return;
+    }
+
+    if (event?.key === "ArrowRight") {
+      const focusedItem = this.getFocusedMenuItem(activeMenu);
+      const item = focusedItem?._ycMenuItem;
+      if (item?.children?.length && focusedItem instanceof HTMLElement) {
+        event.preventDefault();
+        event.stopPropagation();
+        this.openSubmenuForItem(item, focusedItem);
+        this.focusFirstMenuItem(this.subMenuEl);
+      }
+      return;
+    }
+
+    if (event?.key === "ArrowLeft") {
+      if (activeMenu === this.subMenuEl && this.activeSubmenuItemEl instanceof HTMLButtonElement) {
+        event.preventDefault();
+        event.stopPropagation();
+        const parentItem = this.activeSubmenuItemEl;
+        const parentIndex = this.getMenuButtons(this.rootMenuEl).findIndex((button) => button === parentItem);
+        this.closeSubMenu();
+        this.focusMenuItem(this.rootMenuEl, parentIndex);
+      }
+      return;
+    }
+
+    if (event?.key === "Enter" || event?.key === " ") {
+      const focusedItem = this.getFocusedMenuItem(activeMenu);
+      if (!focusedItem) {
+        return;
+      }
+      event.preventDefault();
+      event.stopPropagation();
+      const item = focusedItem._ycMenuItem;
+      if (item?.children?.length && focusedItem instanceof HTMLElement) {
+        this.openSubmenuForItem(item, focusedItem);
+        this.focusFirstMenuItem(this.subMenuEl);
+        return;
+      }
+      focusedItem.click();
+      return;
+    }
+
     if (event?.key === "Escape") {
       event.preventDefault();
+      event.stopPropagation();
+      if (activeMenu === this.subMenuEl && this.activeSubmenuItemEl instanceof HTMLButtonElement) {
+        const parentItem = this.activeSubmenuItemEl;
+        const parentIndex = this.getMenuButtons(this.rootMenuEl).findIndex((button) => button === parentItem);
+        this.closeSubMenu();
+        this.focusMenuItem(this.rootMenuEl, parentIndex);
+        return;
+      }
       this.closeMenu();
+      this.view.focus();
     }
   }
 
@@ -1615,6 +1823,7 @@ class EditorContextMenuController {
       this.activeSubmenuItemEl = null;
     }
     this.pointerInSubmenu = false;
+    this.submenuActiveIndex = -1;
   }
 
   async runItemCommand(item) {
@@ -1648,6 +1857,9 @@ class EditorContextMenuController {
     this.subMenuEl = submenuEl;
     this.activeSubmenuItemEl = itemEl;
     itemEl.classList.add("is-open");
+    const rootIndex = this.getMenuButtons(this.rootMenuEl).findIndex((button) => button === itemEl);
+    this.focusMenuItem(this.rootMenuEl, rootIndex);
+    this.focusFirstMenuItem(this.subMenuEl);
 
     const itemRect = itemEl.getBoundingClientRect();
     const menuRect = submenuEl.getBoundingClientRect();
@@ -1678,6 +1890,8 @@ class EditorContextMenuController {
 
     const menu = document.createElement("div");
     menu.className = `yc-editor-context-menu${isSubmenu ? " yc-editor-context-submenu" : ""}`;
+    menu.setAttribute("role", "menu");
+    menu.tabIndex = -1;
     if (this.isDarkMode()) {
       menu.classList.add("is-dark");
     }
@@ -1720,6 +1934,8 @@ class EditorContextMenuController {
       const button = document.createElement("button");
       button.type = "button";
       button.className = "yc-editor-context-item";
+      button.setAttribute("role", "menuitem");
+      button._ycMenuItem = item;
       if (item?.disabled) {
         button.classList.add("is-disabled");
         button.disabled = true;
@@ -1749,6 +1965,8 @@ class EditorContextMenuController {
         button.appendChild(arrow);
 
         button.addEventListener("mouseenter", () => {
+          const index = this.getMenuButtons(menu).findIndex((entry) => entry === button);
+          this.focusMenuItem(menu, index);
           this.scheduleOpenSubmenu(item, button);
         });
         button.addEventListener("mouseleave", (event) => {
@@ -1765,6 +1983,8 @@ class EditorContextMenuController {
         });
       } else {
         button.addEventListener("mouseenter", () => {
+          const index = this.getMenuButtons(menu).findIndex((entry) => entry === button);
+          this.focusMenuItem(menu, index);
           this.scheduleCloseSubmenu();
         });
         button.addEventListener("click", async (event) => {

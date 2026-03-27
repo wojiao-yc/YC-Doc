@@ -31,7 +31,10 @@
 }
 
 .yc-editor-context-item:hover,
+.yc-editor-context-item:focus,
+.yc-editor-context-item.is-active,
 .yc-editor-context-item.is-open {
+  outline: none;
   background: #e3e3e7;
 }
 
@@ -101,7 +104,10 @@
 }
 
 .yc-editor-context-menu.is-dark .yc-editor-context-item:hover,
+.yc-editor-context-menu.is-dark .yc-editor-context-item:focus,
+.yc-editor-context-menu.is-dark .yc-editor-context-item.is-active,
 .yc-editor-context-menu.is-dark .yc-editor-context-item.is-open {
+  outline: none;
   background: rgba(148, 163, 184, 0.2);
 }
 

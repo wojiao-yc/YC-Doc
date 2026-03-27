@@ -18,6 +18,7 @@ export const createMarkdownEditor = ({
   onChange = null,
   onSelectionChange = null,
   onWikiLinkActivate = null,
+  onWikiLinkSuggestionSelect = null,
   getWikiLinkCurrentRelPath = () => "",
   getWikiLinkMarkdownFiles = () => [],
   getWikiLinkSuggestions = () => []
@@ -29,7 +30,8 @@ export const createMarkdownEditor = ({
     onWikiLinkActivate
   });
   const wikiLinkAutocompleteExtension = createWikiLinkAutocompleteExtension({
-    getSuggestions: getWikiLinkSuggestions
+    getSuggestions: getWikiLinkSuggestions,
+    onSelectSuggestion: onWikiLinkSuggestionSelect
   });
   const updateListener = EditorView.updateListener.of((update) => {
     if ((update.selectionSet || update.docChanged) && typeof onSelectionChange === "function") {

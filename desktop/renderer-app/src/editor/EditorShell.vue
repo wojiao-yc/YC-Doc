@@ -37,6 +37,10 @@ const props = defineProps({
   wikiLinkSuggestions: {
     type: Function,
     default: null
+  },
+  wikiLinkSuggestionSelect: {
+    type: Function,
+    default: null
   }
 });
 
@@ -87,6 +91,12 @@ onMounted(() => {
     },
     onWikiLinkActivate: (payload) => {
       emit("wiki-link-activate", payload);
+    },
+    onWikiLinkSuggestionSelect: (payload) => {
+      if (typeof props.wikiLinkSuggestionSelect === "function") {
+        return props.wikiLinkSuggestionSelect(payload);
+      }
+      return null;
     },
     getWikiLinkCurrentRelPath: () => props.currentRelPath,
     getWikiLinkMarkdownFiles: () => props.wikiLinkFiles,

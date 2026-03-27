@@ -373,6 +373,7 @@
                       :current-rel-path="activeMarkdownRelPath"
                       :wiki-link-files="workspaceMarkdownFiles"
                       :wiki-link-suggestions="getWikiLinkSuggestions"
+                      :wiki-link-suggestion-select="handleWikiLinkSuggestionSelect"
                       @selection-change="handleEditorSelectionChange"
                       @update:model-value="updateMarkdown"
                       @wiki-link-activate="handleEditorWikiLinkActivate"
@@ -518,11 +519,15 @@
         </div>
         <div
           v-if="desktopTabMenu.open"
+          ref="desktopTabMenuRef"
           class="term-context-menu"
+          role="menu"
+          tabindex="-1"
           :style="{ left: `${desktopTabMenu.x}px`, top: `${desktopTabMenu.y}px` }"
           @mousedown.stop
+          @keydown="onTermContextMenuKeydown($event, 'desktop-tab')"
         >
-          <button type="button" class="term-context-item" @click="openDesktopRenameDialog(desktopTabMenu.sid)">
+          <button type="button" class="term-context-item" role="menuitem" @click="openDesktopRenameDialog(desktopTabMenu.sid)">
             重命名
           </button>
         </div>
@@ -856,43 +861,20 @@
 
     <div
       v-if="storageNodeMenu.open"
+      ref="storageNodeMenuRef"
       class="term-context-menu"
+      role="menu"
+      tabindex="-1"
       :style="{ left: `${storageNodeMenu.x}px`, top: `${storageNodeMenu.y}px` }"
       @mousedown.stop
+      @keydown="onTermContextMenuKeydown($event, 'storage-node')"
     >
-      <button type="button" class="term-context-item" @click="openStorageRenameDialog(storageNodeMenu.nodeId)">
+      <button type="button" class="term-context-item" role="menuitem" @click="openStorageRenameDialog(storageNodeMenu.nodeId)">
         重命名
       </button>
-      <button type="button" class="term-context-item is-danger" @click="deleteStorageNode(storageNodeMenu.nodeId)">
+      <button type="button" class="term-context-item is-danger" role="menuitem" @click="deleteStorageNode(storageNodeMenu.nodeId)">
         删除
       </button>
-    </div>
-
-    <div
-      v-if="wikiLinkMenu.open"
-      class="term-context-menu"
-      :style="{ left: `${wikiLinkMenu.x}px`, top: `${wikiLinkMenu.y}px` }"
-      @mousedown.stop
-    >
-      <div class="px-3 py-2 text-[11px] border-b" :class="isDark ? 'border-slate-800 text-slate-400' : 'border-gray-100 text-gray-500'">
-        {{ wikiLinkMenuLabel }}
-      </div>
-      <template v-if="wikiLinkMenu.resolution?.ambiguous">
-        <button
-          v-for="candidate in wikiLinkMenuCandidates"
-          :key="candidate"
-          type="button"
-          class="term-context-item"
-          @click="openWikiLinkCandidate(candidate)"
-        >
-          打开 {{ candidate }}
-        </button>
-      </template>
-      <template v-else-if="wikiLinkMenu.resolution && !wikiLinkMenu.resolution.exists">
-        <button type="button" class="term-context-item" @click="handleWikiLinkCreateFromMenu">
-          创建 {{ wikiLinkMenu.resolution.suggestedRelPath || wikiLinkMenu.match?.parsed?.target || "新文档" }}
-        </button>
-      </template>
     </div>
 
     <div v-if="desktopRenameDialog.open" class="term-rename-mask" @mousedown.self="cancelDesktopRenameDialog">
@@ -1122,25 +1104,200 @@ const storageRenameDialog = ref({
   kind: "file"
 });
 const storageRenameInputRef = ref(null);
-const wikiLinkMenu = ref({
-  open: false,
-  x: 0,
-  y: 0,
-  match: null,
-  resolution: null
-});
+const storageNodeMenuRef = ref(null);
 const desktopTabMenu = ref({
   open: false,
   x: 0,
   y: 0,
   sid: ""
 });
+const desktopTabMenuRef = ref(null);
 const desktopRenameDialog = ref({
   open: false,
   sid: "",
   value: ""
 });
 const desktopRenameInputRef = ref(null);
+const TERM_CONTEXT_ITEM_SELECTOR = ".term-context-item:not(:disabled)";
+
+const getTermContextMenuItems = (menuEl) => (
+  menuEl instanceof HTMLElement
+    ? Array.from(menuEl.querySelectorAll(TERM_CONTEXT_ITEM_SELECTOR))
+        .filter((item) => item instanceof HTMLButtonElement)
+    : []
+);
+
+const focusTermContextMenuItem = (menuEl, indexInput = 0) => {
+  const items = getTermContextMenuItems(menuEl);
+  if (!items.length) {
+    return false;
+  }
+  const length = items.length;
+  const rawIndex = Number(indexInput);
+  const normalizedIndex = Number.isFinite(rawIndex)
+    ? ((Math.round(rawIndex) % length) + length) % length
+    : 0;
+  const target = items[normalizedIndex];
+  target.focus();
+  if (typeof target.scrollIntoView === "function") {
+    target.scrollIntoView({
+      block: "nearest"
+    });
+  }
+  return true;
+};
+
+const moveTermContextMenuFocus = (menuEl, delta) => {
+  const items = getTermContextMenuItems(menuEl);
+  if (!items.length) {
+    return false;
+  }
+  const activeIndex = items.findIndex((item) => item === document.activeElement);
+  const startIndex = activeIndex >= 0 ? activeIndex : (delta < 0 ? 0 : -1);
+  return focusTermContextMenuItem(menuEl, startIndex + delta);
+};
+
+const closeTermContextMenuByType = (menuType = "") => {
+  if (menuType === "desktop-tab") {
+    closeDesktopTabContextMenu();
+    return;
+  }
+  if (menuType === "storage-node") {
+    closeStorageNodeContextMenu();
+  }
+};
+
+const getOpenTermContextMenuState = () => {
+  if (storageNodeMenu.value.open && storageNodeMenuRef.value instanceof HTMLElement) {
+    return {
+      type: "storage-node",
+      menuEl: storageNodeMenuRef.value
+    };
+  }
+  if (desktopTabMenu.value.open && desktopTabMenuRef.value instanceof HTMLElement) {
+    return {
+      type: "desktop-tab",
+      menuEl: desktopTabMenuRef.value
+    };
+  }
+  return null;
+};
+
+const getActiveTermContextMenuItem = (menuEl) => {
+  const active = document.activeElement;
+  if (active instanceof HTMLButtonElement && menuEl?.contains(active) && !active.disabled) {
+    return active;
+  }
+  const items = getTermContextMenuItems(menuEl);
+  return items[0] || null;
+};
+
+const activateTermContextMenuItem = (menuEl) => {
+  const target = getActiveTermContextMenuItem(menuEl);
+  if (!target) {
+    return false;
+  }
+  target.click();
+  return true;
+};
+
+const onGlobalTermContextMenuKeydown = (event) => {
+  const state = getOpenTermContextMenuState();
+  if (!state) {
+    return;
+  }
+
+  const { menuEl, type } = state;
+
+  if (event.key === "ArrowDown") {
+    event.preventDefault();
+    event.stopPropagation();
+    moveTermContextMenuFocus(menuEl, 1);
+    return;
+  }
+
+  if (event.key === "ArrowUp") {
+    event.preventDefault();
+    event.stopPropagation();
+    moveTermContextMenuFocus(menuEl, -1);
+    return;
+  }
+
+  if (event.key === "Home") {
+    event.preventDefault();
+    event.stopPropagation();
+    focusTermContextMenuItem(menuEl, 0);
+    return;
+  }
+
+  if (event.key === "End") {
+    event.preventDefault();
+    event.stopPropagation();
+    const items = getTermContextMenuItems(menuEl);
+    if (items.length) {
+      focusTermContextMenuItem(menuEl, items.length - 1);
+    }
+    return;
+  }
+
+  if (event.key === "Enter" || event.key === "Tab" || event.key === " ") {
+    event.preventDefault();
+    event.stopPropagation();
+    activateTermContextMenuItem(menuEl);
+    return;
+  }
+
+  if (event.key === "Escape") {
+    event.preventDefault();
+    event.stopPropagation();
+    closeTermContextMenuByType(type);
+  }
+};
+
+const onTermContextMenuKeydown = (event, menuType = "") => {
+  const menuEl = event.currentTarget instanceof HTMLElement ? event.currentTarget : null;
+  if (!menuEl) {
+    return;
+  }
+
+  if (event.key === "ArrowDown") {
+    event.preventDefault();
+    event.stopPropagation();
+    moveTermContextMenuFocus(menuEl, 1);
+    return;
+  }
+
+  if (event.key === "ArrowUp") {
+    event.preventDefault();
+    event.stopPropagation();
+    moveTermContextMenuFocus(menuEl, -1);
+    return;
+  }
+
+  if (event.key === "Home") {
+    event.preventDefault();
+    event.stopPropagation();
+    focusTermContextMenuItem(menuEl, 0);
+    return;
+  }
+
+  if (event.key === "End") {
+    event.preventDefault();
+    event.stopPropagation();
+    const items = getTermContextMenuItems(menuEl);
+    if (items.length) {
+      focusTermContextMenuItem(menuEl, items.length - 1);
+    }
+    return;
+  }
+
+  if (event.key === "Escape") {
+    event.preventDefault();
+    event.stopPropagation();
+    closeTermContextMenuByType(menuType);
+  }
+};
+
 const desktopSessionBuffers = new Map();
 const desktopWindowBridge = typeof window !== "undefined" ? window.desktopWindow : null;
 const desktopPtyBridge = typeof window !== "undefined" ? window.desktopPty : null;
@@ -1823,6 +1980,36 @@ const loadDesktopStorageTree = async ({ preferredNodeId = "", preferredMarkdownR
   }
 };
 
+const refreshDesktopStorageTreeSnapshot = async ({ preferredNodeId = "" } = {}) => {
+  if (!isDesktopStorage) {
+    return false;
+  }
+
+  const rootResult = await desktopDataBridge.getWorkspaceRoot();
+  if (rootResult?.ok && rootResult.rootPath) {
+    storageRootPath.value = String(rootResult.rootPath);
+  }
+
+  const treeResult = await desktopDataBridge.readWorkspaceTree();
+  if (!(treeResult?.ok && treeResult.tree)) {
+    throw new Error(String(treeResult?.error || "read_tree_failed"));
+  }
+
+  storageTree.value = normalizeDesktopStorageNode(treeResult.tree, true);
+  if (treeResult.rootPath) {
+    storageRootPath.value = String(treeResult.rootPath);
+  }
+
+  const preferredId = String(preferredNodeId || "").trim();
+  if (preferredId && findStorageNodeInTree(storageTree.value, preferredId)) {
+    selectedStorageNodeId.value = preferredId;
+  } else {
+    ensureSelectedStorageNodeValid();
+  }
+
+  return true;
+};
+
 const findStorageNodeInTree = (node, targetId, parentId = "") => {
   if (!node || !targetId) {
     return null;
@@ -2032,6 +2219,80 @@ const findStorageNodeByRelPath = (node, relPathInput, parentIds = []) => {
     }
   }
   return null;
+};
+
+const createWikiLinkFileByRelPath = async (relPathInput = "") => {
+  const normalizedRelPath = normalizeRelPath(ensureMarkdownExtension(relPathInput));
+  if (!normalizedRelPath) {
+    showToast("创建文件失败");
+    return false;
+  }
+
+  const existing = findStorageNodeByRelPath(storageTree.value, normalizedRelPath);
+  if (existing?.node) {
+    return true;
+  }
+
+  const parentRelPath = dirnameOfRelPath(normalizedRelPath);
+  const fileName = basenameOfRelPath(normalizedRelPath);
+  if (!fileName) {
+    showToast("创建文件失败");
+    return false;
+  }
+
+  if (isDesktopStorage) {
+    try {
+      const result = await desktopDataBridge.createWorkspaceFile({
+        parentRelPath,
+        name: fileName
+      });
+      if (!result?.ok) {
+        throw new Error(String(result?.error || "create_file_failed"));
+      }
+      await refreshDesktopStorageTreeSnapshot({
+        preferredNodeId: String(selectedStorageNodeId.value || "")
+      });
+    } catch (error) {
+      showToast(`创建文件失败: ${String(error?.message || error || "unknown_error")}`);
+      return false;
+    }
+  } else {
+    const parentMatch = parentRelPath
+      ? findStorageNodeByRelPath(storageTree.value, parentRelPath)
+      : { node: storageTree.value, parentIds: [] };
+    if (!parentMatch?.node || parentMatch.node.type !== "folder") {
+      showToast(`创建文件失败: 找不到目录 ${parentRelPath || "/"}`);
+      return false;
+    }
+
+    const fileNode = {
+      id: normalizedRelPath,
+      type: "file",
+      name: fileName,
+      relPath: normalizedRelPath,
+      absPath: "",
+      size: 0,
+      children: []
+    };
+    if (!createStorageNodeAt(String(parentMatch.node.id || STORAGE_ROOT_ID), fileNode)) {
+      showToast("创建文件失败");
+      return false;
+    }
+    storageFolderExpandedMap.value = {
+      ...storageFolderExpandedMap.value,
+      [String(parentMatch.node.id || STORAGE_ROOT_ID)]: true
+    };
+    persistStorageState();
+  }
+
+  const created = findStorageNodeByRelPath(storageTree.value, normalizedRelPath);
+  if (created?.parentIds?.length) {
+    expandStorageAncestors(created.parentIds);
+  }
+  showToast(`已创建文件: ${fileName}`);
+  await nextTick();
+  markdownEditorRef.value?.refreshWikiLinks?.();
+  return true;
 };
 
 const collectMarkdownNodesFromTree = (node, output = []) => {
@@ -2525,26 +2786,6 @@ const deleteStorageNode = async (nodeId) => {
   showToast(`已删除${targetLabel}: ${matched.node.name}`);
 };
 
-const wikiLinkMenuCandidates = computed(() =>
-  Array.isArray(wikiLinkMenu.value?.resolution?.candidates)
-    ? wikiLinkMenu.value.resolution.candidates
-    : []
-);
-
-const wikiLinkMenuLabel = computed(() => {
-  const resolution = wikiLinkMenu.value?.resolution;
-  if (!resolution) {
-    return "";
-  }
-  if (resolution.ambiguous) {
-    return "存在多个同名文档";
-  }
-  if (!resolution.exists) {
-    return "目标文档不存在";
-  }
-  return resolution.relPath || "";
-});
-
 const currentBacklinks = computed(() => {
   const relPath = normalizeRelPath(activeMarkdownRelPath.value);
   if (!relPath) {
@@ -2557,29 +2798,6 @@ const currentBacklinks = computed(() => {
     || (Number(left?.rawFrom || 0) - Number(right?.rawFrom || 0))
   );
 });
-
-const closeWikiLinkMenu = () => {
-  if (!wikiLinkMenu.value.open) {
-    return;
-  }
-  wikiLinkMenu.value = {
-    open: false,
-    x: 0,
-    y: 0,
-    match: null,
-    resolution: null
-  };
-};
-
-const openWikiLinkMenuAt = (x, y, { match = null, resolution = null } = {}) => {
-  wikiLinkMenu.value = {
-    open: true,
-    x: Number(x || 0),
-    y: Number(y || 0),
-    match,
-    resolution
-  };
-};
 
 const expandStorageAncestors = (ids = []) => {
   const nextMap = { ...storageFolderExpandedMap.value };
@@ -2749,92 +2967,41 @@ const openWikiLinkResolved = async (resolutionInput = {}) => {
   if (!resolution.exists || !resolution.relPath) {
     return false;
   }
-  closeWikiLinkMenu();
   return openMarkdownFileByRelPath(resolution.relPath, {
     anchor: String(resolution.anchor || "")
   });
 };
 
-const createNoteFromWikiLink = async (resolutionInput = {}, parsedInput = null) => {
-  const resolution = resolutionInput && typeof resolutionInput === "object" ? resolutionInput : {};
-  const parsed = parsedInput && typeof parsedInput === "object" ? parsedInput : {};
-  const target = String(parsed.target || resolution.target || "").trim();
-  const suggestedRelPath = normalizeRelPath(
-    resolution.suggestedRelPath || suggestRelPathForMissing(target, activeMarkdownRelPath.value)
-  );
-
-  if (!suggestedRelPath) {
-    return "";
-  }
-  if (!(desktopDataBridge?.createWorkspaceFile && desktopDataBridge?.writeWorkspaceFile)) {
-    showToast("当前环境不支持一键创建链接文档");
-    return "";
-  }
-
-  try {
-    const created = await desktopDataBridge.createWorkspaceFile({
-      parentRelPath: dirnameOfRelPath(suggestedRelPath),
-      name: basenameOfRelPath(suggestedRelPath)
-    });
-    if (!created?.ok) {
-      throw new Error(String(created?.error || "create_workspace_file_failed"));
-    }
-    const createdRelPath = normalizeRelPath(created.relPath || suggestedRelPath);
-    const noteTitle = stripMarkdownExtension(basenameOfRelPath(createdRelPath)) || target || "Untitled";
-    const writeResult = await desktopDataBridge.writeWorkspaceFile({
-      relPath: createdRelPath,
-      content: `# ${noteTitle}\n`
-    });
-    if (!writeResult?.ok) {
-      throw new Error(String(writeResult?.error || "write_workspace_file_failed"));
-    }
-    await loadDesktopStorageTree({
-      preferredNodeId: createdRelPath,
-      preferredMarkdownRelPath: createdRelPath
-    });
-    scheduleWikiLinkIndexRebuild();
-    showToast(`已创建文档: ${createdRelPath}`);
-    return createdRelPath;
-  } catch (error) {
-    showToast(`创建文档失败: ${String(error?.message || error || "unknown_error")}`);
-    return "";
-  }
-};
-
-const openWikiLinkCandidate = async (candidateRelPath) => {
-  const anchor = String(wikiLinkMenu.value?.match?.parsed?.anchor || wikiLinkMenu.value?.resolution?.anchor || "");
-  closeWikiLinkMenu();
-  await openMarkdownFileByRelPath(candidateRelPath, { anchor });
-};
-
-const handleWikiLinkCreateFromMenu = async () => {
-  const resolution = wikiLinkMenu.value?.resolution;
-  const match = wikiLinkMenu.value?.match;
-  closeWikiLinkMenu();
-  const createdRelPath = await createNoteFromWikiLink(resolution, match?.parsed);
-  if (!createdRelPath) {
-    return;
-  }
-  await openMarkdownFileByRelPath(createdRelPath, {
-    anchor: String(match?.parsed?.anchor || resolution?.anchor || "")
-  });
-};
-
-const handleWikiLinkActivate = async ({ clientX = 0, clientY = 0, match = null, resolution = null } = {}) => {
+const handleWikiLinkActivate = async ({ match = null, resolution = null } = {}) => {
   const parsed = match?.parsed || {};
   const latestResolution = resolveWikiLink(parsed, activeMarkdownRelPath.value, workspaceMarkdownFiles.value);
   if (latestResolution.exists && latestResolution.relPath) {
     await openWikiLinkResolved(latestResolution);
     return;
   }
-  openWikiLinkMenuAt(clientX, clientY, {
-    match,
-    resolution: latestResolution || resolution
-  });
+  if (latestResolution?.ambiguous) {
+    showToast("Wiki Link 匹配到多个文档，请把链接写得更明确一些");
+    return;
+  }
+  const missingTarget = String(
+    latestResolution?.suggestedRelPath
+    || parsed.target
+    || resolution?.suggestedRelPath
+    || "目标文档"
+  );
+  showToast(`Wiki Link 未找到: ${missingTarget}`);
 };
 
 const handleEditorWikiLinkActivate = (payload) => {
   void handleWikiLinkActivate(payload);
+};
+
+const handleWikiLinkSuggestionSelect = async ({ item = null } = {}) => {
+  if (String(item?.action || "") !== "create-note") {
+    return false;
+  }
+  const relPath = String(item?.createRelPath || item?.detail || item?.insertText || "");
+  return createWikiLinkFileByRelPath(relPath);
 };
 
 const getWikiLinkSuggestions = ({ mode = "file", noteQuery = "", headingQuery = "" } = {}) => {
@@ -2921,7 +3088,9 @@ const getWikiLinkSuggestions = ({ mode = "file", noteQuery = "", headingQuery = 
       label: `创建 ${rawTarget}`,
       detail: suggestRelPathForMissing(rawTarget, activeMarkdownRelPath.value),
       insertText: rawTarget,
-      tone: "warning"
+      tone: "warning",
+      action: "create-note",
+      createRelPath: suggestRelPathForMissing(rawTarget, activeMarkdownRelPath.value)
     });
   }
 
@@ -4626,7 +4795,6 @@ const onGlobalPointerDown = (event) => {
   }
   closeDesktopTabContextMenu();
   closeStorageNodeContextMenu();
-  closeWikiLinkMenu();
 };
 
 const onGlobalKeyup = (event) => {
@@ -4637,6 +4805,7 @@ const onGlobalKeyup = (event) => {
 };
 
 onMounted(() => {
+  window.addEventListener("keydown", onGlobalTermContextMenuKeydown, true);
   window.addEventListener("keydown", onKeydown);
   window.addEventListener("keyup", onGlobalKeyup, true);
   window.addEventListener("mousedown", onGlobalPointerDown, true);
@@ -4644,7 +4813,6 @@ onMounted(() => {
   window.addEventListener("focus", clearBodyInteractionStyles);
   window.addEventListener("blur", closeDesktopTabContextMenu);
   window.addEventListener("blur", closeStorageNodeContextMenu);
-  window.addEventListener("blur", closeWikiLinkMenu);
   window.addEventListener("blur", releasePasteShortcutLocks);
   window.addEventListener("resize", refreshContentProgress);
   if (isDesktopStorage) {
@@ -4675,7 +4843,6 @@ onBeforeUnmount(() => {
   releaseTransientPointerState({ syncTerminal: false });
   cancelDesktopRenameDialog();
   cancelStorageRenameDialog();
-  closeWikiLinkMenu();
   if (wikiLinkIndexTimer) {
     clearTimeout(wikiLinkIndexTimer);
     wikiLinkIndexTimer = null;
@@ -4689,6 +4856,7 @@ onBeforeUnmount(() => {
     clearTimeout(terminalResizeSyncTimer);
     terminalResizeSyncTimer = null;
   }
+  window.removeEventListener("keydown", onGlobalTermContextMenuKeydown, true);
   window.removeEventListener("keydown", onKeydown);
   window.removeEventListener("keyup", onGlobalKeyup, true);
   window.removeEventListener("mousedown", onGlobalPointerDown, true);
@@ -4696,7 +4864,6 @@ onBeforeUnmount(() => {
   window.removeEventListener("focus", clearBodyInteractionStyles);
   window.removeEventListener("blur", closeDesktopTabContextMenu);
   window.removeEventListener("blur", closeStorageNodeContextMenu);
-  window.removeEventListener("blur", closeWikiLinkMenu);
   window.removeEventListener("blur", releasePasteShortcutLocks);
   window.removeEventListener("resize", refreshContentProgress);
   if (desktopWindowMaximizeOff) {

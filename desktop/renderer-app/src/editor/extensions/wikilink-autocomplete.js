@@ -1,4 +1,5 @@
-import { EditorView, ViewPlugin } from "@codemirror/view";
+import { Prec } from "@codemirror/state";
+import { EditorView, ViewPlugin, keymap } from "@codemirror/view";
 import { findOpenWikiLinkContext } from "../../utils/wiki-link";
 
 const MAX_ITEMS = 8;
@@ -12,7 +13,9 @@ const normalizeItems = (itemsInput = []) =>
       label: String(item.label || item.insertText || ""),
       detail: String(item.detail || ""),
       insertText: String(item.insertText || ""),
-      tone: String(item.tone || "default")
+      tone: String(item.tone || "default"),
+      action: String(item.action || ""),
+      createRelPath: String(item.createRelPath || "")
     }));
 
 const detectWikiLinkAutocompleteContext = (state) => {
@@ -39,9 +42,38 @@ const detectWikiLinkAutocompleteContext = (state) => {
 };
 
 export const createWikiLinkAutocompleteExtension = ({
-  getSuggestions
+  getSuggestions,
+  onSelectSuggestion = null
 } = {}) => {
   let autocompletePlugin = null;
+
+  const getAutocompletePlugin = (view) => view.plugin(autocompletePlugin);
+
+  const handleAutocompleteKeydown = (view, event) => {
+    const plugin = getAutocompletePlugin(view);
+    if (!plugin || !plugin.context || !plugin.items.length) {
+      return false;
+    }
+
+    if (event.key === "ArrowDown") {
+      event.preventDefault();
+      return plugin.moveSelection(1);
+    }
+    if (event.key === "ArrowUp") {
+      event.preventDefault();
+      return plugin.moveSelection(-1);
+    }
+    if (event.key === "Enter" || event.key === "Tab") {
+      event.preventDefault();
+      return plugin.applySelection();
+    }
+    if (event.key === "Escape") {
+      event.preventDefault();
+      plugin.close();
+      return true;
+    }
+    return false;
+  };
 
   autocompletePlugin = ViewPlugin.fromClass(class {
     constructor(view) {
@@ -101,6 +133,7 @@ export const createWikiLinkAutocompleteExtension = ({
 
       const index = Math.max(0, Math.min(this.items.length - 1, Number(indexInput || 0)));
       const item = this.items[index];
+      const contextSnapshot = this.context ? { ...this.context } : null;
       const doc = this.view.state.doc;
       const hasClosing = doc.sliceString(this.context.to, Math.min(doc.length, this.context.to + 2)) === "]]";
       const insert = hasClosing ? item.insertText : `${item.insertText}]]`;
@@ -120,6 +153,12 @@ export const createWikiLinkAutocompleteExtension = ({
       });
 
       this.close();
+      if (typeof onSelectSuggestion === "function") {
+        void Promise.resolve(onSelectSuggestion({
+          item,
+          context: contextSnapshot
+        })).catch(() => {});
+      }
       return true;
     }
 
@@ -141,6 +180,16 @@ export const createWikiLinkAutocompleteExtension = ({
 
       const context = detectWikiLinkAutocompleteContext(this.view.state);
       if (!context || typeof getSuggestions !== "function") {
+        this.close();
+        return;
+      }
+
+      const lineText = String(this.view.state.doc.lineAt(context.to).text || "");
+      const closingOffset = lineText.indexOf("]]", context.replaceFrom);
+      const fullQuery = closingOffset >= 0
+        ? lineText.slice(context.replaceFrom, closingOffset)
+        : context.query;
+      if (closingOffset >= 0 && fullQuery.trim()) {
         this.close();
         return;
       }
@@ -213,37 +262,41 @@ export const createWikiLinkAutocompleteExtension = ({
   }, {
     eventHandlers: {
       keydown(event, view) {
-        const plugin = view.plugin(autocompletePlugin);
-        if (!plugin || !plugin.context || !plugin.items.length) {
-          return false;
-        }
-
-        if (event.key === "ArrowDown") {
-          event.preventDefault();
-          return plugin.moveSelection(1);
-        }
-        if (event.key === "ArrowUp") {
-          event.preventDefault();
-          return plugin.moveSelection(-1);
-        }
-        if (event.key === "Enter" || event.key === "Tab") {
-          event.preventDefault();
-          return plugin.applySelection();
-        }
-        if (event.key === "Escape") {
-          event.preventDefault();
-          plugin.close();
-          return true;
-        }
-        return false;
+        return handleAutocompleteKeydown(view, event);
       },
       blur(_event, view) {
-        const plugin = view.plugin(autocompletePlugin);
+        const plugin = getAutocompletePlugin(view);
         plugin?.close();
         return false;
       }
     }
   });
 
-  return autocompletePlugin;
+  return [
+    autocompletePlugin,
+    Prec.highest(
+      keymap.of([
+        {
+          key: "ArrowDown",
+          run: (view) => handleAutocompleteKeydown(view, { key: "ArrowDown", preventDefault() {} })
+        },
+        {
+          key: "ArrowUp",
+          run: (view) => handleAutocompleteKeydown(view, { key: "ArrowUp", preventDefault() {} })
+        },
+        {
+          key: "Enter",
+          run: (view) => handleAutocompleteKeydown(view, { key: "Enter", preventDefault() {} })
+        },
+        {
+          key: "Tab",
+          run: (view) => handleAutocompleteKeydown(view, { key: "Tab", preventDefault() {} })
+        },
+        {
+          key: "Escape",
+          run: (view) => handleAutocompleteKeydown(view, { key: "Escape", preventDefault() {} })
+        }
+      ])
+    )
+  ];
 };
