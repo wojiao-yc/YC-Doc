@@ -9,6 +9,14 @@ const WIKI_LINK_MENU_HINTS = [
   { token: "|", text: "指定显示的文本" }
 ];
 
+const escapeHtml = (valueInput = "") =>
+  String(valueInput || "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+
 const normalizeItems = (itemsInput = []) =>
   (Array.isArray(itemsInput) ? itemsInput : [])
     .filter((item) => item && typeof item === "object" && item.insertText)
@@ -17,11 +25,46 @@ const normalizeItems = (itemsInput = []) =>
       id: String(item.id || `wikilink-item-${index}`),
       label: String(item.label || item.insertText || ""),
       detail: String(item.detail || ""),
+      meta: String(item.meta || ""),
       insertText: String(item.insertText || ""),
       tone: String(item.tone || "default"),
       action: String(item.action || ""),
-      createRelPath: String(item.createRelPath || "")
+      createRelPath: String(item.createRelPath || ""),
+      layout: String(item.layout || "default")
     }));
+
+const renderAutocompleteItemHtml = (item) => {
+  const label = escapeHtml(item?.label || "");
+  const detail = escapeHtml(item?.detail || "");
+  const meta = escapeHtml(item?.meta || "");
+
+  if (String(item?.layout || "") === "preview") {
+    return [
+      '<span class="yc-wikilink-autocomplete-main-row">',
+      `<span class="yc-wikilink-autocomplete-label">${label}</span>`,
+      meta ? `<span class="yc-wikilink-autocomplete-meta">${meta}</span>` : "",
+      "</span>",
+      detail ? `<span class="yc-wikilink-autocomplete-detail">${detail}</span>` : ""
+    ].join("");
+  }
+
+  if (detail) {
+    return `<span class="yc-wikilink-autocomplete-label">${label}</span><span class="yc-wikilink-autocomplete-detail">${detail}</span>`;
+  }
+  return `<span class="yc-wikilink-autocomplete-label">${label}</span>`;
+};
+
+const shouldShowFileSuggestionsForContext = ({ context = null, trigger = null } = {}) => {
+  if (!context || context.mode !== "file") {
+    return true;
+  }
+
+  if (!String(context.noteQuery || "").trim()) {
+    return true;
+  }
+
+  return Boolean(trigger?.docChanged);
+};
 
 const detectWikiLinkAutocompleteContext = (state) => {
   const selection = state?.selection?.main;
@@ -91,14 +134,17 @@ export const createWikiLinkAutocompleteExtension = ({
       this.panel.className = "yc-wikilink-autocomplete";
       this.panel.style.display = "none";
       document.body.appendChild(this.panel);
-      this.updatePanel(true);
+      this.updatePanel({ forceResetSelection: true });
     }
 
     update(update) {
       if (!(update.docChanged || update.selectionSet || update.focusChanged)) {
         return;
       }
-      this.updatePanel(false);
+      this.updatePanel({
+        forceResetSelection: false,
+        trigger: update
+      });
     }
 
     destroy() {
@@ -177,7 +223,7 @@ export const createWikiLinkAutocompleteExtension = ({
       return true;
     }
 
-    updatePanel(forceResetSelection) {
+    updatePanel({ forceResetSelection = false, trigger = null } = {}) {
       if (!this.view.hasFocus) {
         this.close();
         return;
@@ -188,13 +234,7 @@ export const createWikiLinkAutocompleteExtension = ({
         this.close();
         return;
       }
-
-      const lineText = String(this.view.state.doc.lineAt(context.to).text || "");
-      const closingOffset = lineText.indexOf("]]", context.replaceFrom);
-      const fullQuery = closingOffset >= 0
-        ? lineText.slice(context.replaceFrom, closingOffset)
-        : context.query;
-      if (closingOffset >= 0 && fullQuery.trim()) {
+      if (!shouldShowFileSuggestionsForContext({ context, trigger })) {
         this.close();
         return;
       }
@@ -254,9 +294,7 @@ export const createWikiLinkAutocompleteExtension = ({
         const button = document.createElement("button");
         button.type = "button";
         button.className = `yc-wikilink-autocomplete-item ${index === this.selectedIndex ? "is-active" : ""} ${item.tone ? `is-${item.tone}` : ""}`.trim();
-        button.innerHTML = item.detail
-          ? `<span class="yc-wikilink-autocomplete-label">${item.label}</span><span class="yc-wikilink-autocomplete-detail">${item.detail}</span>`
-          : `<span class="yc-wikilink-autocomplete-label">${item.label}</span>`;
+        button.innerHTML = renderAutocompleteItemHtml(item);
         button.addEventListener("mousedown", (event) => {
           event.preventDefault();
           event.stopPropagation();
@@ -269,7 +307,7 @@ export const createWikiLinkAutocompleteExtension = ({
       footer.className = "yc-wikilink-autocomplete-footer";
       footer.innerHTML = WIKI_LINK_MENU_HINTS
         .map((hint) =>
-          `<div class="yc-wikilink-autocomplete-hint"><span class="yc-wikilink-autocomplete-hint-token">${hint.token}</span><span class="yc-wikilink-autocomplete-hint-text">${hint.text}</span></div>`
+          `<div class="yc-wikilink-autocomplete-hint"><span class="yc-wikilink-autocomplete-hint-token">${escapeHtml(hint.token)}</span><span class="yc-wikilink-autocomplete-hint-text">${escapeHtml(hint.text)}</span></div>`
         )
         .join("");
       this.panel.appendChild(footer);

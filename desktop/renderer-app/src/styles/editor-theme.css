@@ -323,6 +323,24 @@
   line-height: 1.25;
 }
 
+.yc-wikilink-autocomplete-main-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.yc-wikilink-autocomplete-meta {
+  flex: 0 0 auto;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1;
+  color: #6b7280;
+  background: rgba(148, 163, 184, 0.16);
+  border-radius: 999px;
+  padding: 4px 8px;
+}
+
 .yc-wikilink-autocomplete-detail {
   font-size: 11px;
   line-height: 1.35;
@@ -331,6 +349,11 @@
 
 .yc-wikilink-autocomplete.is-dark .yc-wikilink-autocomplete-detail {
   color: #94a3b8;
+}
+
+.yc-wikilink-autocomplete.is-dark .yc-wikilink-autocomplete-meta {
+  color: #cbd5e1;
+  background: rgba(71, 85, 105, 0.5);
 }
 
 .yc-wikilink-autocomplete-footer {

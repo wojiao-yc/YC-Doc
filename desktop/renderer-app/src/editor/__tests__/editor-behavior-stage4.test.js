@@ -159,7 +159,12 @@ test("keyboard activation and special-block navigation are wired through the edi
   assert.match(linkEvents, /source:\s*"editor-keyboard"/);
   assert.match(linkEvents, /event\.key !== "Enter"/);
   assert.match(autocomplete, /WIKI_LINK_MENU_HINTS/);
+  assert.match(autocomplete, /renderAutocompleteItemHtml/);
+  assert.match(autocomplete, /shouldShowFileSuggestionsForContext/);
+  assert.match(autocomplete, /Boolean\(trigger\?\.docChanged\)/);
+  assert.match(autocomplete, /yc-wikilink-autocomplete-meta/);
   assert.match(autocomplete, /yc-wikilink-autocomplete-footer/);
+  assert.doesNotMatch(autocomplete, /fullQuery\.trim/);
   assert.match(presentation, /handleSpecialBlockVerticalNavigation/);
   assert.match(presentation, /focusTableBlockCellEditor/);
   assert.match(presentation, /isPlainTableVerticalArrowEvent/);

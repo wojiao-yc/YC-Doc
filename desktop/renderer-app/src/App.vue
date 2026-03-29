@@ -930,10 +930,14 @@ import { useResizable } from "./composables/useResizable";
 import { useSteps } from "./composables/useSteps";
 import { useTerminal } from "./composables/useTerminal";
 import { useToast } from "./composables/useToast";
-import { parseMarkdownToBlocks } from "./editor/parser/parse-blocks.js";
 import { extractHeadingsFromMarkdown, findHeadingMatch, slugifyHeading } from "./utils/heading-slug";
 import { renderMarkdownToHtml } from "./utils/render-markdown";
 import { buildWikiLinkIndex } from "./utils/wiki-link-index";
+import {
+  collectWikiLinkTextBlocks,
+  findWikiLinkTextBlockByReference,
+  normalizeWikiLinkBlockText
+} from "./utils/wiki-link-text-blocks.js";
 import {
   basenameOfRelPath,
   dirnameOfRelPath,
@@ -2828,34 +2832,6 @@ const getMarkdownForRelPath = (relPathInput = "") => {
   return String(wikiLinkIndexState.value?.contentsByPath?.[relPath] || "");
 };
 
-const WIKI_LINK_NON_HEADING_BLOCK_TYPES = new Set([
-  "paragraph",
-  "bullet_list_item",
-  "ordered_list_item",
-  "task_list_item",
-  "blockquote",
-  "code_block",
-  "math_block",
-  "image",
-  "table",
-  "html_block"
-]);
-
-const normalizeWikiLinkBlockText = (valueInput = "") =>
-  String(valueInput || "")
-    .replace(/\s+/g, " ")
-    .trim();
-
-const wikiLinkBlockInsertTextOf = (block) => normalizeWikiLinkBlockText(block?.rawText || "");
-
-const wikiLinkBlockLabelOf = (block) => {
-  const text = wikiLinkBlockInsertTextOf(block);
-  if (!text) {
-    return "";
-  }
-  return text.length > 72 ? `${text.slice(0, 72).trim()}...` : text;
-};
-
 const getNoteHeadingsForRelPath = (relPathInput = "") => {
   const relPath = normalizeRelPath(relPathInput);
   if (!relPath) {
@@ -2874,39 +2850,9 @@ const getNoteTextBlocksForRelPath = (relPathInput = "", { anchor = "" } = {}) =>
     return [];
   }
 
-  const markdown = getMarkdownForRelPath(relPath);
-  if (!markdown) {
-    return [];
-  }
-
-  const blocks = parseMarkdownToBlocks(markdown).filter((block) =>
-    WIKI_LINK_NON_HEADING_BLOCK_TYPES.has(String(block?.type || ""))
-    && normalizeWikiLinkBlockText(block?.rawText).length > 0
-  );
-
-  const normalizedAnchor = String(anchor || "").trim();
-  if (!normalizedAnchor) {
-    return blocks;
-  }
-
-  const headings = getNoteHeadingsForRelPath(relPath);
-  const headingMatch = findHeadingMatch(headings, normalizedAnchor);
-  if (!headingMatch) {
-    return [];
-  }
-
-  const nextHeading = headings.find((heading) =>
-    Number(heading?.from || 0) > Number(headingMatch.from || 0)
-    && Number(heading?.level || 7) <= Number(headingMatch.level || 7)
-  );
-  const scopeFrom = Math.max(0, Number(headingMatch.to || headingMatch.from || 0));
-  const scopeTo = nextHeading
-    ? Math.max(scopeFrom, Number(nextHeading.from || markdown.length))
-    : markdown.length;
-
-  return blocks.filter((block) => {
-    const from = Number(block?.from || 0);
-    return from >= scopeFrom && from < scopeTo;
+  return collectWikiLinkTextBlocks(getMarkdownForRelPath(relPath), {
+    headings: getNoteHeadingsForRelPath(relPath),
+    anchor
   });
 };
 
@@ -2920,29 +2866,11 @@ const findNoteTextBlockTarget = ({
     return null;
   }
 
-  const ranked = getNoteTextBlocksForRelPath(relPath, { anchor })
-    .map((block) => {
-      const normalizedText = wikiLinkBlockInsertTextOf(block).toLowerCase();
-      let score = 0;
-      if (normalizedText === normalizedBlockRef) {
-        score = 3;
-      } else if (normalizedText.startsWith(normalizedBlockRef)) {
-        score = 2;
-      } else if (normalizedText.includes(normalizedBlockRef)) {
-        score = 1;
-      }
-      return {
-        block,
-        score
-      };
-    })
-    .filter((item) => item.score > 0)
-    .sort((left, right) =>
-      right.score - left.score
-      || Number(left.block?.from || 0) - Number(right.block?.from || 0)
-    );
-
-  return ranked[0]?.block || null;
+  return findWikiLinkTextBlockByReference(getMarkdownForRelPath(relPath), {
+    headings: getNoteHeadingsForRelPath(relPath),
+    anchor,
+    blockRef: normalizedBlockRef
+  });
 };
 
 const findStepIndexForRawPos = (markdownInput = "", rawPosInput = 0) => {
@@ -3192,9 +3120,11 @@ const getWikiLinkSuggestions = ({ mode = "file", noteQuery = "", headingQuery = 
       .map((heading, index) => ({
         id: `${resolution.relPath}#${heading.slug || index}`,
         label: String(heading.text || ""),
-        detail: resolution.relPath,
+        detail: resolution.relPath === normalizeRelPath(activeMarkdownRelPath.value) ? "" : resolution.relPath,
+        meta: `H${Math.max(1, Number(heading?.level || 1))}`,
         insertText: `${insertTarget}#${String(heading.text || "")}`,
-        tone: "default"
+        tone: "default",
+        layout: "preview"
       }));
   }
 
@@ -3216,18 +3146,20 @@ const getWikiLinkSuggestions = ({ mode = "file", noteQuery = "", headingQuery = 
     const normalizedBlockQuery = normalizeWikiLinkBlockText(blockQuery).toLowerCase();
 
     return getNoteTextBlocksForRelPath(resolution.relPath, { anchor: baseAnchor })
-      .map((block, index) => {
-        const insertBlockText = wikiLinkBlockInsertTextOf(block);
-        const label = wikiLinkBlockLabelOf(block);
+      .map((entry, index) => {
+        const insertBlockRef = String(entry?.refToken || "");
+        const label = String(entry?.previewText || "");
         return {
-          id: `${resolution.relPath}^${Number(block?.from || index)}`,
+          id: `${resolution.relPath}^${String(insertBlockRef || index)}`,
           label,
-          detail: `${resolution.relPath}${baseAnchor ? `#${baseAnchor}` : ""}`,
-          insertText: `${blockPrefix}${insertBlockText}`,
+          detail: `^${insertBlockRef}`,
+          meta: `L${Math.max(1, Number(entry?.lineStart || 1))}`,
+          insertText: `${blockPrefix}${insertBlockRef}`,
           tone: "default",
-          blockText: insertBlockText,
-          exact: normalizedBlockQuery && insertBlockText.toLowerCase() === normalizedBlockQuery,
-          starts: normalizedBlockQuery && insertBlockText.toLowerCase().startsWith(normalizedBlockQuery)
+          layout: "preview",
+          blockText: String(entry?.text || ""),
+          exact: normalizedBlockQuery && String(entry?.text || "").toLowerCase() === normalizedBlockQuery,
+          starts: normalizedBlockQuery && String(entry?.text || "").toLowerCase().startsWith(normalizedBlockQuery)
         };
       })
       .filter((item) => item.label && (!normalizedBlockQuery || item.blockText.toLowerCase().includes(normalizedBlockQuery)))
