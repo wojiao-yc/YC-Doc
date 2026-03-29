@@ -3,6 +3,11 @@ import { EditorView, ViewPlugin, keymap } from "@codemirror/view";
 import { findOpenWikiLinkContext } from "../../utils/wiki-link.js";
 
 const MAX_ITEMS = 8;
+const WIKI_LINK_MENU_HINTS = [
+  { token: "#", text: "可以链接到标题" },
+  { token: "^", text: "链接文本块" },
+  { token: "|", text: "指定显示的文本" }
+];
 
 const normalizeItems = (itemsInput = []) =>
   (Array.isArray(itemsInput) ? itemsInput : [])
@@ -198,6 +203,7 @@ export const createWikiLinkAutocompleteExtension = ({
         query: context.query,
         noteQuery: context.noteQuery,
         headingQuery: context.headingQuery,
+        blockQuery: context.blockQuery,
         mode: context.mode
       }));
 
@@ -258,6 +264,15 @@ export const createWikiLinkAutocompleteExtension = ({
         });
         this.panel.appendChild(button);
       }
+
+      const footer = document.createElement("div");
+      footer.className = "yc-wikilink-autocomplete-footer";
+      footer.innerHTML = WIKI_LINK_MENU_HINTS
+        .map((hint) =>
+          `<div class="yc-wikilink-autocomplete-hint"><span class="yc-wikilink-autocomplete-hint-token">${hint.token}</span><span class="yc-wikilink-autocomplete-hint-text">${hint.text}</span></div>`
+        )
+        .join("");
+      this.panel.appendChild(footer);
     }
   }, {
     eventHandlers: {

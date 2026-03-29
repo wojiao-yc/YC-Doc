@@ -29,7 +29,11 @@ const titleForResolution = (resolution) => {
   }
   if (resolution?.exists) {
     const anchor = String(resolution?.anchor || "").trim();
-    return anchor ? `Open ${resolution.relPath} # ${anchor}` : `Open ${resolution.relPath}`;
+    const blockRef = String(resolution?.blockRef || "").trim();
+    if (!anchor && !blockRef) {
+      return `Open ${resolution.relPath}`;
+    }
+    return `Open ${resolution.relPath}${anchor ? ` # ${anchor}` : ""}${blockRef ? ` ^ ${blockRef}` : ""}`;
   }
   const suggested = String(resolution?.suggestedRelPath || "").trim();
   return suggested ? `Missing note. Click to create ${suggested}` : "Missing note";

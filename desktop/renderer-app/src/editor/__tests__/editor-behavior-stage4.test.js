@@ -148,13 +148,18 @@ test("keyboard activation and special-block navigation are wired through the edi
   const app = readSrc("App.vue");
   const linkEvents = readSrc("editor/extensions/wikilink-events.js");
   const presentation = readSrc("editor/extensions/presentation.js");
+  const autocomplete = readSrc("editor/extensions/wikilink-autocomplete.js");
 
   assert.match(createEditor, /onExternalLinkActivate/);
   assert.match(shell, /external-link-activate/);
   assert.match(app, /@external-link-activate="handleEditorExternalLinkActivate"/);
+  assert.match(app, /mode === "block"/);
+  assert.match(app, /getNoteTextBlocksForRelPath/);
   assert.match(linkEvents, /resolveEditorLinkActivation/);
   assert.match(linkEvents, /source:\s*"editor-keyboard"/);
   assert.match(linkEvents, /event\.key !== "Enter"/);
+  assert.match(autocomplete, /WIKI_LINK_MENU_HINTS/);
+  assert.match(autocomplete, /yc-wikilink-autocomplete-footer/);
   assert.match(presentation, /handleSpecialBlockVerticalNavigation/);
   assert.match(presentation, /focusTableBlockCellEditor/);
   assert.match(presentation, /isPlainTableVerticalArrowEvent/);

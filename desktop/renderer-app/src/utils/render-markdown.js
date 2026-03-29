@@ -26,6 +26,7 @@ const createWikiLinkHtml = (parsed, resolution) => {
 
   const target = String(parsed.target || "");
   const anchor = String(parsed.anchor || "");
+  const blockRef = String(parsed.blockRef || "");
   const alias = String(parsed.alias || "");
   const displayText = String(resolution.displayText || parsed.displayText || target || alias || parsed.raw || "");
   const relPath = String(resolution.relPath || "");
@@ -38,6 +39,7 @@ const createWikiLinkHtml = (parsed, resolution) => {
     ` class="${classNames.join(" ")}"`,
     ` data-wiki-target="${encodeAttr(target)}"`,
     ` data-wiki-anchor="${encodeAttr(anchor)}"`,
+    ` data-wiki-block-ref="${encodeAttr(blockRef)}"`,
     ` data-wiki-alias="${encodeAttr(alias)}"`,
     ` data-wiki-rel-path="${encodeAttr(relPath)}"`,
     ` data-wiki-state="${encodeAttr(resolution.ambiguous ? "ambiguous" : (resolution.exists ? "resolved" : "missing"))}"`,

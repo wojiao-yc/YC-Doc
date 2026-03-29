@@ -575,6 +575,7 @@ const buildWikiLinkTokens = ({
       attrs: {
         target: parsed.target,
         anchor: parsed.anchor,
+        blockRef: parsed.blockRef,
         alias: parsed.alias,
         body: parsed.body
       },

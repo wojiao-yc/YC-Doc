@@ -930,6 +930,7 @@ import { useResizable } from "./composables/useResizable";
 import { useSteps } from "./composables/useSteps";
 import { useTerminal } from "./composables/useTerminal";
 import { useToast } from "./composables/useToast";
+import { parseMarkdownToBlocks } from "./editor/parser/parse-blocks.js";
 import { extractHeadingsFromMarkdown, findHeadingMatch, slugifyHeading } from "./utils/heading-slug";
 import { renderMarkdownToHtml } from "./utils/render-markdown";
 import { buildWikiLinkIndex } from "./utils/wiki-link-index";
@@ -2827,6 +2828,34 @@ const getMarkdownForRelPath = (relPathInput = "") => {
   return String(wikiLinkIndexState.value?.contentsByPath?.[relPath] || "");
 };
 
+const WIKI_LINK_NON_HEADING_BLOCK_TYPES = new Set([
+  "paragraph",
+  "bullet_list_item",
+  "ordered_list_item",
+  "task_list_item",
+  "blockquote",
+  "code_block",
+  "math_block",
+  "image",
+  "table",
+  "html_block"
+]);
+
+const normalizeWikiLinkBlockText = (valueInput = "") =>
+  String(valueInput || "")
+    .replace(/\s+/g, " ")
+    .trim();
+
+const wikiLinkBlockInsertTextOf = (block) => normalizeWikiLinkBlockText(block?.rawText || "");
+
+const wikiLinkBlockLabelOf = (block) => {
+  const text = wikiLinkBlockInsertTextOf(block);
+  if (!text) {
+    return "";
+  }
+  return text.length > 72 ? `${text.slice(0, 72).trim()}...` : text;
+};
+
 const getNoteHeadingsForRelPath = (relPathInput = "") => {
   const relPath = normalizeRelPath(relPathInput);
   if (!relPath) {
@@ -2837,6 +2866,83 @@ const getNoteHeadingsForRelPath = (relPathInput = "") => {
   }
   const note = wikiLinkIndexState.value?.notesByPath?.[relPath];
   return Array.isArray(note?.headings) ? note.headings : extractHeadingsFromMarkdown(getMarkdownForRelPath(relPath));
+};
+
+const getNoteTextBlocksForRelPath = (relPathInput = "", { anchor = "" } = {}) => {
+  const relPath = normalizeRelPath(relPathInput);
+  if (!relPath) {
+    return [];
+  }
+
+  const markdown = getMarkdownForRelPath(relPath);
+  if (!markdown) {
+    return [];
+  }
+
+  const blocks = parseMarkdownToBlocks(markdown).filter((block) =>
+    WIKI_LINK_NON_HEADING_BLOCK_TYPES.has(String(block?.type || ""))
+    && normalizeWikiLinkBlockText(block?.rawText).length > 0
+  );
+
+  const normalizedAnchor = String(anchor || "").trim();
+  if (!normalizedAnchor) {
+    return blocks;
+  }
+
+  const headings = getNoteHeadingsForRelPath(relPath);
+  const headingMatch = findHeadingMatch(headings, normalizedAnchor);
+  if (!headingMatch) {
+    return [];
+  }
+
+  const nextHeading = headings.find((heading) =>
+    Number(heading?.from || 0) > Number(headingMatch.from || 0)
+    && Number(heading?.level || 7) <= Number(headingMatch.level || 7)
+  );
+  const scopeFrom = Math.max(0, Number(headingMatch.to || headingMatch.from || 0));
+  const scopeTo = nextHeading
+    ? Math.max(scopeFrom, Number(nextHeading.from || markdown.length))
+    : markdown.length;
+
+  return blocks.filter((block) => {
+    const from = Number(block?.from || 0);
+    return from >= scopeFrom && from < scopeTo;
+  });
+};
+
+const findNoteTextBlockTarget = ({
+  relPath = "",
+  anchor = "",
+  blockRef = ""
+} = {}) => {
+  const normalizedBlockRef = normalizeWikiLinkBlockText(blockRef).toLowerCase();
+  if (!normalizedBlockRef) {
+    return null;
+  }
+
+  const ranked = getNoteTextBlocksForRelPath(relPath, { anchor })
+    .map((block) => {
+      const normalizedText = wikiLinkBlockInsertTextOf(block).toLowerCase();
+      let score = 0;
+      if (normalizedText === normalizedBlockRef) {
+        score = 3;
+      } else if (normalizedText.startsWith(normalizedBlockRef)) {
+        score = 2;
+      } else if (normalizedText.includes(normalizedBlockRef)) {
+        score = 1;
+      }
+      return {
+        block,
+        score
+      };
+    })
+    .filter((item) => item.score > 0)
+    .sort((left, right) =>
+      right.score - left.score
+      || Number(left.block?.from || 0) - Number(right.block?.from || 0)
+    );
+
+  return ranked[0]?.block || null;
 };
 
 const findStepIndexForRawPos = (markdownInput = "", rawPosInput = 0) => {
@@ -2887,7 +2993,9 @@ const jumpWithinCurrentDocument = async ({ rawPos = null, anchor = "" } = {}) =>
   if (anchor) {
     const headingMatch = findHeadingMatch(getNoteHeadingsForRelPath(activeMarkdownRelPath.value), anchor);
     if (headingMatch) {
-      targetPos = clamp(Number(headingMatch.from || 0), 0, markdown.length);
+      if (!Number.isFinite(targetPos)) {
+        targetPos = clamp(Number(headingMatch.from || 0), 0, markdown.length);
+      }
       headingSlug = String(headingMatch.slug || slugifyHeading(anchor));
     } else {
       headingSlug = slugifyHeading(anchor);
@@ -2968,8 +3076,19 @@ const openWikiLinkResolved = async (resolutionInput = {}) => {
   if (!resolution.exists || !resolution.relPath) {
     return false;
   }
+  const blockTarget = resolution.blockRef
+    ? findNoteTextBlockTarget({
+        relPath: resolution.relPath,
+        anchor: String(resolution.anchor || ""),
+        blockRef: String(resolution.blockRef || "")
+      })
+    : null;
+  if (resolution.blockRef && !blockTarget) {
+    return false;
+  }
   return openMarkdownFileByRelPath(resolution.relPath, {
-    anchor: String(resolution.anchor || "")
+    anchor: String(resolution.anchor || ""),
+    rawPos: Number.isFinite(blockTarget?.from) ? Number(blockTarget.from) : null
   });
 };
 
@@ -2977,7 +3096,10 @@ const handleWikiLinkActivate = async ({ match = null, resolution = null } = {}) 
   const parsed = match?.parsed || {};
   const latestResolution = resolveWikiLink(parsed, activeMarkdownRelPath.value, workspaceMarkdownFiles.value);
   if (latestResolution.exists && latestResolution.relPath) {
-    await openWikiLinkResolved(latestResolution);
+    const opened = await openWikiLinkResolved(latestResolution);
+    if (!opened && latestResolution.blockRef) {
+      showToast(`Wiki Link text block not found: ${String(latestResolution.blockRef || "")}`);
+    }
     return;
   }
   if (latestResolution?.ambiguous) {
@@ -3038,7 +3160,7 @@ const handleWikiLinkSuggestionSelect = async ({ item = null } = {}) => {
   return createWikiLinkFileByRelPath(relPath);
 };
 
-const getWikiLinkSuggestions = ({ mode = "file", noteQuery = "", headingQuery = "" } = {}) => {
+const getWikiLinkSuggestions = ({ mode = "file", noteQuery = "", headingQuery = "", blockQuery = "" } = {}) => {
   const files = workspaceMarkdownFiles.value;
   const notesByPath = wikiLinkIndexState.value?.notesByPath || {};
   const normalizedNoteQuery = String(noteQuery || "").trim().toLowerCase();
@@ -3074,6 +3196,48 @@ const getWikiLinkSuggestions = ({ mode = "file", noteQuery = "", headingQuery = 
         insertText: `${insertTarget}#${String(heading.text || "")}`,
         tone: "default"
       }));
+  }
+
+  if (mode === "block") {
+    const baseTarget = String(noteQuery || "").trim();
+    const baseAnchor = String(headingQuery || "").trim();
+    const currentRelPath = normalizeRelPath(activeMarkdownRelPath.value);
+    const resolution = baseTarget
+      ? resolveWikiLink({ target: baseTarget }, currentRelPath, files)
+      : (currentRelPath ? { exists: true, relPath: currentRelPath } : null);
+    if (!resolution?.exists || !resolution.relPath) {
+      return [];
+    }
+
+    const insertTarget = baseTarget
+      || preferredWikiTargetForFile({ relPath: resolution.relPath, name: basenameOfRelPath(resolution.relPath) }, files)
+      || stripMarkdownExtension(basenameOfRelPath(resolution.relPath));
+    const blockPrefix = `${insertTarget}${baseAnchor ? `#${baseAnchor}` : ""}^`;
+    const normalizedBlockQuery = normalizeWikiLinkBlockText(blockQuery).toLowerCase();
+
+    return getNoteTextBlocksForRelPath(resolution.relPath, { anchor: baseAnchor })
+      .map((block, index) => {
+        const insertBlockText = wikiLinkBlockInsertTextOf(block);
+        const label = wikiLinkBlockLabelOf(block);
+        return {
+          id: `${resolution.relPath}^${Number(block?.from || index)}`,
+          label,
+          detail: `${resolution.relPath}${baseAnchor ? `#${baseAnchor}` : ""}`,
+          insertText: `${blockPrefix}${insertBlockText}`,
+          tone: "default",
+          blockText: insertBlockText,
+          exact: normalizedBlockQuery && insertBlockText.toLowerCase() === normalizedBlockQuery,
+          starts: normalizedBlockQuery && insertBlockText.toLowerCase().startsWith(normalizedBlockQuery)
+        };
+      })
+      .filter((item) => item.label && (!normalizedBlockQuery || item.blockText.toLowerCase().includes(normalizedBlockQuery)))
+      .sort((left, right) =>
+        Number(Boolean(right.exact)) - Number(Boolean(left.exact))
+        || Number(Boolean(right.starts)) - Number(Boolean(left.starts))
+        || String(left.id || "").localeCompare(String(right.id || ""), "zh-CN")
+      )
+      .slice(0, 8)
+      .map(({ exact, starts, blockText, ...item }) => item);
   }
 
   const fileItems = files
@@ -3279,6 +3443,7 @@ const handlePreviewNavClick = (event) => {
       parsed: {
         target: String(target.dataset.wikiTarget || ""),
         anchor: String(target.dataset.wikiAnchor || ""),
+        blockRef: String(target.dataset.wikiBlockRef || ""),
         alias: String(target.dataset.wikiAlias || "")
       }
     };

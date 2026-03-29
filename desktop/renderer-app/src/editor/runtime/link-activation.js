@@ -123,6 +123,7 @@ export const resolveEditorLinkActivation = ({
     const parsed = {
       target: String(token?.attrs?.target || ""),
       anchor: String(token?.attrs?.anchor || ""),
+      blockRef: String(token?.attrs?.blockRef || ""),
       alias: String(token?.attrs?.alias || ""),
       body: String(token?.attrs?.body || "")
     };

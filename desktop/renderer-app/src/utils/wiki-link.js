@@ -65,14 +65,19 @@ export const isExplicitWikiTarget = (targetInput = "") => {
   return target.includes("/") || /\.md$/i.test(target);
 };
 
-export const wikiLinkDisplayTextOf = ({ target = "", anchor = "", alias = "" } = {}) => {
+export const wikiLinkDisplayTextOf = ({ target = "", anchor = "", blockRef = "", alias = "" } = {}) => {
   const safeAlias = asString(alias).trim();
   if (safeAlias) {
     return safeAlias;
   }
   const safeTarget = asString(target).trim();
   const safeAnchor = normalizeHeadingText(anchor);
-  return safeAnchor ? `${safeTarget}#${safeAnchor}` : safeTarget;
+  const safeBlockRef = asString(blockRef).replace(/\s+/g, " ").trim();
+  return [
+    safeTarget,
+    safeAnchor ? `#${safeAnchor}` : "",
+    safeBlockRef ? `^${safeBlockRef}` : ""
+  ].join("");
 };
 
 export const parseWikiLinkBody = (bodyInput = "") => {
@@ -82,6 +87,7 @@ export const parseWikiLinkBody = (bodyInput = "") => {
       body: "",
       target: "",
       anchor: "",
+      blockRef: "",
       alias: "",
       displayText: ""
     };
@@ -90,16 +96,20 @@ export const parseWikiLinkBody = (bodyInput = "") => {
   const aliasSeparatorIndex = body.indexOf("|");
   const head = aliasSeparatorIndex >= 0 ? body.slice(0, aliasSeparatorIndex) : body;
   const alias = aliasSeparatorIndex >= 0 ? body.slice(aliasSeparatorIndex + 1).trim() : "";
-  const anchorSeparatorIndex = head.indexOf("#");
-  const target = (anchorSeparatorIndex >= 0 ? head.slice(0, anchorSeparatorIndex) : head).trim();
-  const anchor = anchorSeparatorIndex >= 0 ? head.slice(anchorSeparatorIndex + 1).trim() : "";
+  const blockSeparatorIndex = head.indexOf("^");
+  const headWithoutBlock = blockSeparatorIndex >= 0 ? head.slice(0, blockSeparatorIndex) : head;
+  const blockRef = blockSeparatorIndex >= 0 ? head.slice(blockSeparatorIndex + 1).replace(/\s+/g, " ").trim() : "";
+  const anchorSeparatorIndex = headWithoutBlock.indexOf("#");
+  const target = (anchorSeparatorIndex >= 0 ? headWithoutBlock.slice(0, anchorSeparatorIndex) : headWithoutBlock).trim();
+  const anchor = anchorSeparatorIndex >= 0 ? headWithoutBlock.slice(anchorSeparatorIndex + 1).trim() : "";
 
   return {
     body,
     target,
     anchor,
+    blockRef,
     alias,
-    displayText: wikiLinkDisplayTextOf({ target, anchor, alias })
+    displayText: wikiLinkDisplayTextOf({ target, anchor, blockRef, alias })
   };
 };
 
@@ -304,9 +314,12 @@ export const findOpenWikiLinkContext = (lineInput = "", cursorOffsetInput = 0) =
 
   const aliasIndex = rawQuery.indexOf("|");
   const searchableQuery = aliasIndex >= 0 ? rawQuery.slice(0, aliasIndex) : rawQuery;
-  const anchorIndex = searchableQuery.indexOf("#");
-  const noteQuery = anchorIndex >= 0 ? searchableQuery.slice(0, anchorIndex) : searchableQuery;
-  const headingQuery = anchorIndex >= 0 ? searchableQuery.slice(anchorIndex + 1) : "";
+  const blockIndex = searchableQuery.indexOf("^");
+  const searchableHead = blockIndex >= 0 ? searchableQuery.slice(0, blockIndex) : searchableQuery;
+  const anchorIndex = searchableHead.indexOf("#");
+  const noteQuery = anchorIndex >= 0 ? searchableHead.slice(0, anchorIndex) : searchableHead;
+  const headingQuery = anchorIndex >= 0 ? searchableHead.slice(anchorIndex + 1) : "";
+  const blockQuery = blockIndex >= 0 ? searchableQuery.slice(blockIndex + 1) : "";
 
   return {
     openFrom: lastOpen,
@@ -314,8 +327,9 @@ export const findOpenWikiLinkContext = (lineInput = "", cursorOffsetInput = 0) =
     query: rawQuery,
     noteQuery,
     headingQuery,
+    blockQuery,
     aliasQuery: aliasIndex >= 0 ? rawQuery.slice(aliasIndex + 1) : "",
-    mode: anchorIndex >= 0 ? "heading" : "file"
+    mode: blockIndex >= 0 ? "block" : (anchorIndex >= 0 ? "heading" : "file")
   };
 };
 
@@ -364,6 +378,7 @@ export const resolveWikiLink = (parsedInput = {}, currentRelPath = "", filesInpu
   const fallbackBody = [
     asString(parsedInput?.target).trim(),
     parsedInput?.anchor ? `#${asString(parsedInput.anchor).trim()}` : "",
+    parsedInput?.blockRef ? `^${asString(parsedInput.blockRef).replace(/\s+/g, " ").trim()}` : "",
     parsedInput?.alias ? `|${asString(parsedInput.alias).trim()}` : ""
   ].join("");
   const parsed = typeof parsedInput === "string" ? parseWikiLinkRaw(parsedInput) : {
@@ -372,12 +387,13 @@ export const resolveWikiLink = (parsedInput = {}, currentRelPath = "", filesInpu
   };
   const target = asString(parsed.target).trim();
   const anchor = normalizeHeadingText(parsed.anchor);
+  const blockRef = asString(parsed.blockRef).replace(/\s+/g, " ").trim();
   const alias = asString(parsed.alias).trim();
-  const displayText = wikiLinkDisplayTextOf({ target, anchor, alias });
+  const displayText = wikiLinkDisplayTextOf({ target, anchor, blockRef, alias });
   const files = normalizedFileItems(filesInput);
 
   if (!target) {
-    if (anchor && currentRelPath) {
+    if ((anchor || blockRef) && currentRelPath) {
       const relPath = normalizeRelPath(currentRelPath);
       return {
         ok: true,
@@ -387,6 +403,7 @@ export const resolveWikiLink = (parsedInput = {}, currentRelPath = "", filesInpu
         fileName: basenameOfRelPath(relPath),
         target,
         anchor,
+        blockRef,
         alias,
         displayText
       };
@@ -399,6 +416,7 @@ export const resolveWikiLink = (parsedInput = {}, currentRelPath = "", filesInpu
       relPath: "",
       target,
       anchor,
+      blockRef,
       alias,
       displayText,
       suggestedRelPath: ""
@@ -421,6 +439,7 @@ export const resolveWikiLink = (parsedInput = {}, currentRelPath = "", filesInpu
       ambiguous: true,
       target,
       anchor,
+      blockRef,
       alias,
       displayText,
       candidates: candidates.map((item) => item.relPath)
@@ -437,6 +456,7 @@ export const resolveWikiLink = (parsedInput = {}, currentRelPath = "", filesInpu
       fileName: resolved.fileName,
       target,
       anchor,
+      blockRef,
       alias,
       displayText
     };
@@ -449,6 +469,7 @@ export const resolveWikiLink = (parsedInput = {}, currentRelPath = "", filesInpu
     relPath: "",
     target,
     anchor,
+    blockRef,
     alias,
     displayText,
     suggestedRelPath: suggestRelPathForMissing(target, currentRelPath)
@@ -482,7 +503,11 @@ export const describeWikiLinkResolution = (resolutionInput = {}) => {
   }
   if (resolution.exists) {
     const heading = normalizeHeadingText(resolution.anchor);
-    return heading ? `Open ${resolution.relPath} # ${heading}` : `Open ${resolution.relPath}`;
+    const blockRef = asString(resolution.blockRef).replace(/\s+/g, " ").trim();
+    if (heading || blockRef) {
+      return `Open ${resolution.relPath}${heading ? ` # ${heading}` : ""}${blockRef ? ` ^ ${blockRef}` : ""}`;
+    }
+    return `Open ${resolution.relPath}`;
   }
   if (resolution.suggestedRelPath) {
     return `Missing note. Click to create ${resolution.suggestedRelPath}`;

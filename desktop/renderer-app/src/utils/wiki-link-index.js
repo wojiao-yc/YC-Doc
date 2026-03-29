@@ -87,6 +87,7 @@ export const buildWikiLinkIndex = async ({
         contextText: toContextText(link.lineText),
         target: String(link.parsed?.target || ""),
         anchor: String(link.parsed?.anchor || ""),
+        blockRef: String(link.parsed?.blockRef || ""),
         alias: String(link.parsed?.alias || ""),
         displayText: String(link.displayText || "")
       };

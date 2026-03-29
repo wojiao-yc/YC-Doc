@@ -33,6 +33,24 @@ test("resolveEditorLinkActivation picks external markdown links under the cursor
   assert.equal(activation?.text, "OpenAI");
 });
 
+test("resolveEditorLinkActivation keeps wiki block refs under the cursor", () => {
+  const markdown = "Before [[Note#Heading^Block text|Shown]] after";
+  const anchor = markdown.indexOf("Shown") + 2;
+  const activation = resolveEditorLinkActivation({
+    markdown,
+    selection: { anchor, head: anchor },
+    currentRelPath: "notes/today.md",
+    markdownFiles: [
+      { relPath: "Note.md", name: "Note.md" }
+    ]
+  });
+
+  assert.equal(activation?.type, "wiki");
+  assert.equal(activation?.match?.parsed?.anchor, "Heading");
+  assert.equal(activation?.match?.parsed?.blockRef, "Block text");
+  assert.equal(activation?.resolution?.blockRef, "Block text");
+});
+
 test("only safe external markdown links are keyboard-activatable", () => {
   assert.equal(safeExternalLinkHref("https://example.com"), "https://example.com");
   assert.equal(safeExternalLinkHref("mailto:test@example.com"), "mailto:test@example.com");
