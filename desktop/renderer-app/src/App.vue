@@ -377,6 +377,7 @@
                       @selection-change="handleEditorSelectionChange"
                       @update:model-value="updateMarkdown"
                       @wiki-link-activate="handleEditorWikiLinkActivate"
+                      @external-link-activate="handleEditorExternalLinkActivate"
                     />
                   </div>
                 </div>
@@ -2994,6 +2995,39 @@ const handleWikiLinkActivate = async ({ match = null, resolution = null } = {}) 
 
 const handleEditorWikiLinkActivate = (payload) => {
   void handleWikiLinkActivate(payload);
+};
+
+const openExternalLink = async (hrefInput) => {
+  const href = String(hrefInput || "").trim();
+  if (!/^(https?:|mailto:)/i.test(href)) {
+    showToast("澶栭儴閾炬帴鍦板潃鏃犳晥");
+    return false;
+  }
+
+  try {
+    if (typeof window !== "undefined" && typeof window.desktopWindow?.openExternal === "function") {
+      const result = await window.desktopWindow.openExternal(href);
+      if (result?.ok === false) {
+        throw new Error(String(result?.error || "open_external_failed"));
+      }
+      return true;
+    }
+
+    if (typeof window !== "undefined" && typeof window.open === "function") {
+      window.open(href, "_blank", "noopener,noreferrer");
+      return true;
+    }
+  } catch (error) {
+    showToast(`鎵撳紑澶栭儴閾炬帴澶辫触: ${String(error?.message || error || "unknown_error")}`);
+    return false;
+  }
+
+  showToast("褰撳墠鐜涓嶆敮鎸佹墦寮€澶栭儴閾炬帴");
+  return false;
+};
+
+const handleEditorExternalLinkActivate = (payload) => {
+  void openExternalLink(payload?.href);
 };
 
 const handleWikiLinkSuggestionSelect = async ({ item = null } = {}) => {

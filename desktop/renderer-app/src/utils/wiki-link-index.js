@@ -1,11 +1,11 @@
-import { extractHeadingsFromMarkdown } from "./heading-slug";
+import { extractHeadingsFromMarkdown } from "./heading-slug.js";
 import {
   basenameOfRelPath,
   extractWikiLinksFromMarkdown,
   normalizeRelPath,
   resolveWikiLink,
   stripMarkdownExtension
-} from "./wiki-link";
+} from "./wiki-link.js";
 
 const toContextText = (lineTextInput = "") => String(lineTextInput || "").replace(/\s+/g, " ").trim();
 

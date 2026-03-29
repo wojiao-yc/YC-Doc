@@ -40,6 +40,7 @@ contextBridge.exposeInMainWorld("desktopWindow", {
   isMaximized: () => ipcRenderer.invoke("desktop:window:is-maximized"),
   dragFromMaximized: (payload = {}) => ipcRenderer.invoke("desktop:window:drag-from-maximized", payload),
   close: () => ipcRenderer.invoke("desktop:window:close"),
+  openExternal: (url) => ipcRenderer.invoke("desktop:window:open-external", { url }),
   onMaximizedChanged: (handler) => {
     if (typeof handler !== "function") {
       return () => {};

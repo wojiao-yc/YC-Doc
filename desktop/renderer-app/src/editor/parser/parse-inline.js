@@ -1,6 +1,6 @@
 import { marked } from "marked";
-import { BLOCK_TYPES } from "../model/block-types";
-import { parseWikiLinkRaw } from "../../utils/wiki-link";
+import { BLOCK_TYPES } from "../model/block-types.js";
+import { parseWikiLinkRaw } from "../../utils/wiki-link.js";
 
 const INLINE_BLOCK_TYPES = new Set([
   BLOCK_TYPES.PARAGRAPH,

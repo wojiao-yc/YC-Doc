@@ -1,6 +1,6 @@
-import { createSemanticSnapshot } from "../model/semantic-snapshot";
-import { parseMarkdownToBlocks } from "./parse-blocks";
-import { buildOutlineFromBlocks } from "../runtime/outline";
+import { createSemanticSnapshot } from "../model/semantic-snapshot.js";
+import { parseMarkdownToBlocks } from "./parse-blocks.js";
+import { buildOutlineFromBlocks } from "../runtime/outline.js";
 
 let cachedMarkdown = null;
 let cachedSnapshot = null;

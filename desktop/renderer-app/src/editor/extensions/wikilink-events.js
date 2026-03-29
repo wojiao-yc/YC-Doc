@@ -1,6 +1,7 @@
-import { StateEffect } from "@codemirror/state";
-import { Decoration, EditorView, ViewPlugin } from "@codemirror/view";
-import { extractWikiLinksFromMarkdown, resolveWikiLink } from "../../utils/wiki-link";
+import { Prec, StateEffect } from "@codemirror/state";
+import { Decoration, EditorView, ViewPlugin, keymap } from "@codemirror/view";
+import { extractWikiLinksFromMarkdown, resolveWikiLink } from "../../utils/wiki-link.js";
+import { resolveEditorLinkActivation } from "../runtime/link-activation.js";
 
 const clampPos = (value, length) => Math.max(0, Math.min(Number(length || 0), Number(value || 0)));
 
@@ -70,17 +71,83 @@ const buildWikiLinkDecorations = (entries, docLength) => {
   }
 };
 
-const matchAtPos = (entries, posInput) => {
-  const pos = Number(posInput || 0);
-  return (Array.isArray(entries) ? entries : []).find((entry) => pos >= entry.rawFrom && pos <= entry.rawTo) || null;
-};
-
 export const createWikiLinkEventExtensions = ({
   getCurrentRelPath,
   getMarkdownFiles,
-  onWikiLinkActivate
+  onWikiLinkActivate,
+  onExternalLinkActivate
 } = {}) => {
   let wikiLinkPlugin = null;
+
+  const activateResolvedLink = (activation, payload = {}) => {
+    if (!activation) {
+      return false;
+    }
+
+    const source = String(payload?.source || "editor");
+    const clientX = Number(payload?.clientX || 0);
+    const clientY = Number(payload?.clientY || 0);
+
+    if (activation.type === "wiki") {
+      if (typeof onWikiLinkActivate !== "function") {
+        return false;
+      }
+      onWikiLinkActivate({
+        source,
+        clientX,
+        clientY,
+        match: activation.match,
+        resolution: activation.resolution
+      });
+      return true;
+    }
+
+    if (activation.type === "external") {
+      if (typeof onExternalLinkActivate !== "function") {
+        return false;
+      }
+      onExternalLinkActivate({
+        source,
+        clientX,
+        clientY,
+        href: activation.href,
+        title: activation.title,
+        text: activation.text,
+        token: activation.token
+      });
+      return true;
+    }
+
+    return false;
+  };
+
+  const resolveActivationForSelection = (view, selection = null) =>
+    resolveEditorLinkActivation({
+      markdown: view.state.doc.toString(),
+      selection: selection || view.state.selection.main,
+      currentRelPath: typeof getCurrentRelPath === "function" ? getCurrentRelPath() : "",
+      markdownFiles: typeof getMarkdownFiles === "function" ? getMarkdownFiles() : []
+    });
+
+  const isKeyboardActivationEvent = (event) => {
+    if (!event || event.defaultPrevented || event.isComposing) {
+      return false;
+    }
+    if (event.key !== "Enter") {
+      return false;
+    }
+    if (!(event.ctrlKey || event.metaKey) || event.shiftKey || event.altKey) {
+      return false;
+    }
+    return true;
+  };
+
+  const runKeyboardActivation = (view) => {
+    const activation = resolveActivationForSelection(view);
+    return activateResolvedLink(activation, {
+      source: "editor-keyboard"
+    });
+  };
 
   wikiLinkPlugin = ViewPlugin.fromClass(class {
     constructor(view) {
@@ -99,12 +166,10 @@ export const createWikiLinkEventExtensions = ({
     decorations: (plugin) => plugin.decorations,
     eventHandlers: {
       mousedown: (event, view) => {
-        if (Number(event.button) !== 0 || !(event.metaKey || event.ctrlKey)) {
+        if (event.target instanceof Element && view?.contentDOM instanceof Element && !view.contentDOM.contains(event.target)) {
           return false;
         }
-
-        const plugin = view.plugin(wikiLinkPlugin);
-        if (!plugin) {
+        if (Number(event.button) !== 0 || !(event.metaKey || event.ctrlKey)) {
           return false;
         }
 
@@ -116,29 +181,65 @@ export const createWikiLinkEventExtensions = ({
           return false;
         }
 
-        const entry = matchAtPos(plugin.entries, pos);
-        if (!entry) {
+        const activation = resolveActivationForSelection(view, { anchor: pos, head: pos });
+        if (!activation) {
+          return false;
+        }
+
+        if (!activateResolvedLink(activation, {
+          source: "editor",
+          clientX: Number(event.clientX || 0),
+          clientY: Number(event.clientY || 0)
+        })) {
           return false;
         }
 
         event.preventDefault();
         event.stopPropagation();
-        if (typeof onWikiLinkActivate === "function") {
-          onWikiLinkActivate({
-            source: "editor",
-            clientX: Number(event.clientX || 0),
-            clientY: Number(event.clientY || 0),
-            match: entry,
-            resolution: entry.resolution
-          });
+        return true;
+      },
+      keydown: (event, view) => {
+        if (event.target instanceof Element && view?.contentDOM instanceof Element && !view.contentDOM.contains(event.target)) {
+          return false;
         }
+        if (!isKeyboardActivationEvent(event)) {
+          return false;
+        }
+
+        const activation = resolveActivationForSelection(view);
+        if (!activateResolvedLink(activation, {
+          source: "editor-keyboard"
+        })) {
+          return false;
+        }
+
+        event.preventDefault();
+        event.stopPropagation();
         return true;
       }
     }
   });
 
   return {
-    extensions: [wikiLinkPlugin],
+    extensions: [
+      Prec.highest(
+        keymap.of([
+          {
+            key: "Mod-Enter",
+            run: runKeyboardActivation
+          },
+          {
+            key: "Ctrl-Enter",
+            run: runKeyboardActivation
+          },
+          {
+            key: "Cmd-Enter",
+            run: runKeyboardActivation
+          }
+        ])
+      ),
+      wikiLinkPlugin
+    ],
     refreshEffect: refreshWikiLinksEffect
   };
 };

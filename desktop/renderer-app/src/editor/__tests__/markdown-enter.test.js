@@ -6,7 +6,7 @@ import {
   exitUnclosedFenceOnEmptyLine,
   findUnclosedFenceAtLine,
   isEmptyBlockquoteLine
-} from "../extensions/markdown";
+} from "../extensions/markdown.js";
 
 const runEnter = (doc, anchor) => {
   const state = EditorState.create({

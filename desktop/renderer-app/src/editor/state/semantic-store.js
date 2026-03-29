@@ -1,6 +1,6 @@
 import { computed, onBeforeUnmount, ref, shallowRef, watch } from "vue";
-import { parseMarkdownToSemanticSnapshot } from "../parser/parse-markdown";
-import { findCurrentBlockFromSelection } from "../runtime/current-block";
+import { parseMarkdownToSemanticSnapshot } from "../parser/parse-markdown.js";
+import { findCurrentBlockFromSelection } from "../runtime/current-block.js";
 
 const normalizeSelection = (selection) => ({
   anchor: Number(selection?.anchor || 0),

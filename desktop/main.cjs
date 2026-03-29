@@ -628,6 +628,23 @@ ipcMain.handle("desktop:window:close", async () => {
   return { ok: true };
 });
 
+ipcMain.handle("desktop:window:open-external", async (_event, payload = {}) => {
+  const url = String(payload?.url || "").trim();
+  if (!url) {
+    return { ok: false, error: "invalid_url" };
+  }
+
+  try {
+    await shell.openExternal(url);
+    return { ok: true };
+  } catch (error) {
+    return {
+      ok: false,
+      error: String(error?.message || error || "open_external_failed")
+    };
+  }
+});
+
 ipcMain.handle("desktop:data:get-steps-path", async () => ({
   ok: true,
   path: getStepsDataPath()

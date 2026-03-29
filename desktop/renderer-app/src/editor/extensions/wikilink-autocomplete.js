@@ -1,6 +1,6 @@
 import { Prec } from "@codemirror/state";
 import { EditorView, ViewPlugin, keymap } from "@codemirror/view";
-import { findOpenWikiLinkContext } from "../../utils/wiki-link";
+import { findOpenWikiLinkContext } from "../../utils/wiki-link.js";
 
 const MAX_ITEMS = 8;
 

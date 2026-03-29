@@ -1,4 +1,4 @@
-import { BLOCK_TYPES } from "../model/block-types";
+import { BLOCK_TYPES } from "../model/block-types.js";
 
 const TASK_PATTERN = /^(\s*)([-+*])\s+\[( |x|X)\]\s+(.*)$/;
 const BULLET_PATTERN = /^(\s*)([-+*])\s+(.*)$/;

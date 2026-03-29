@@ -1,4 +1,4 @@
-import { DEFAULT_BLOCK_TYPE } from "./block-types";
+import { DEFAULT_BLOCK_TYPE } from "./block-types.js";
 
 const toSafeNumber = (value, fallback = 0) => {
   const number = Number(value);

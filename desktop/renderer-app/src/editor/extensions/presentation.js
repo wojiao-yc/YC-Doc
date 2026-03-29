@@ -1,8 +1,8 @@
-import { Decoration, EditorView, ViewPlugin, WidgetType } from "@codemirror/view";
-import { StateEffect, StateField } from "@codemirror/state";
+import { Decoration, EditorView, ViewPlugin, WidgetType, keymap } from "@codemirror/view";
+import { Prec, StateEffect, StateField } from "@codemirror/state";
 import katex from "katex";
 import { marked } from "marked";
-import { parseImageLine, serializeImageLine } from "../parser/parse-image";
+import { parseImageLine, serializeImageLine } from "../parser/parse-image.js";
 
 const HEADING_PREFIX_PATTERN = /^\s{0,3}#{1,6}[ \t]+/;
 const BLOCKQUOTE_PREFIX_PATTERN = /^\s{0,3}>\s?/;
@@ -29,6 +29,15 @@ const SOURCE_VISIBLE_BLOCK_TYPES = new Set([
   "task_list_item",
   "blockquote",
   "thematic_break"
+]);
+const AUTO_SOURCE_REVEAL_BLOCK_TYPES = new Set([
+  "image",
+  "math_block"
+]);
+const KEYBOARD_NAVIGABLE_SPECIAL_BLOCK_TYPES = new Set([
+  "image",
+  "math_block",
+  "table"
 ]);
 
 const safePosForLineLookup = (doc, pos) => {
@@ -2097,9 +2106,12 @@ const buildDecorations = (view, blocks, currentBlockId) => {
       const isImageExpanded = imageExpandSet.has(imageExpandKey);
       const isMathExpanded = mathExpandSet.has(mathExpandKey);
       const isTableExpanded = tableExpandSet.has(tableExpandKey);
+      const blockSelectionVisible = selectionIntersectsRange(selection, blockFrom, blockTo);
       // Keep source visible for focused source-first block types or expanded media/math blocks.
-      const blockKeepsSourceVisible = (SOURCE_VISIBLE_BLOCK_TYPES.has(blockType)
-        && selectionIntersectsRange(selection, blockFrom, blockTo)) || isImageExpanded || isMathExpanded || isTableExpanded;
+      const blockKeepsSourceVisible = (
+        (SOURCE_VISIBLE_BLOCK_TYPES.has(blockType) || AUTO_SOURCE_REVEAL_BLOCK_TYPES.has(blockType))
+        && blockSelectionVisible
+      ) || isImageExpanded || isMathExpanded || isTableExpanded;
       const hideImageSourceLines = blockType === "image" && !blockKeepsSourceVisible;
       const hideMathSourceLines = blockType === "math_block" && !blockKeepsSourceVisible;
       const hideTableSourceLines = blockType === "table" && !blockKeepsSourceVisible;
@@ -2826,6 +2838,203 @@ const persistImageWidthToMarkdown = (view, blockId, widthInput) => {
   });
 };
 
+const isPlainVerticalArrowEvent = (event) => {
+  if (!event || event.defaultPrevented || event.isComposing) {
+    return false;
+  }
+  if (event.key !== "ArrowUp" && event.key !== "ArrowDown") {
+    return false;
+  }
+  if (event.shiftKey || event.altKey || event.ctrlKey || event.metaKey) {
+    return false;
+  }
+  return true;
+};
+
+const blockExpandedForKeyboardNavigation = (view, block) => {
+  const type = String(block?.type || "");
+  if (type === "image") {
+    return view.state.field(imageExpandField).has(imageExpandKeyOf(block));
+  }
+  if (type === "math_block") {
+    return view.state.field(mathExpandField).has(mathExpandKeyOf(block));
+  }
+  if (type === "table") {
+    return view.state.field(tableExpandField).has(tableExpandKeyOf(block));
+  }
+  return false;
+};
+
+const placeCaretInEditableCell = (editableCell, placeAtEnd = false) => {
+  if (!(editableCell instanceof HTMLElement) || typeof document === "undefined" || typeof window === "undefined") {
+    return false;
+  }
+  const selection = window.getSelection?.();
+  if (!selection) {
+    return false;
+  }
+
+  const range = document.createRange();
+  range.selectNodeContents(editableCell);
+  range.collapse(!placeAtEnd);
+  selection.removeAllRanges();
+  selection.addRange(range);
+  return true;
+};
+
+const focusTableBlockCellEditor = (view, blockIdInput, direction = 1) => {
+  const blockId = String(blockIdInput || "");
+  if (!blockId) {
+    return false;
+  }
+
+  const root = view?.dom;
+  if (!(root instanceof Element)) {
+    return false;
+  }
+
+  const editors = Array.from(
+    root.querySelectorAll(`[data-table-block-id="${blockId}"] [data-table-edit="true"]`)
+  ).filter((node) => node instanceof HTMLElement);
+  if (!editors.length) {
+    return false;
+  }
+
+  const target = direction < 0 ? editors[editors.length - 1] : editors[0];
+  const applyFocus = () => {
+    try {
+      target.focus({ preventScroll: true });
+    } catch {
+      target.focus();
+    }
+    placeCaretInEditableCell(target, direction < 0);
+    if (typeof target.scrollIntoView === "function") {
+      target.scrollIntoView({
+        block: "nearest",
+        inline: "nearest"
+      });
+    }
+  };
+
+  applyFocus();
+  if (typeof window !== "undefined" && typeof window.requestAnimationFrame === "function") {
+    window.requestAnimationFrame(() => {
+      if (target.isConnected) {
+        applyFocus();
+      }
+    });
+  }
+  return true;
+};
+
+const moveCursorIntoSpecialBlockSource = (view, block, direction = 1) => {
+  const docLength = Number(view.state.doc.length || 0);
+  const from = clampPos(block?.from, docLength);
+  const to = clampPos(block?.to, docLength);
+  if (to <= from) {
+    return false;
+  }
+
+  const cursor = direction < 0 ? Math.max(from, to - 1) : from;
+  view.dispatch({
+    selection: {
+      anchor: cursor,
+      head: cursor
+    },
+    scrollIntoView: true
+  });
+  view.focus();
+  return true;
+};
+
+const resolveKeyboardNavigableSpecialBlock = (view, direction = 1) => {
+  const data = view.state.field(presentationDataField);
+  const blocks = Array.isArray(data?.blocks) ? data.blocks : [];
+  if (!blocks.length) {
+    return null;
+  }
+
+  const selection = selectionSnapshotOf(view.state);
+  if (!selection.empty) {
+    return null;
+  }
+
+  const doc = view.state.doc;
+  const docLength = Number(doc.length || 0);
+  const cursorLine = doc.lineAt(selection.head).number;
+  let adjacentMatch = null;
+
+  for (const block of blocks) {
+    const blockType = String(block?.type || "");
+    if (!KEYBOARD_NAVIGABLE_SPECIAL_BLOCK_TYPES.has(blockType) || blockExpandedForKeyboardNavigation(view, block)) {
+      continue;
+    }
+
+    const blockFrom = clampPos(block?.from, docLength);
+    const blockTo = clampPos(block?.to, docLength);
+    if (blockTo <= blockFrom) {
+      continue;
+    }
+
+    if (blockType === "table" && selectionIntersectsRange(selection, blockFrom, blockTo)) {
+      return block;
+    }
+
+    const lineRange = resolveLineRange(doc, block);
+    const isAdjacent = direction < 0
+      ? cursorLine === lineRange.toLine + 1
+      : cursorLine === lineRange.fromLine - 1;
+    if (!isAdjacent) {
+      continue;
+    }
+
+    adjacentMatch = block;
+    break;
+  }
+
+  return adjacentMatch;
+};
+
+const runSpecialBlockVerticalNavigation = (view, direction = 1) => {
+  const block = resolveKeyboardNavigableSpecialBlock(view, direction);
+  if (!block) {
+    return false;
+  }
+
+  const handled = String(block?.type || "") === "table"
+    ? focusTableBlockCellEditor(view, tableExpandKeyOf(block), direction)
+    : moveCursorIntoSpecialBlockSource(view, block, direction);
+  return handled;
+};
+
+const handleSpecialBlockVerticalNavigation = (event, view) => {
+  if (!isPlainVerticalArrowEvent(event)) {
+    return false;
+  }
+
+  const direction = event.key === "ArrowUp" ? -1 : 1;
+  if (!runSpecialBlockVerticalNavigation(view, direction)) {
+    return false;
+  }
+
+  event.preventDefault();
+  event.stopPropagation();
+  return true;
+};
+
+const specialBlockNavigationKeymap = Prec.highest(
+  keymap.of([
+    {
+      key: "ArrowUp",
+      run: (view) => runSpecialBlockVerticalNavigation(view, -1)
+    },
+    {
+      key: "ArrowDown",
+      run: (view) => runSpecialBlockVerticalNavigation(view, 1)
+    }
+  ])
+);
+
 const presentationMouseDownHandler = (event, view) => {
   const target = event.target;
   if (!(target instanceof Element)) {
@@ -2927,24 +3136,25 @@ const presentationMouseDownHandler = (event, view) => {
 
 const presentationKeyDownHandler = (event, view) => {
   const target = event.target;
-  if (!(target instanceof Element)) {
+  if (target instanceof Element && view?.contentDOM instanceof Element && !view.contentDOM.contains(target)) {
     return false;
   }
-
-  const tableEditableCell = target.closest("[data-table-edit='true']");
-  if (!tableEditableCell) {
-    return false;
-  }
-
-  event.stopPropagation();
-  if (event.key === "Enter" && !event.shiftKey && !event.altKey && !event.ctrlKey && !event.metaKey) {
-    event.preventDefault();
-    if (tableEditableCell instanceof HTMLElement) {
-      tableEditableCell.blur();
+  if (target instanceof Element) {
+    const tableEditableCell = target.closest("[data-table-edit='true']");
+    if (tableEditableCell) {
+      event.stopPropagation();
+      if (event.key === "Enter" && !event.shiftKey && !event.altKey && !event.ctrlKey && !event.metaKey) {
+        event.preventDefault();
+        if (tableEditableCell instanceof HTMLElement) {
+          tableEditableCell.blur();
+        }
+        return true;
+      }
+      return false;
     }
-    return true;
   }
-  return false;
+
+  return handleSpecialBlockVerticalNavigation(event, view);
 };
 
 const presentationFocusOutHandler = (event, view) => {
@@ -3063,6 +3273,7 @@ export const presentationExtensions = [
   imageWidthField,
   mathExpandField,
   tableExpandField,
+  specialBlockNavigationKeymap,
   EditorView.domEventHandlers({
     contextmenu: presentationContextMenuHandler,
     mousedown: presentationMouseDownHandler,

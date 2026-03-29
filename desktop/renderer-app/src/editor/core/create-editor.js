@@ -1,15 +1,15 @@
 import { Compartment } from "@codemirror/state";
 import { openSearchPanel } from "@codemirror/search";
 import { EditorView } from "@codemirror/view";
-import { createEditorState } from "./create-state";
-import { createEditorView } from "./create-view";
-import { coreExtensions } from "../extensions/core";
-import { markdownExtensions } from "../extensions/markdown";
-import { presentationExtensions, setPresentationDataEffect } from "../extensions/presentation";
-import { contextMenuExtensions } from "../extensions/context-menu";
-import { createWikiLinkEventExtensions } from "../extensions/wikilink-events";
-import { createWikiLinkAutocompleteExtension } from "../extensions/wikilink-autocomplete";
-import { createEditorThemeExtension } from "../extensions/theme";
+import { createEditorState } from "./create-state.js";
+import { createEditorView } from "./create-view.js";
+import { coreExtensions } from "../extensions/core.js";
+import { markdownExtensions } from "../extensions/markdown.js";
+import { presentationExtensions, setPresentationDataEffect } from "../extensions/presentation.js";
+import { contextMenuExtensions } from "../extensions/context-menu.js";
+import { createWikiLinkEventExtensions } from "../extensions/wikilink-events.js";
+import { createWikiLinkAutocompleteExtension } from "../extensions/wikilink-autocomplete.js";
+import { createEditorThemeExtension } from "../extensions/theme.js";
 
 export const createMarkdownEditor = ({
   parent,
@@ -18,6 +18,7 @@ export const createMarkdownEditor = ({
   onChange = null,
   onSelectionChange = null,
   onWikiLinkActivate = null,
+  onExternalLinkActivate = null,
   onWikiLinkSuggestionSelect = null,
   getWikiLinkCurrentRelPath = () => "",
   getWikiLinkMarkdownFiles = () => [],
@@ -27,7 +28,8 @@ export const createMarkdownEditor = ({
   const wikiLinkEventConfig = createWikiLinkEventExtensions({
     getCurrentRelPath: getWikiLinkCurrentRelPath,
     getMarkdownFiles: getWikiLinkMarkdownFiles,
-    onWikiLinkActivate
+    onWikiLinkActivate,
+    onExternalLinkActivate
   });
   const wikiLinkAutocompleteExtension = createWikiLinkAutocompleteExtension({
     getSuggestions: getWikiLinkSuggestions,

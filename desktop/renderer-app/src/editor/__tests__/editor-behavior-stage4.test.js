@@ -56,6 +56,7 @@ test("presentation hides markdown syntax by default and keeps active token sourc
   assert.match(presentation, /selectionSet/);
   assert.match(presentation, /blockKeepsSourceVisible/);
   assert.match(presentation, /isTokenRelatedToActiveToken/);
+  assert.match(presentation, /AUTO_SOURCE_REVEAL_BLOCK_TYPES/);
 });
 
 test("presentation also supports block-level markdown rendering and source reveal", () => {
@@ -64,8 +65,8 @@ test("presentation also supports block-level markdown rendering and source revea
   assert.match(presentation, /SOURCE_VISIBLE_BLOCK_TYPES/);
   assert.match(presentation, /addListPrefixDecorationsForBlock/);
   assert.match(presentation, /addBlockquotePrefixDecorationsForBlock/);
-  assert.match(presentation, /addTablePreviewDecorationForBlock/);
-  assert.match(presentation, /MarkdownTableWidget/);
+  assert.match(presentation, /TableBlockWidget/);
+  assert.match(presentation, /toggleTableExpandEffect/);
   assert.match(presentation, /cm-table-widget/);
 });
 
@@ -73,7 +74,8 @@ test("image source toggle updates immediately and prunes stale expanded-image id
   const presentation = readSrc("editor/extensions/presentation.js");
 
   assert.match(presentation, /updateHasEffect\(update,\s*toggleImageExpandEffect\)/);
-  assert.match(presentation, /selectionChanged \|\| imageExpandChanged/);
+  assert.match(presentation, /selectionChanged/);
+  assert.match(presentation, /imageExpandChanged/);
   assert.match(presentation, /effect\.is\(setPresentationDataEffect\)/);
   assert.match(presentation, /validImageIds/);
   assert.match(presentation, /this\.blocks = \[\]/);
@@ -130,9 +132,30 @@ test("editor includes custom right-click context menu extension with grouped com
   assert.match(createEditor, /\.\.\.contextMenuExtensions/);
 
   assert.match(menuExtension, /id:\s*"add-link"/);
+  assert.match(menuExtension, /commandInsertWikiLink/);
+  assert.match(menuExtension, /commandInsertExternalLink/);
+  assert.match(menuExtension, /\[\[\$\{linkText\}\]\]/);
   assert.match(menuExtension, /id:\s*"format"/);
   assert.match(menuExtension, /id:\s*"paragraph"/);
   assert.match(menuExtension, /id:\s*"insert"/);
   assert.match(menuExtension, /clipboard-cut/);
   assert.match(menuExtension, /select-all/);
+});
+
+test("keyboard activation and special-block navigation are wired through the editor", () => {
+  const createEditor = readSrc("editor/core/create-editor.js");
+  const shell = readSrc("editor/EditorShell.vue");
+  const app = readSrc("App.vue");
+  const linkEvents = readSrc("editor/extensions/wikilink-events.js");
+  const presentation = readSrc("editor/extensions/presentation.js");
+
+  assert.match(createEditor, /onExternalLinkActivate/);
+  assert.match(shell, /external-link-activate/);
+  assert.match(app, /@external-link-activate="handleEditorExternalLinkActivate"/);
+  assert.match(linkEvents, /resolveEditorLinkActivation/);
+  assert.match(linkEvents, /source:\s*"editor-keyboard"/);
+  assert.match(linkEvents, /event\.key !== "Enter"/);
+  assert.match(presentation, /handleSpecialBlockVerticalNavigation/);
+  assert.match(presentation, /focusTableBlockCellEditor/);
+  assert.match(presentation, /event\.key !== "ArrowUp" && event\.key !== "ArrowDown"/);
 });

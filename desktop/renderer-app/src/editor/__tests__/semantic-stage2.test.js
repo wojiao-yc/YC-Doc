@@ -1,10 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { parseListLine } from "../parser/parse-list";
-import { parseMarkdownToBlocks } from "../parser/parse-blocks";
-import { parseMarkdownToSemanticSnapshot } from "../parser/parse-markdown";
-import { findBlockContextByPos } from "../runtime/block-index";
-import { findCurrentBlock } from "../runtime/current-block";
+import { parseListLine } from "../parser/parse-list.js";
+import { parseMarkdownToBlocks } from "../parser/parse-blocks.js";
+import { parseMarkdownToSemanticSnapshot } from "../parser/parse-markdown.js";
+import { findBlockContextByPos } from "../runtime/block-index.js";
+import { findCurrentBlock } from "../runtime/current-block.js";
 
 const flattenInlineTokens = (tokens = []) =>
   tokens.flatMap((token) => [token, ...flattenInlineTokens(token?.children || [])]);

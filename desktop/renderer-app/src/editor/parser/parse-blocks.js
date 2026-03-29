@@ -1,9 +1,9 @@
 import { marked } from "marked";
-import { createBlockNode } from "../model/block-node";
-import { BLOCK_TYPES } from "../model/block-types";
-import { parseImageLine } from "./parse-image";
-import { buildInlineModelForBlock } from "./parse-inline";
-import { parseListLine } from "./parse-list";
+import { createBlockNode } from "../model/block-node.js";
+import { BLOCK_TYPES } from "../model/block-types.js";
+import { parseImageLine } from "./parse-image.js";
+import { buildInlineModelForBlock } from "./parse-inline.js";
+import { parseListLine } from "./parse-list.js";
 
 const OPEN_MATH_FENCE_PATTERN = /^\s{0,3}\$\$\s*$/;
 const SINGLE_LINE_MATH_PATTERN = /^\s{0,3}\$\$(.+?)\$\$\s*$/;

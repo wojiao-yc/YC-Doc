@@ -1,10 +1,10 @@
 import { marked } from "marked";
-import { applyHeadingIdsToHtml } from "./heading-slug";
+import { applyHeadingIdsToHtml } from "./heading-slug.js";
 import {
   describeWikiLinkResolution,
   replaceWikiLinksInMarkdown,
   resolveWikiLink
-} from "./wiki-link";
+} from "./wiki-link.js";
 
 const escapeHtml = (value) =>
   String(value || "")

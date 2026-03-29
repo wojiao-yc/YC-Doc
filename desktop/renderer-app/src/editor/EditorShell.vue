@@ -44,7 +44,7 @@ const props = defineProps({
   }
 });
 
-const emit = defineEmits(["update:modelValue", "selection-change", "wiki-link-activate"]);
+const emit = defineEmits(["update:modelValue", "selection-change", "wiki-link-activate", "external-link-activate"]);
 const editorHostRef = ref(null);
 let editorApi = null;
 let latestPresentationBlocks = Array.isArray(props.presentationBlocks) ? props.presentationBlocks : [];
@@ -91,6 +91,9 @@ onMounted(() => {
     },
     onWikiLinkActivate: (payload) => {
       emit("wiki-link-activate", payload);
+    },
+    onExternalLinkActivate: (payload) => {
+      emit("external-link-activate", payload);
     },
     onWikiLinkSuggestionSelect: (payload) => {
       if (typeof props.wikiLinkSuggestionSelect === "function") {

@@ -1,4 +1,4 @@
-import { findHeadingMatch, normalizeHeadingText, slugifyHeading } from "./heading-slug";
+import { findHeadingMatch, normalizeHeadingText, slugifyHeading } from "./heading-slug.js";
 
 const WIKI_LINK_OPEN = "[[";
 const WIKI_LINK_CLOSE = "]]";

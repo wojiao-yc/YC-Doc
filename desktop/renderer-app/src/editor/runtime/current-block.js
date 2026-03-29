@@ -1,4 +1,4 @@
-import { findBlockContextByPos } from "./block-index";
+import { findBlockContextByPos } from "./block-index.js";
 
 const normalizePos = (value) => {
   const number = Number(value);

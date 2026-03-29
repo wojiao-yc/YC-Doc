@@ -1,5 +1,5 @@
 import { EditorView, ViewPlugin } from "@codemirror/view";
-import { parseMarkdownToBlocks } from "../parser/parse-blocks";
+import { parseMarkdownToBlocks } from "../parser/parse-blocks.js";
 
 const MENU_GAP = 8;
 const SUBMENU_GAP = 2;
@@ -712,7 +712,10 @@ const applyTableCellInlineFormat = (commandIdInput, menuContext = {}) => {
     range.insertNode(textNode);
     return finalize(true);
   }
-  if (commandId === "add-link" || commandId === "add-external-link") {
+  if (commandId === "add-link") {
+    return finalize(surroundTableCellSelectionWithText(editableCell, "[[", "]]"));
+  }
+  if (commandId === "add-external-link") {
     const prompted = promptLinkUrl(DEFAULT_LINK_URL);
     if (prompted == null) {
       return false;
@@ -944,6 +947,7 @@ const applyParagraphStyle = (view, style) => {
 const clearInlineMarkdownSyntax = (sourceInput) => {
   let source = String(sourceInput || "");
   const patterns = [
+    [/\[\[([\s\S]+?)\]\]/g, "$1"],
     [/\[([^\]]+)\]\(([^)]+)\)/g, "$1"],
     [/%%([\s\S]+?)%%/g, "$1"],
     [/==([\s\S]+?)==/g, "$1"],
@@ -981,7 +985,17 @@ const promptLinkUrl = (defaultValue = DEFAULT_LINK_URL) => {
   return window.prompt("请输入链接地址", defaultValue);
 };
 
-const commandInsertLink = (view) => {
+const commandInsertWikiLink = (view) => {
+  const range = selectionRangeOf(view);
+  const linkText = view.state.sliceDoc(range.from, range.to).trim();
+  const markdown = `[[${linkText}]]`;
+  return replaceSelection(view, markdown, {
+    anchor: range.from + 2,
+    head: range.from + 2 + linkText.length
+  });
+};
+
+const commandInsertExternalLink = (view) => {
   const range = selectionRangeOf(view);
   const selectedText = view.state.sliceDoc(range.from, range.to).trim();
   const linkText = selectedText || "";
@@ -1168,9 +1182,9 @@ const executeCommand = async (view, commandId, menuContext = {}) => {
   try {
     switch (normalizedCommandId) {
       case "add-link":
-        return commandInsertLink(view);
+        return commandInsertWikiLink(view);
       case "add-external-link":
-        return commandInsertLink(view);
+        return commandInsertExternalLink(view);
       case "format-bold":
         return surroundSelection(view, { prefix: "**", suffix: "**" });
       case "format-italic":

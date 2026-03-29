@@ -1,5 +1,5 @@
-import { BLOCK_TYPES } from "../model/block-types";
-import { createOutlineNode } from "../model/outline-node";
+import { BLOCK_TYPES } from "../model/block-types.js";
+import { createOutlineNode } from "../model/outline-node.js";
 
 const headingTextOf = (block) => {
   const text = String(block?.attrs?.text || "").trim();
