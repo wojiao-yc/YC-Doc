@@ -157,5 +157,7 @@ test("keyboard activation and special-block navigation are wired through the edi
   assert.match(linkEvents, /event\.key !== "Enter"/);
   assert.match(presentation, /handleSpecialBlockVerticalNavigation/);
   assert.match(presentation, /focusTableBlockCellEditor/);
+  assert.match(presentation, /isPlainTableVerticalArrowEvent/);
+  assert.match(presentation, /moveTableCellEditorVerticalFocus/);
   assert.match(presentation, /event\.key !== "ArrowUp" && event\.key !== "ArrowDown"/);
 });

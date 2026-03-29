@@ -506,6 +506,213 @@ const clampIndex = (valueInput, minInput, maxInput) => {
   return Math.max(min, Math.min(max, Math.round(numeric)));
 };
 
+const isPlainTableVerticalArrowEvent = (event) => {
+  if (!event || event.defaultPrevented || event.isComposing) {
+    return false;
+  }
+  if (event.key !== "ArrowUp" && event.key !== "ArrowDown") {
+    return false;
+  }
+  if (event.shiftKey || event.altKey || event.ctrlKey || event.metaKey) {
+    return false;
+  }
+  return true;
+};
+
+const tableCellEditorIdentityOf = (cellEditor) => {
+  if (!(cellEditor instanceof HTMLElement)) {
+    return null;
+  }
+
+  const blockId = String(cellEditor.getAttribute("data-table-block-id") || "");
+  const section = String(cellEditor.getAttribute("data-table-section") || "body").toLowerCase();
+  const colIndex = Number(cellEditor.getAttribute("data-table-col-index"));
+  const rowIndexRaw = Number(cellEditor.getAttribute("data-table-row-index"));
+  if (!blockId || !Number.isFinite(colIndex)) {
+    return null;
+  }
+
+  return {
+    blockId,
+    section: section === "header" ? "header" : "body",
+    rowIndex: Number.isFinite(rowIndexRaw) ? rowIndexRaw : -1,
+    colIndex
+  };
+};
+
+const tableVisualRowIndexOf = (cellIdentity) => {
+  if (!cellIdentity) {
+    return -1;
+  }
+  return cellIdentity.section === "header"
+    ? 0
+    : Math.max(0, Number(cellIdentity.rowIndex || 0)) + 1;
+};
+
+const resolveTableCellSectionAtVisualRow = (visualRowIndexInput) => {
+  const visualRowIndex = Math.max(0, Number(visualRowIndexInput || 0));
+  if (visualRowIndex <= 0) {
+    return {
+      section: "header",
+      rowIndex: -1
+    };
+  }
+  return {
+    section: "body",
+    rowIndex: visualRowIndex - 1
+  };
+};
+
+const resolveTableCellSelectionTextOffset = (cellEditor) => {
+  if (!(cellEditor instanceof HTMLElement) || typeof window === "undefined" || typeof document === "undefined") {
+    return 0;
+  }
+
+  const selection = window.getSelection?.();
+  if (!selection || selection.rangeCount < 1) {
+    return 0;
+  }
+
+  const range = selection.getRangeAt(0);
+  if (!cellEditor.contains(range.endContainer)) {
+    return 0;
+  }
+
+  const prefixRange = document.createRange();
+  prefixRange.selectNodeContents(cellEditor);
+  prefixRange.setEnd(range.endContainer, range.endOffset);
+  return Math.max(0, String(prefixRange.toString() || "").length);
+};
+
+const placeCaretAtTextOffsetInTableCell = (cellEditor, offsetInput = 0) => {
+  if (!(cellEditor instanceof HTMLElement) || typeof window === "undefined" || typeof document === "undefined") {
+    return false;
+  }
+
+  const selection = window.getSelection?.();
+  if (!selection) {
+    return false;
+  }
+
+  const offset = Math.max(0, Number(offsetInput || 0));
+  const range = document.createRange();
+  const textWalker = document.createTreeWalker(cellEditor, window.NodeFilter?.SHOW_TEXT ?? 4);
+  let remaining = offset;
+  let lastTextNode = null;
+  let currentNode = textWalker.nextNode();
+
+  while (currentNode) {
+    const textNode = currentNode;
+    const textLength = String(textNode.nodeValue || "").length;
+    lastTextNode = textNode;
+    if (remaining <= textLength) {
+      range.setStart(textNode, remaining);
+      range.collapse(true);
+      selection.removeAllRanges();
+      selection.addRange(range);
+      return true;
+    }
+    remaining -= textLength;
+    currentNode = textWalker.nextNode();
+  }
+
+  if (lastTextNode) {
+    const lastLength = String(lastTextNode.nodeValue || "").length;
+    range.setStart(lastTextNode, lastLength);
+    range.collapse(true);
+  } else {
+    range.selectNodeContents(cellEditor);
+    range.collapse(offset <= 0);
+  }
+  selection.removeAllRanges();
+  selection.addRange(range);
+  return true;
+};
+
+const focusTableCellEditorElement = (cellEditor, textOffsetInput = 0) => {
+  if (!(cellEditor instanceof HTMLElement)) {
+    return false;
+  }
+
+  try {
+    cellEditor.focus({ preventScroll: true });
+  } catch {
+    cellEditor.focus();
+  }
+  placeCaretAtTextOffsetInTableCell(cellEditor, textOffsetInput);
+  if (typeof cellEditor.scrollIntoView === "function") {
+    cellEditor.scrollIntoView({
+      block: "nearest",
+      inline: "nearest"
+    });
+  }
+  return true;
+};
+
+const resolveMaxTableBodyRowIndex = (tableWidget) => {
+  if (!(tableWidget instanceof Element)) {
+    return -1;
+  }
+
+  let maxRowIndex = -1;
+  for (const cell of tableWidget.querySelectorAll('[data-table-edit="true"][data-table-section="body"]')) {
+    const rowIndex = Number(cell.getAttribute("data-table-row-index"));
+    if (Number.isFinite(rowIndex)) {
+      maxRowIndex = Math.max(maxRowIndex, rowIndex);
+    }
+  }
+  return maxRowIndex;
+};
+
+const resolveTableCellEditorAt = (tableWidget, blockIdInput, visualRowIndexInput, colIndexInput) => {
+  if (!(tableWidget instanceof Element)) {
+    return null;
+  }
+
+  const blockId = String(blockIdInput || "");
+  const colIndex = Math.max(0, Number(colIndexInput || 0));
+  const rowDescriptor = resolveTableCellSectionAtVisualRow(visualRowIndexInput);
+  const selectorParts = [
+    '[data-table-edit="true"]',
+    `[data-table-block-id="${blockId}"]`,
+    `[data-table-section="${rowDescriptor.section}"]`,
+    `[data-table-col-index="${colIndex}"]`
+  ];
+  if (rowDescriptor.section === "body") {
+    selectorParts.push(`[data-table-row-index="${rowDescriptor.rowIndex}"]`);
+  }
+  const target = tableWidget.querySelector(selectorParts.join(""));
+  return target instanceof HTMLElement ? target : null;
+};
+
+const moveTableCellEditorVerticalFocus = (cellEditor, direction = 1) => {
+  const cellIdentity = tableCellEditorIdentityOf(cellEditor);
+  if (!cellIdentity) {
+    return false;
+  }
+
+  const tableWidget = cellEditor.closest(".cm-table-widget");
+  if (!(tableWidget instanceof Element)) {
+    return false;
+  }
+
+  const currentVisualRowIndex = tableVisualRowIndexOf(cellIdentity);
+  const maxVisualRowIndex = Math.max(0, resolveMaxTableBodyRowIndex(tableWidget) + 1);
+  const targetVisualRowIndex = clampIndex(currentVisualRowIndex + direction, 0, maxVisualRowIndex);
+  const textOffset = resolveTableCellSelectionTextOffset(cellEditor);
+  const target = resolveTableCellEditorAt(
+    tableWidget,
+    cellIdentity.blockId,
+    targetVisualRowIndex,
+    cellIdentity.colIndex
+  );
+  if (!target) {
+    return focusTableCellEditorElement(cellEditor, textOffset);
+  }
+
+  return focusTableCellEditorElement(target, textOffset);
+};
+
 const moveArrayItem = (itemsInput, fromIndexInput, toIndexInput) => {
   const items = Array.isArray(itemsInput) ? itemsInput.slice() : [];
   if (!items.length) {
@@ -667,6 +874,11 @@ const bindTableCellEditorDomEvents = (cellEditor) => {
   });
   cellEditor.addEventListener("keydown", (event) => {
     event.stopPropagation();
+    if (isPlainTableVerticalArrowEvent(event)) {
+      event.preventDefault();
+      moveTableCellEditorVerticalFocus(cellEditor, event.key === "ArrowUp" ? -1 : 1);
+      return;
+    }
     if (event.key === "Enter" && !event.shiftKey && !event.altKey && !event.ctrlKey && !event.metaKey) {
       event.preventDefault();
       cellEditor.blur();
