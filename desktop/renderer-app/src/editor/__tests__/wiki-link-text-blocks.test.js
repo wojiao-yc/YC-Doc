@@ -68,3 +68,22 @@ test("findWikiLinkTextBlockByReference resolves encoded refs within a heading sc
 
   assert.equal(targetBlock?.rawText?.trim(), "Beta paragraph");
 });
+
+test("collectWikiLinkTextBlocks keeps richer multiline preview text for long blocks", () => {
+  const markdown = [
+    "# Title",
+    "",
+    "$$",
+    "A = 1 + 2 + 3",
+    "B = 4 + 5 + 6",
+    "C = 7 + 8 + 9",
+    "D = 10 + 11 + 12",
+    "$$"
+  ].join("\n");
+  const blocks = collectWikiLinkTextBlocks(markdown);
+  const previewText = String(blocks[0]?.previewText || "");
+
+  assert.match(previewText, /A = 1 \+ 2 \+ 3/);
+  assert.match(previewText, /B = 4 \+ 5 \+ 6/);
+  assert.match(previewText, /\.\.\.$/);
+});

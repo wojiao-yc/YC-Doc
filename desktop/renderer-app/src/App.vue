@@ -3149,27 +3149,25 @@ const getWikiLinkSuggestions = ({ mode = "file", noteQuery = "", headingQuery = 
       .map((entry, index) => {
         const insertBlockRef = String(entry?.refToken || "");
         const label = String(entry?.previewText || "");
+        const lineStart = Math.max(1, Number(entry?.lineStart || 1));
         return {
           id: `${resolution.relPath}^${String(insertBlockRef || index)}`,
           label,
           detail: `^${insertBlockRef}`,
-          meta: `L${Math.max(1, Number(entry?.lineStart || 1))}`,
+          meta: `L${lineStart}`,
           insertText: `${blockPrefix}${insertBlockRef}`,
           tone: "default",
           layout: "preview",
+          lineStart,
           blockText: String(entry?.text || ""),
-          exact: normalizedBlockQuery && String(entry?.text || "").toLowerCase() === normalizedBlockQuery,
-          starts: normalizedBlockQuery && String(entry?.text || "").toLowerCase().startsWith(normalizedBlockQuery)
         };
       })
       .filter((item) => item.label && (!normalizedBlockQuery || item.blockText.toLowerCase().includes(normalizedBlockQuery)))
       .sort((left, right) =>
-        Number(Boolean(right.exact)) - Number(Boolean(left.exact))
-        || Number(Boolean(right.starts)) - Number(Boolean(left.starts))
+        Number(left.lineStart || 0) - Number(right.lineStart || 0)
         || String(left.id || "").localeCompare(String(right.id || ""), "zh-CN")
       )
-      .slice(0, 8)
-      .map(({ exact, starts, blockText, ...item }) => item);
+      .map(({ blockText, lineStart, ...item }) => item);
   }
 
   const fileItems = files

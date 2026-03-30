@@ -21,6 +21,13 @@ const normalizeText = (valueInput = "") =>
     .replace(/\s+/g, " ")
     .trim();
 
+const previewLinesOf = (valueInput = "") =>
+  String(valueInput || "")
+    .replace(/\r\n/g, "\n")
+    .split("\n")
+    .map((line) => line.replace(/\t/g, "  ").trim())
+    .filter(Boolean);
+
 const fnv1aHash = (valueInput = "") => {
   let hash = 0x811c9dc5;
   const value = String(valueInput || "");
@@ -31,13 +38,57 @@ const fnv1aHash = (valueInput = "") => {
   return hash >>> 0;
 };
 
-const truncatePreview = (valueInput = "", maxLengthInput = 84) => {
-  const value = normalizeText(valueInput);
-  const maxLength = Math.max(12, Number(maxLengthInput || 0));
-  if (value.length <= maxLength) {
-    return value;
+const truncatePreview = (valueInput = "", {
+  maxLinesInput = 3,
+  maxLengthInput = 180
+} = {}) => {
+  const lines = previewLinesOf(valueInput);
+  const fallback = normalizeText(valueInput);
+  if (!lines.length) {
+    return fallback;
   }
-  return `${value.slice(0, maxLength).trim()}...`;
+
+  const maxLines = Math.max(1, Number(maxLinesInput || 0));
+  const maxLength = Math.max(24, Number(maxLengthInput || 0));
+  const preview = [];
+  let remaining = maxLength;
+  let truncated = false;
+
+  for (let index = 0; index < lines.length; index += 1) {
+    if (preview.length >= maxLines) {
+      truncated = true;
+      break;
+    }
+
+    const line = String(lines[index] || "");
+    const budget = remaining - (preview.length > 0 ? 1 : 0);
+    if (budget <= 0) {
+      truncated = true;
+      break;
+    }
+
+    if (line.length <= budget) {
+      preview.push(line);
+      remaining -= line.length + (preview.length > 1 ? 1 : 0);
+      continue;
+    }
+
+    const sliceLength = Math.max(8, budget - 3);
+    preview.push(`${line.slice(0, sliceLength).trimEnd()}...`);
+    truncated = true;
+    remaining = 0;
+    break;
+  }
+
+  if (!preview.length) {
+    return fallback;
+  }
+
+  if (truncated && !preview[preview.length - 1].endsWith("...")) {
+    preview[preview.length - 1] = `${preview[preview.length - 1].trimEnd()}...`;
+  }
+
+  return preview.join("\n");
 };
 
 const scopeRangeForAnchor = (markdownInput = "", headingsInput = [], anchorInput = "") => {
@@ -102,7 +153,7 @@ export const collectWikiLinkTextBlocks = (markdownInput = "", {
       block,
       refToken: buildEncodedWikiLinkBlockRef(normalizedText, nextOccurrence - 1),
       text: normalizedText,
-      previewText: truncatePreview(normalizedText),
+      previewText: truncatePreview(block?.rawText || normalizedText),
       lineStart: Math.max(1, Number(block?.lineStart || 1)),
       lineEnd: Math.max(1, Number(block?.lineEnd || block?.lineStart || 1)),
       type: String(block?.type || "paragraph")

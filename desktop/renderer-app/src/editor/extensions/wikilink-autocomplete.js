@@ -2,7 +2,10 @@ import { Prec } from "@codemirror/state";
 import { EditorView, ViewPlugin, keymap } from "@codemirror/view";
 import { findOpenWikiLinkContext } from "../../utils/wiki-link.js";
 
-const MAX_ITEMS = 8;
+const AUTOCOMPLETE_PANEL_GAP = 6;
+const AUTOCOMPLETE_MAX_HEIGHT = 720;
+const AUTOCOMPLETE_MIN_LIST_HEIGHT = 96;
+const AUTOCOMPLETE_VIEWPORT_MARGIN = 12;
 const WIKI_LINK_MENU_HINTS = [
   { token: "#", text: "可以链接到标题" },
   { token: "^", text: "链接文本块" },
@@ -20,7 +23,6 @@ const escapeHtml = (valueInput = "") =>
 const normalizeItems = (itemsInput = []) =>
   (Array.isArray(itemsInput) ? itemsInput : [])
     .filter((item) => item && typeof item === "object" && item.insertText)
-    .slice(0, MAX_ITEMS)
     .map((item, index) => ({
       id: String(item.id || `wikilink-item-${index}`),
       label: String(item.label || item.insertText || ""),
@@ -132,6 +134,16 @@ export const createWikiLinkAutocompleteExtension = ({
       this.renderFrame = 0;
       this.panel = document.createElement("div");
       this.panel.className = "yc-wikilink-autocomplete";
+      this.list = document.createElement("div");
+      this.list.className = "yc-wikilink-autocomplete-list";
+      this.footer = document.createElement("div");
+      this.footer.className = "yc-wikilink-autocomplete-footer";
+      this.footer.innerHTML = WIKI_LINK_MENU_HINTS
+        .map((hint) =>
+          `<div class="yc-wikilink-autocomplete-hint"><span class="yc-wikilink-autocomplete-hint-token">${escapeHtml(hint.token)}</span><span class="yc-wikilink-autocomplete-hint-text">${escapeHtml(hint.text)}</span></div>`
+        )
+        .join("");
+      this.panel.append(this.list, this.footer);
       this.panel.style.display = "none";
       document.body.appendChild(this.panel);
       this.updatePanel({ forceResetSelection: true });
@@ -174,7 +186,62 @@ export const createWikiLinkAutocompleteExtension = ({
       this.items = [];
       this.selectedIndex = 0;
       this.panel.style.display = "none";
-      this.panel.innerHTML = "";
+      this.list.innerHTML = "";
+    }
+
+    ensureSelectedItemVisible(target) {
+      if (!target || typeof target.scrollIntoView !== "function") {
+        return;
+      }
+      target.scrollIntoView({
+        block: "nearest",
+        inline: "nearest"
+      });
+    }
+
+    positionPanel(coords) {
+      const viewportWidth = Math.max(
+        Number(window.innerWidth || 0),
+        Number(document.documentElement?.clientWidth || 0)
+      );
+      const viewportHeight = Math.max(
+        Number(window.innerHeight || 0),
+        Number(document.documentElement?.clientHeight || 0)
+      );
+      const panelMaxHeight = Math.min(
+        AUTOCOMPLETE_MAX_HEIGHT,
+        Math.max(180, viewportHeight - AUTOCOMPLETE_VIEWPORT_MARGIN * 2)
+      );
+      this.panel.style.maxHeight = `${Math.round(panelMaxHeight)}px`;
+      const footerHeight = Math.ceil(this.footer.getBoundingClientRect().height || 0);
+      const listMaxHeight = Math.max(
+        AUTOCOMPLETE_MIN_LIST_HEIGHT,
+        panelMaxHeight - footerHeight - 16
+      );
+      this.list.style.maxHeight = `${Math.round(listMaxHeight)}px`;
+      const rect = this.panel.getBoundingClientRect();
+      const belowTop = Number(coords?.bottom || 0) + AUTOCOMPLETE_PANEL_GAP;
+      const aboveTop = Number(coords?.top || 0) - rect.height - AUTOCOMPLETE_PANEL_GAP;
+      const maxLeft = Math.max(
+        AUTOCOMPLETE_VIEWPORT_MARGIN,
+        viewportWidth - rect.width - AUTOCOMPLETE_VIEWPORT_MARGIN
+      );
+      const maxTop = Math.max(
+        AUTOCOMPLETE_VIEWPORT_MARGIN,
+        viewportHeight - rect.height - AUTOCOMPLETE_VIEWPORT_MARGIN
+      );
+      const left = Math.min(
+        Math.max(AUTOCOMPLETE_VIEWPORT_MARGIN, Number(coords?.left || 0)),
+        maxLeft
+      );
+      const fitsBelow = belowTop + rect.height <= viewportHeight - AUTOCOMPLETE_VIEWPORT_MARGIN;
+      const fitsAbove = aboveTop >= AUTOCOMPLETE_VIEWPORT_MARGIN;
+      const preferredTop = fitsBelow
+        ? belowTop
+        : (fitsAbove ? aboveTop : Math.min(Math.max(AUTOCOMPLETE_VIEWPORT_MARGIN, belowTop), maxTop));
+
+      this.panel.style.left = `${Math.round(left)}px`;
+      this.panel.style.top = `${Math.round(preferredTop)}px`;
     }
 
     applySelection(indexInput = this.selectedIndex) {
@@ -281,13 +348,12 @@ export const createWikiLinkAutocompleteExtension = ({
       }
 
       this.panel.style.display = "block";
-      this.panel.style.left = `${Math.round(coords.left)}px`;
-      this.panel.style.top = `${Math.round(coords.bottom + 6)}px`;
       this.panel.classList.toggle(
         "is-dark",
         Boolean(document.getElementById("app")?.classList.contains("dark-ui"))
       );
-      this.panel.innerHTML = "";
+      this.list.innerHTML = "";
+      let selectedButton = null;
 
       for (let index = 0; index < this.items.length; index += 1) {
         const item = this.items[index];
@@ -300,17 +366,13 @@ export const createWikiLinkAutocompleteExtension = ({
           event.stopPropagation();
           this.applySelection(index);
         });
-        this.panel.appendChild(button);
+        if (index === this.selectedIndex) {
+          selectedButton = button;
+        }
+        this.list.appendChild(button);
       }
-
-      const footer = document.createElement("div");
-      footer.className = "yc-wikilink-autocomplete-footer";
-      footer.innerHTML = WIKI_LINK_MENU_HINTS
-        .map((hint) =>
-          `<div class="yc-wikilink-autocomplete-hint"><span class="yc-wikilink-autocomplete-hint-token">${escapeHtml(hint.token)}</span><span class="yc-wikilink-autocomplete-hint-text">${escapeHtml(hint.text)}</span></div>`
-        )
-        .join("");
-      this.panel.appendChild(footer);
+      this.ensureSelectedItemVisible(selectedButton);
+      this.positionPanel(coords);
     }
   }, {
     eventHandlers: {
