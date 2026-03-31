@@ -190,3 +190,31 @@ test("keyboard activation and special-block navigation are wired through the edi
   assert.match(presentation, /moveTableCellEditorVerticalFocus/);
   assert.match(presentation, /event\.key !== "ArrowUp" && event\.key !== "ArrowDown"/);
 });
+
+test("workspace graph view is wired through app state, graph data, and force-layout rendering", () => {
+  const app = readSrc("App.vue");
+  const graphView = readSrc("components/WorkspaceLinkGraph.vue");
+  const graphUtil = readSrc("utils/workspace-link-graph.js");
+
+  assert.match(app, /WorkspaceLinkGraph/);
+  assert.match(app, /workspaceGraphOpen/);
+  assert.match(app, /workspaceGraphData/);
+  assert.match(app, /openWorkspaceGraph/);
+  assert.match(app, /handleWorkspaceGraphOpenNote/);
+  assert.match(app, /buildWorkspaceLinkGraph/);
+  assert.match(app, /@open-note="handleWorkspaceGraphOpenNote"/);
+
+  assert.match(graphUtil, /extractWorkspaceTags/);
+  assert.match(graphUtil, /backlinksCount/);
+  assert.match(graphUtil, /folderKey/);
+  assert.match(graphUtil, /primaryTag/);
+
+  assert.match(graphView, /requestAnimationFrame/);
+  assert.match(graphView, /handleNodePointerDown/);
+  assert.match(graphView, /handleWheel/);
+  assert.match(graphView, /hoveredNodeId/);
+  assert.match(graphView, /marker-end/);
+  assert.match(graphView, /:viewBox="svgViewBox"/);
+  assert.match(graphView, /const svgViewBox = computed/);
+  assert.match(graphView, /graphTransform/);
+});

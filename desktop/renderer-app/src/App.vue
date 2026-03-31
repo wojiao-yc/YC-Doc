@@ -143,6 +143,21 @@
               <path d="M8 7.2v3.2M6.4 8.8h3.2" stroke="currentColor" stroke-width="1.1" stroke-linecap="round"/>
             </svg>
           </button>
+          <button
+            type="button"
+            class="w-9 h-9 rounded-lg border inline-flex items-center justify-center transition-all term-tip-btn"
+            :class="isDark ? 'border-slate-700 text-slate-200 bg-slate-900 hover:bg-slate-800' : 'border-gray-200 text-gray-700 bg-white hover:bg-gray-100'"
+            @click="openWorkspaceGraph"
+            data-tip="Workspace Graph"
+            aria-label="Workspace Graph"
+          >
+            <svg class="chrome-icon" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+              <circle cx="4.2" cy="4.3" r="1.6" stroke="currentColor" stroke-width="1.1" />
+              <circle cx="11.8" cy="4.5" r="1.6" stroke="currentColor" stroke-width="1.1" />
+              <circle cx="8" cy="11.7" r="1.8" stroke="currentColor" stroke-width="1.1" />
+              <path d="M5.6 5.1l1.2.9m2.4 0 1.1-.9M5.2 5.9l1.8 4.1m2-4.1L7.3 10" stroke="currentColor" stroke-width="1.1" stroke-linecap="round" />
+            </svg>
+          </button>
         </div>
         <div v-if="!isFileSidebarCollapsed && isDesktopStorage" class="mt-2 flex items-center gap-2">
           <button
@@ -860,6 +875,15 @@
     </aside>
     </div>
 
+    <WorkspaceLinkGraph
+      v-if="workspaceGraphOpen && isEditMode"
+      :graph-data="workspaceGraphData"
+      :active-rel-path="activeMarkdownRelPath"
+      :is-dark="isDark"
+      @close="closeWorkspaceGraph"
+      @open-note="handleWorkspaceGraphOpenNote"
+    />
+
     <div
       v-if="storageNodeMenu.open"
       ref="storageNodeMenuRef"
@@ -923,6 +947,7 @@ import katex from "katex";
 import { FitAddon } from "@xterm/addon-fit";
 import { Terminal as XTermTerminal } from "xterm";
 import ToastMessage from "./components/ToastMessage.vue";
+import WorkspaceLinkGraph from "./components/WorkspaceLinkGraph.vue";
 import EditorShell from "./editor";
 import { useSemanticStore } from "./editor/state/semantic-store";
 import { useMarkdownDocument } from "./composables/useMarkdownDocument";
@@ -948,6 +973,7 @@ import {
   stripMarkdownExtension,
   suggestRelPathForMissing
 } from "./utils/wiki-link";
+import { buildWorkspaceLinkGraph } from "./utils/workspace-link-graph.js";
 
 // 渲染数学公式
 const renderMathFormula = (formula, displayMode) => {
@@ -1068,6 +1094,7 @@ const isSidebarDragging = ref(false);
 const isFileSidebarCollapsed = ref(false);
 const isFileSidebarHidden = ref(false);
 const isFileSidebarDragging = ref(false);
+const workspaceGraphOpen = ref(false);
 const fileSidebarWidth = ref(280);
 const STORAGE_ROOT_ID = "workspace-root";
 const storageTree = ref(null);
@@ -2325,6 +2352,23 @@ const collectMarkdownNodesFromTree = (node, output = []) => {
 };
 
 const workspaceMarkdownFiles = computed(() => collectMarkdownNodesFromTree(storageTree.value, []));
+const workspaceGraphData = computed(() => {
+  const contentsByPath = {
+    ...(wikiLinkIndexState.value?.contentsByPath || {})
+  };
+  const activeRelPath = normalizeRelPath(activeMarkdownRelPath.value);
+  if (activeRelPath) {
+    contentsByPath[activeRelPath] = String(documentMarkdown.value || "");
+  }
+
+  return buildWorkspaceLinkGraph({
+    files: workspaceMarkdownFiles.value,
+    notesByPath: wikiLinkIndexState.value?.notesByPath || {},
+    contentsByPath,
+    forwardLinks: wikiLinkIndexState.value?.forwardLinks || {},
+    backlinks: wikiLinkIndexState.value?.backlinks || {}
+  });
+});
 
 const persistStorageState = () => {
   if (typeof window === "undefined") {
@@ -4697,9 +4741,25 @@ const toggleDark = () => {
   isDark.value = !isDark.value;
 };
 
+const openWorkspaceGraph = () => {
+  workspaceGraphOpen.value = true;
+  scheduleWikiLinkIndexRebuild();
+};
+
+const closeWorkspaceGraph = () => {
+  workspaceGraphOpen.value = false;
+};
+
+const handleWorkspaceGraphOpenNote = (relPathInput = "") => {
+  void openMarkdownFileByRelPath(relPathInput, {
+    showMissingToast: true
+  });
+};
+
 const toggleMode = async () => {
   const nextMode = isEditMode.value ? "view" : "edit";
   if (nextMode === "view") {
+    workspaceGraphOpen.value = false;
     await flushPendingMarkdownSave();
   }
   mode.value = nextMode;
