@@ -68,23 +68,16 @@
 }
 
 .yc-editor-context-arrow {
-  width: 8px;
-  min-width: 8px;
-  height: 8px;
+  width: 10px;
+  min-width: 10px;
+  height: 10px;
   color: #71717a;
   margin-left: 6px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-}
-
-.yc-editor-context-arrow::before {
-  content: "";
-  width: 5px;
-  height: 5px;
-  border-top: 1.4px solid currentColor;
-  border-right: 1.4px solid currentColor;
-  transform: rotate(45deg);
+  font-size: 0;
+  line-height: 1;
 }
 
 .yc-editor-context-separator {

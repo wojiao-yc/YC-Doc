@@ -1,4 +1,6 @@
+import { h, render } from "vue";
 import { EditorView, ViewPlugin } from "@codemirror/view";
+import AppIcon from "../../components/AppIcon.vue";
 import { parseMarkdownToBlocks } from "../parser/parse-blocks.js";
 
 const MENU_GAP = 8;
@@ -1372,6 +1374,109 @@ const TABLE_MENU_DEFINITION = [
   ...TABLE_SORT_ACTIONS
 ];
 
+const CONTEXT_MENU_ICON_NAME_BY_ID = Object.freeze({
+  "add-link": "link",
+  "add-external-link": "external-link",
+  format: "tool",
+  "format-bold": "bold",
+  "format-italic": "italic",
+  "format-strike": "strikethrough",
+  "format-highlight": "highlight",
+  "format-code": "code",
+  "format-math": "formula",
+  "format-comment": "message",
+  "format-clear": "eraser",
+  paragraph: "menu",
+  "paragraph-bullet": "unordered-list",
+  "paragraph-ordered": "ordered-list",
+  "paragraph-task": "check-square",
+  "paragraph-h1": "h1",
+  "paragraph-h2": "h2",
+  "paragraph-h3": "h3",
+  "paragraph-h4": "h4",
+  "paragraph-h5": "h5",
+  "paragraph-h6": "h6",
+  "paragraph-text": "line-height",
+  "paragraph-quote": "quote",
+  insert: "add",
+  "insert-footnote": "file",
+  "insert-table": "apps",
+  "insert-callout": "notification",
+  "insert-divider": "minimize",
+  "insert-code-block": "code-block",
+  "insert-math-block": "formula",
+  "insert-database": "storage",
+  "clipboard-cut": "scissor",
+  "clipboard-copy": "copy",
+  "clipboard-paste": "paste",
+  "clipboard-paste-plain": "paste",
+  "select-block": "scan",
+  "select-all": "select-all",
+  "table-row": "list",
+  "table-col": "apps",
+  "table-row-insert-above": "arrow-up",
+  "table-row-insert-below": "arrow-down",
+  "table-row-move-up": "arrow-up",
+  "table-row-move-down": "arrow-down",
+  "table-row-copy": "copy",
+  "table-row-delete": "delete",
+  "table-col-insert-left": "arrow-left",
+  "table-col-insert-right": "arrow-right",
+  "table-col-move-left": "arrow-left",
+  "table-col-move-right": "arrow-right",
+  "table-col-align-left": "align-left",
+  "table-col-align-center": "align-center",
+  "table-col-align-right": "align-right",
+  "table-col-copy": "copy",
+  "table-col-delete": "delete",
+  "table-sort-asc": "sort-asc",
+  "table-sort-desc": "sort-desc"
+});
+
+const resolveContextMenuIconName = (itemIdInput) => CONTEXT_MENU_ICON_NAME_BY_ID[String(itemIdInput || "")] || "";
+
+const mountContextMenuAppIcon = (hostInput, iconNameInput, svgClassNameInput, fallbackTextInput = "") => {
+  const host = hostInput instanceof HTMLElement ? hostInput : null;
+  if (!host) {
+    return;
+  }
+  host.dataset.ycAppIconHost = "true";
+  host.setAttribute("aria-hidden", "true");
+  host.textContent = "";
+  host.classList.remove("is-fallback");
+  const iconName = String(iconNameInput || "").trim();
+  if (iconName) {
+    render(h(AppIcon, {
+      name: iconName,
+      class: String(svgClassNameInput || "")
+    }), host);
+    return;
+  }
+  render(null, host);
+  const fallbackText = String(fallbackTextInput || "").trim();
+  if (!fallbackText) {
+    return;
+  }
+  host.classList.add("is-fallback");
+  host.textContent = fallbackText;
+};
+
+const mountContextMenuItemIcon = (host, item) =>
+  mountContextMenuAppIcon(host, resolveContextMenuIconName(item?.id), "yc-editor-context-icon-svg", item?.icon);
+
+const mountContextMenuArrowIcon = (host) =>
+  mountContextMenuAppIcon(host, "chevron-right", "yc-editor-context-arrow-svg");
+
+const disposeMountedContextMenuIcons = (rootInput) => {
+  const root = rootInput instanceof HTMLElement ? rootInput : null;
+  if (!root) {
+    return;
+  }
+  Array.from(root.querySelectorAll('[data-yc-app-icon-host="true"]')).forEach((host) => {
+    render(null, host);
+  });
+};
+
 const menuDefinitionForContext = (menuContext = {}) => {
   const tableContext = menuContext?.table || null;
   if (!tableContext?.blockId) {
@@ -1619,10 +1724,12 @@ class EditorContextMenuController {
   closeMenu() {
     this.clearSubmenuTimers();
     if (this.subMenuEl) {
+      disposeMountedContextMenuIcons(this.subMenuEl);
       this.subMenuEl.remove();
       this.subMenuEl = null;
     }
     if (this.rootMenuEl) {
+      disposeMountedContextMenuIcons(this.rootMenuEl);
       this.rootMenuEl.remove();
       this.rootMenuEl = null;
     }
@@ -1829,6 +1936,7 @@ class EditorContextMenuController {
   closeSubMenu() {
     this.clearSubmenuTimers();
     if (this.subMenuEl) {
+      disposeMountedContextMenuIcons(this.subMenuEl);
       this.subMenuEl.remove();
       this.subMenuEl = null;
     }
@@ -1960,10 +2068,7 @@ class EditorContextMenuController {
 
       const icon = document.createElement("span");
       icon.className = "yc-editor-context-icon";
-      icon.setAttribute("data-icon-id", String(item?.id || ""));
-      icon.setAttribute("data-icon-fallback", String(item?.icon || ""));
-      icon.setAttribute("aria-hidden", "true");
-      icon.textContent = String(item?.icon || "");
+      mountContextMenuItemIcon(icon, item);
 
       const label = document.createElement("span");
       label.className = "yc-editor-context-label";
@@ -1975,7 +2080,7 @@ class EditorContextMenuController {
       if (Array.isArray(item?.children) && item.children.length) {
         const arrow = document.createElement("span");
         arrow.className = "yc-editor-context-arrow";
-        arrow.textContent = "";
+        mountContextMenuArrowIcon(arrow);
         button.appendChild(arrow);
 
         button.addEventListener("mouseenter", () => {
