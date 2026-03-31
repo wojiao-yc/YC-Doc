@@ -13,6 +13,7 @@
       class="app-chrome-bar"
       :class="isDark ? 'is-dark' : ''"
     >
+      <!-- App chrome icons are centralized in `AppIcon.vue` to keep shell layout readable. -->
       <div class="app-chrome-no-drag">
         <button
           type="button"
@@ -21,15 +22,7 @@
           :aria-label="isFileSidebarHidden ? '展开左边栏' : '收起左边栏'"
           @click="toggleFileSidebarCollapse"
         >
-          <svg class="chrome-icon" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-            <rect x="1.8" y="2.2" width="12.4" height="11.6" rx="2" stroke="currentColor" stroke-width="1.2" />
-            <path
-              :d="isFileSidebarHidden ? 'M11.2 3.8v8.4' : 'M4.8 3.8v8.4'"
-              stroke="currentColor"
-              stroke-width="1.2"
-              stroke-linecap="round"
-            />
-          </svg>
+          <AppIcon name="panel-left" :collapsed="isFileSidebarHidden" class="chrome-icon" />
         </button>
       </div>
       <div class="editor-chrome-tabs-wrap app-chrome-no-drag">
@@ -44,16 +37,7 @@
             @click="switchEditorTab(tab.id)"
           >
             <span class="editor-tab-icon" aria-hidden="true">
-              <svg v-if="tab.kind === 'graph'" class="chrome-icon" viewBox="0 0 16 16" fill="none">
-                <circle cx="4.2" cy="4.3" r="1.6" stroke="currentColor" stroke-width="1.1" />
-                <circle cx="11.8" cy="4.5" r="1.6" stroke="currentColor" stroke-width="1.1" />
-                <circle cx="8" cy="11.7" r="1.8" stroke="currentColor" stroke-width="1.1" />
-                <path d="M5.6 5.1l1.2.9m2.4 0 1.1-.9M5.2 5.9l1.8 4.1m2-4.1L7.3 10" stroke="currentColor" stroke-width="1.1" stroke-linecap="round" />
-              </svg>
-              <svg v-else class="chrome-icon" viewBox="0 0 16 16" fill="none">
-                <path d="M4.2 2.4h4.9l2.7 2.7v8.5H4.2V2.4z" stroke="currentColor" stroke-width="1.1" stroke-linejoin="round" />
-                <path d="M9.1 2.4v2.9h2.7" stroke="currentColor" stroke-width="1.1" stroke-linejoin="round" />
-              </svg>
+              <AppIcon :name="tab.kind === 'graph' ? 'graph' : 'file'" class="chrome-icon" />
             </span>
             <span class="editor-tab-label">{{ tab.label }}</span>
             <span class="editor-tab-close" @mousedown.stop @click.stop="closeEditorTab(tab.id)">x</span>
@@ -66,12 +50,7 @@
           aria-label="Open graph"
           @click="openWorkspaceGraph"
         >
-          <svg class="chrome-icon" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-            <circle cx="4.2" cy="4.3" r="1.6" stroke="currentColor" stroke-width="1.1" />
-            <circle cx="11.8" cy="4.5" r="1.6" stroke="currentColor" stroke-width="1.1" />
-            <circle cx="8" cy="11.7" r="1.8" stroke="currentColor" stroke-width="1.1" />
-            <path d="M5.6 5.1l1.2.9m2.4 0 1.1-.9M5.2 5.9l1.8 4.1m2-4.1L7.3 10" stroke="currentColor" stroke-width="1.1" stroke-linecap="round" />
-          </svg>
+          <AppIcon name="graph" class="chrome-icon" />
         </button>
       </div>
       <div class="app-chrome-drag" @mousedown="handleChromeDragMouseDown"></div>
@@ -83,15 +62,7 @@
           :aria-label="isSidebarHidden ? '展开右边栏' : '收起右边栏'"
           @click="toggleSidebarCollapse"
         >
-          <svg class="chrome-icon" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-            <rect x="1.8" y="2.2" width="12.4" height="11.6" rx="2" stroke="currentColor" stroke-width="1.2" />
-            <path
-              :d="isSidebarHidden ? 'M4.8 3.8v8.4' : 'M11.2 3.8v8.4'"
-              stroke="currentColor"
-              stroke-width="1.2"
-              stroke-linecap="round"
-            />
-          </svg>
+          <AppIcon name="panel-right" :collapsed="isSidebarHidden" class="chrome-icon" />
         </button>
         <button
           type="button"
@@ -100,9 +71,7 @@
           aria-label="最小化"
           @click="handleWindowMinimize"
         >
-          <svg class="chrome-icon" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-            <path d="M4 8h8" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" />
-          </svg>
+          <AppIcon name="minimize" class="chrome-icon" />
         </button>
         <button
           type="button"
@@ -111,13 +80,7 @@
           :aria-label="windowIsMaximized ? '还原' : '最大化'"
           @click="handleWindowToggleMaximize"
         >
-          <svg v-if="windowIsMaximized" class="chrome-icon" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-            <rect x="4.7" y="3.3" width="7.1" height="7.1" rx="0.8" stroke="currentColor" stroke-width="1.2" />
-            <path d="M3.4 5.5V12h6.5" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" />
-          </svg>
-          <svg v-else class="chrome-icon" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-            <rect x="3.5" y="3.5" width="9" height="9" rx="1" stroke="currentColor" stroke-width="1.2" />
-          </svg>
+          <AppIcon :name="windowIsMaximized ? 'restore' : 'maximize'" class="chrome-icon" />
         </button>
         <button
           type="button"
@@ -126,9 +89,7 @@
           aria-label="关闭"
           @click="handleWindowClose"
         >
-          <svg class="chrome-icon" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-            <path d="M4.5 4.5l7 7m0-7-7 7" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" />
-          </svg>
+          <AppIcon name="close" class="chrome-icon" />
         </button>
       </div>
     </div>
@@ -146,83 +107,51 @@
           : (isDark ? 'border-slate-800 bg-slate-950' : 'border-gray-200 bg-[#fafafa]')
       ]"
     >
-      <div :class="isFileSidebarCollapsed ? 'px-2 py-3' : 'p-4 pb-3'" class="border-b" :style="{ borderColor: isDark ? '#1e293b' : '#e5e7eb' }">
-        <div :class="isFileSidebarCollapsed ? 'flex flex-col items-center gap-2' : 'flex items-start justify-between gap-2'">
-          <div :class="isFileSidebarCollapsed ? 'flex items-center justify-center w-full' : 'flex items-center gap-2 min-w-0'">
-            <div class="w-7 h-7 rounded-lg flex items-center justify-center text-white text-xs font-bold bg-orange-500">FS</div>
-            <div v-if="!isFileSidebarCollapsed" class="min-w-0">
-              <h2 class="text-sm font-semibold truncate" :class="isDark ? 'text-slate-100' : 'text-gray-800'">文件管理</h2>
-              <p class="text-[11px] mt-0.5 truncate" :class="isDark ? 'text-slate-500' : 'text-gray-400'">
-                {{ storageLocationText }}
-              </p>
-            </div>
-          </div>
-        </div>
-        <div v-if="!isFileSidebarCollapsed" class="mt-3 flex items-center gap-2">
+      <div
+        class="border-b"
+        :class="isFileSidebarCollapsed ? 'px-2 py-3' : 'px-3 py-3'"
+        :style="{ borderColor: isDark ? '#1e293b' : '#e5e7eb' }"
+      >
+        <div :class="isFileSidebarCollapsed ? 'flex flex-col items-center gap-1.5' : 'flex items-center gap-1.5'">
+          <!-- File sidebar actions and tree icons are also centralized in `AppIcon.vue`. -->
           <button
             type="button"
-            class="w-9 h-9 rounded-lg border inline-flex items-center justify-center transition-all term-tip-btn"
-            :class="isDark ? 'border-slate-700 text-slate-200 bg-slate-900 hover:bg-slate-800' : 'border-gray-200 text-gray-700 bg-white hover:bg-gray-100'"
-            @click="createStorageFile"
+            class="term-window-btn term-tip-btn file-sidebar-tool-btn"
             data-tip="新建文件"
             aria-label="新建文件"
+            @click="createStorageFile"
           >
-            <svg class="chrome-icon" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-              <path d="M3 11.8V13h1.2l6.8-6.8-1.2-1.2L3 11.8z" stroke="currentColor" stroke-width="1.1" stroke-linejoin="round"/>
-              <path d="M9.7 4.3l1.2-1.2 1.2 1.2-1.2 1.2-1.2-1.2z" stroke="currentColor" stroke-width="1.1" stroke-linejoin="round"/>
-            </svg>
+            <AppIcon name="new-file" class="chrome-icon file-sidebar-icon" />
           </button>
           <button
             type="button"
-            class="w-9 h-9 rounded-lg border inline-flex items-center justify-center transition-all term-tip-btn"
-            :class="isDark ? 'border-slate-700 text-slate-200 bg-slate-900 hover:bg-slate-800' : 'border-gray-200 text-gray-700 bg-white hover:bg-gray-100'"
-            @click="createStorageFolder"
+            class="term-window-btn term-tip-btn file-sidebar-tool-btn"
             data-tip="新建文件夹"
             aria-label="新建文件夹"
+            @click="createStorageFolder"
           >
-            <svg class="chrome-icon" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-              <path d="M2.8 4.5h3l1 1h6.4v6.8H2.8V4.5z" stroke="currentColor" stroke-width="1.1" stroke-linejoin="round"/>
-              <path d="M8 7.2v3.2M6.4 8.8h3.2" stroke="currentColor" stroke-width="1.1" stroke-linecap="round"/>
-            </svg>
+            <AppIcon name="new-folder" class="chrome-icon file-sidebar-icon" />
           </button>
           <button
             type="button"
-            class="w-9 h-9 rounded-lg border inline-flex items-center justify-center transition-all term-tip-btn"
-            :class="isDark ? 'border-slate-700 text-slate-200 bg-slate-900 hover:bg-slate-800' : 'border-gray-200 text-gray-700 bg-white hover:bg-gray-100'"
+            class="term-window-btn term-tip-btn file-sidebar-tool-btn"
+            :class="storageSortMode === 'name-desc' ? 'is-active' : ''"
+            :data-tip="storageSortTooltip"
+            :aria-label="storageSortTooltip"
+            @click="toggleStorageSortMode"
+          >
+            <AppIcon :name="storageSortMode === 'name-desc' ? 'sort-desc' : 'sort-asc'" class="chrome-icon file-sidebar-icon" />
+          </button>
+          <button
+            type="button"
+            class="term-window-btn term-tip-btn file-sidebar-tool-btn"
+            data-tip="关系图谱"
+            aria-label="关系图谱"
             @click="openWorkspaceGraph"
-            data-tip="Workspace Graph"
-            aria-label="Workspace Graph"
           >
-            <svg class="chrome-icon" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-              <circle cx="4.2" cy="4.3" r="1.6" stroke="currentColor" stroke-width="1.1" />
-              <circle cx="11.8" cy="4.5" r="1.6" stroke="currentColor" stroke-width="1.1" />
-              <circle cx="8" cy="11.7" r="1.8" stroke="currentColor" stroke-width="1.1" />
-              <path d="M5.6 5.1l1.2.9m2.4 0 1.1-.9M5.2 5.9l1.8 4.1m2-4.1L7.3 10" stroke="currentColor" stroke-width="1.1" stroke-linecap="round" />
-            </svg>
+            <AppIcon name="graph" class="chrome-icon file-sidebar-icon" />
           </button>
         </div>
-        <div v-if="!isFileSidebarCollapsed && isDesktopStorage" class="mt-2 flex items-center gap-2">
-          <button
-            type="button"
-            class="px-2.5 py-1.5 text-xs rounded-lg border transition-all"
-            :class="isDark ? 'border-slate-700 text-slate-200 bg-slate-900 hover:bg-slate-800' : 'border-gray-200 text-gray-700 bg-white hover:bg-gray-100'"
-            @click="openStorageRootDir"
-          >
-            打开目录
-          </button>
-          <button
-            v-if="canPickWorkspaceRoot"
-            type="button"
-            class="px-2.5 py-1.5 text-xs rounded-lg border transition-all"
-            :class="isDark ? 'border-slate-700 text-slate-200 bg-slate-900 hover:bg-slate-800' : 'border-gray-200 text-gray-700 bg-white hover:bg-gray-100'"
-            @click="pickStorageRootDir"
-          >
-            选择目录
-          </button>
-        </div>
-        <p v-if="!isFileSidebarCollapsed" class="text-[11px] mt-2" :class="isDark ? 'text-slate-500' : 'text-gray-400'">
-          {{ storageStats }}
-        </p>
       </div>
 
       <nav class="flex-1 min-h-0 overflow-y-auto p-2">
@@ -241,16 +170,119 @@
         >
           <span class="w-4 h-4 inline-flex items-center justify-center text-[11px]">
             <template v-if="item.type === 'folder'">
-              <span @click.stop="toggleStorageFolder(item.id)">{{ isStorageFolderExpanded(item.id) ? '▾' : '▸' }}</span>
+              <span class="file-tree-toggle" @click.stop="toggleStorageFolder(item.id)">
+                <AppIcon
+                  :name="isStorageFolderExpanded(item.id) ? 'chevron-down' : 'chevron-right'"
+                  class="file-tree-chevron"
+                />
+              </span>
             </template>
             <template v-else>
-              •
+              <span class="file-tree-toggle-placeholder"></span>
             </template>
           </span>
-          <span class="text-xs">{{ item.type === "folder" ? "📁" : "📄" }}</span>
+          <span class="inline-flex items-center justify-center">
+            <AppIcon
+              :name="item.type === 'folder' ? (isStorageFolderExpanded(item.id) ? 'folder-open' : 'folder') : 'file'"
+              class="file-tree-node-icon"
+            />
+          </span>
           <span v-if="!isFileSidebarCollapsed" class="truncate text-xs">{{ item.name }}</span>
         </button>
       </nav>
+
+      <div
+        v-if="!isFileSidebarCollapsed"
+        class="file-sidebar-footer border-t"
+        :style="{ borderColor: isDark ? '#1e293b' : '#e5e7eb' }"
+      >
+        <div class="file-sidebar-workspace-bar" :class="isDark ? 'is-dark' : ''">
+          <button
+            type="button"
+            class="file-sidebar-workspace-main"
+            :class="isDark ? 'is-dark' : ''"
+            :title="storageLocationText"
+            @click="handleWorkspaceFooterPrimaryAction"
+          >
+            <AppIcon name="workspace-switch" class="workspace-switch-icon" />
+            <span class="truncate text-sm">{{ workspaceDisplayName }}</span>
+          </button>
+
+          <div class="relative workspace-footer-panel-shell">
+            <button
+              type="button"
+              class="term-window-btn term-tip-btn file-sidebar-tool-btn"
+              data-tip="工作区信息"
+              aria-label="工作区信息"
+              @click.stop="toggleWorkspaceFooterPanel('info')"
+            >
+              <AppIcon name="info" class="chrome-icon file-sidebar-icon" />
+            </button>
+            <div
+              v-if="workspaceFooterPanel === 'info'"
+              class="workspace-footer-popover"
+              :class="isDark ? 'is-dark' : ''"
+            >
+              <div class="workspace-footer-popover-title">工作区信息</div>
+              <div class="workspace-footer-info-list">
+                <div class="workspace-footer-info-row">
+                  <span class="workspace-footer-info-label">名称</span>
+                  <span class="workspace-footer-info-value">{{ workspaceDisplayName }}</span>
+                </div>
+                <div class="workspace-footer-info-row">
+                  <span class="workspace-footer-info-label">统计</span>
+                  <span class="workspace-footer-info-value">{{ storageStats }}</span>
+                </div>
+              </div>
+              <p class="workspace-footer-popover-path">{{ storageLocationText }}</p>
+            </div>
+          </div>
+
+          <div class="relative workspace-footer-panel-shell">
+            <button
+              type="button"
+              class="term-window-btn term-tip-btn file-sidebar-tool-btn"
+              data-tip="工作区设置"
+              aria-label="工作区设置"
+              @click.stop="toggleWorkspaceFooterPanel('settings')"
+            >
+              <AppIcon name="settings" class="chrome-icon file-sidebar-icon" />
+            </button>
+            <div
+              v-if="workspaceFooterPanel === 'settings'"
+              class="workspace-footer-popover workspace-footer-actions"
+              :class="isDark ? 'is-dark' : ''"
+            >
+              <button
+                v-if="canPickWorkspaceRoot"
+                type="button"
+                class="workspace-footer-action"
+                :class="isDark ? 'is-dark' : ''"
+                @click="handleWorkspaceFooterSwitch"
+              >
+                <AppIcon name="workspace-switch" class="workspace-footer-action-icon" />
+                <span>切换工作区</span>
+              </button>
+              <button
+                v-if="canOpenWorkspaceRoot"
+                type="button"
+                class="workspace-footer-action"
+                :class="isDark ? 'is-dark' : ''"
+                @click="handleWorkspaceFooterOpenDir"
+              >
+                <AppIcon name="open-folder" class="workspace-footer-action-icon" />
+                <span>打开当前目录</span>
+              </button>
+              <p
+                v-if="!canPickWorkspaceRoot && !canOpenWorkspaceRoot"
+                class="workspace-footer-empty"
+              >
+                当前环境不支持工作区设置
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
     </aside>
 
     <div
@@ -505,6 +537,7 @@
           :class="isDark ? 'border-slate-800 bg-slate-950' : 'border-gray-200 bg-white'"
           @mousedown="startTerminalPullResize"
         >
+          <!-- Terminal toolbar icons also come from `AppIcon.vue` to keep this section focused on behavior. -->
           <div class="flex items-center gap-1 min-w-0">
             <template v-if="isDesktopPty">
               <button
@@ -515,9 +548,7 @@
                 @mousedown.stop
                 @click="createDesktopTerminal"
               >
-                <svg class="term-icon" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-                  <path d="M8 3v10M3 8h10" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" />
-                </svg>
+                <AppIcon name="add" class="term-icon" />
               </button>
               <button
                 v-for="session in desktopSessions"
@@ -569,10 +600,7 @@
               @mousedown.stop
               @click="toggleDesktopSplit"
             >
-              <svg class="term-icon" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-                <rect x="2.5" y="3" width="11" height="10" stroke="currentColor" stroke-width="1.2" rx="1.2"/>
-                <path d="M8 3v10" stroke="currentColor" stroke-width="1.2"/>
-              </svg>
+              <AppIcon name="split" class="term-icon" />
             </button>
             <select
               v-if="isDesktopPty && desktopSessions.length"
@@ -593,10 +621,7 @@
               @mousedown.stop
               @click="terminateCurrentTerminal"
             >
-              <svg class="term-icon" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-                <path d="M3 4.5h10M6.2 2.5h3.6m-5.6 2 0.6 8.2h6.4l0.6-8.2" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>
-                <path d="M6.8 6.4v4.4M9.2 6.4v4.4" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
-              </svg>
+              <AppIcon name="terminate" class="term-icon" />
             </button>
           </div>
         </div>
@@ -611,7 +636,8 @@
           @keydown="onTermContextMenuKeydown($event, 'desktop-tab')"
         >
           <button type="button" class="term-context-item" role="menuitem" @click="openDesktopRenameDialog(desktopTabMenu.sid)">
-            重命名
+            <AppIcon name="rename" class="storage-context-icon" />
+            <span>重命名</span>
           </button>
         </div>
 
@@ -952,10 +978,12 @@
       @keydown="onTermContextMenuKeydown($event, 'storage-node')"
     >
       <button type="button" class="term-context-item" role="menuitem" @click="openStorageRenameDialog(storageNodeMenu.nodeId)">
-        重命名
+        <AppIcon name="rename" class="storage-context-icon" />
+        <span>重命名</span>
       </button>
       <button type="button" class="term-context-item is-danger" role="menuitem" @click="deleteStorageNode(storageNodeMenu.nodeId)">
-        删除
+        <AppIcon name="delete" class="storage-context-icon" />
+        <span>删除</span>
       </button>
     </div>
 
@@ -1003,6 +1031,8 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue"
 import katex from "katex";
 import { FitAddon } from "@xterm/addon-fit";
 import { Terminal as XTermTerminal } from "xterm";
+// App-wide icon registry used by the shell, file tree, and terminal toolbars.
+import AppIcon from "./components/AppIcon.vue";
 import ToastMessage from "./components/ToastMessage.vue";
 import WorkspaceLinkGraph from "./components/WorkspaceLinkGraph.vue";
 import EditorShell from "./editor";
@@ -1155,6 +1185,7 @@ const EDITOR_GRAPH_TAB_ID = "__workspace_graph__";
 const editorTabs = ref([]);
 const activeEditorTabId = ref("");
 const fileSidebarWidth = ref(280);
+const storageSortMode = ref("name-asc");
 const STORAGE_ROOT_ID = "workspace-root";
 const storageTree = ref(null);
 const storageRootPath = ref("");
@@ -1195,6 +1226,7 @@ const storageRenameDialog = ref({
   value: "",
   kind: "file"
 });
+const workspaceFooterPanel = ref("");
 const storageRenameInputRef = ref(null);
 const storageNodeMenuRef = ref(null);
 const desktopTabMenu = ref({
@@ -1401,6 +1433,7 @@ const isDesktopStorage = Boolean(
   && desktopDataBridge?.createWorkspaceFolder
 );
 const canPickWorkspaceRoot = Boolean(desktopDataBridge?.pickWorkspaceRoot);
+const canOpenWorkspaceRoot = Boolean(desktopDataBridge?.openWorkspaceDir);
 const canWorkspaceFileIO = Boolean(
   desktopDataBridge?.readWorkspaceFile
   && desktopDataBridge?.writeWorkspaceFile
@@ -1455,6 +1488,7 @@ const VIEW_STEPS_SIDEBAR_COLLAPSE_STORAGE_KEY = "yc-doc.view-steps-sidebar-colla
 const STORAGE_TREE_STORAGE_KEY = "yc-doc.storage-tree.v1";
 const STORAGE_EXPANDED_STORAGE_KEY = "yc-doc.storage-expanded.v1";
 const STORAGE_SELECTED_STORAGE_KEY = "yc-doc.storage-selected.v1";
+const STORAGE_SORT_MODE_STORAGE_KEY = "yc-doc.storage-sort-mode.v1";
 const WIKI_LINK_INDEX_DEBOUNCE_MS = 220;
 
 const { toast, showToast } = useToast();
@@ -1911,6 +1945,8 @@ if (typeof window !== "undefined") {
     if (selectedId) {
       selectedStorageNodeId.value = selectedId;
     }
+    const rawStorageSortMode = String(localStorage.getItem(STORAGE_SORT_MODE_STORAGE_KEY) || "").trim();
+    storageSortMode.value = rawStorageSortMode === "name-desc" ? "name-desc" : "name-asc";
   } catch {
     gestureNavigationEnabled.value = false;
     collapseHeaderInView.value = false;
@@ -1918,6 +1954,7 @@ if (typeof window !== "undefined") {
     storageTree.value = null;
     storageFolderExpandedMap.value = { [STORAGE_ROOT_ID]: true };
     selectedStorageNodeId.value = STORAGE_ROOT_ID;
+    storageSortMode.value = "name-asc";
   }
 }
 
@@ -2193,7 +2230,8 @@ const compareStorageNodes = (a, b) => {
   if (a.type !== b.type) {
     return a.type === "folder" ? -1 : 1;
   }
-  return String(a.name || "").localeCompare(String(b.name || ""), "zh-CN");
+  const direction = storageSortMode.value === "name-desc" ? -1 : 1;
+  return direction * String(a.name || "").localeCompare(String(b.name || ""), "zh-CN");
 };
 
 const fileSidebarPanelWidth = computed(() => {
@@ -2276,6 +2314,19 @@ const storageStats = computed(() => {
   return `${Math.max(0, folderCount - 1)} 文件夹 / ${fileCount} 文件`;
 });
 
+const storageSortTooltip = computed(() =>
+  storageSortMode.value === "name-desc" ? "排序：名称降序" : "排序：名称升序"
+);
+
+const workspaceDisplayName = computed(() => {
+  if (isDesktopStorage) {
+    const trimmedPath = String(storageRootPath.value || "").replace(/[\\/]+$/, "");
+    const segments = trimmedPath.split(/[\\/]/).filter(Boolean);
+    return segments[segments.length - 1] || "Workspace";
+  }
+  return String(storageTree.value?.name || "Local Storage");
+});
+
 const isStorageFolderExpanded = (id) => storageFolderExpandedMap.value[id] !== false;
 
 const visibleStorageNodes = computed(() => {
@@ -2299,7 +2350,11 @@ const visibleStorageNodes = computed(() => {
       walk(child, depth + 1);
     }
   };
-  walk(storageTree.value, 0);
+  const rootChildren = Array.isArray(storageTree.value?.children) ? storageTree.value.children : [];
+  const orderedRoots = [...rootChildren].sort(compareStorageNodes);
+  for (const child of orderedRoots) {
+    walk(child, 0);
+  }
   return list;
 });
 
@@ -2774,6 +2829,39 @@ const toggleStorageFolder = (id) => {
     [targetId]: !isStorageFolderExpanded(targetId)
   };
   persistStorageState();
+};
+
+const closeWorkspaceFooterPanel = () => {
+  workspaceFooterPanel.value = "";
+};
+
+const toggleWorkspaceFooterPanel = (panel) => {
+  const targetPanel = String(panel || "").trim();
+  workspaceFooterPanel.value = workspaceFooterPanel.value === targetPanel ? "" : targetPanel;
+};
+
+const handleWorkspaceFooterPrimaryAction = async () => {
+  closeWorkspaceFooterPanel();
+  if (canPickWorkspaceRoot) {
+    await pickStorageRootDir();
+    return;
+  }
+  if (canOpenWorkspaceRoot) {
+    await openStorageRootDir();
+  }
+};
+
+const handleWorkspaceFooterSwitch = async () => {
+  closeWorkspaceFooterPanel();
+  if (!canPickWorkspaceRoot) {
+    return;
+  }
+  await pickStorageRootDir();
+};
+
+const handleWorkspaceFooterOpenDir = async () => {
+  closeWorkspaceFooterPanel();
+  await openStorageRootDir();
 };
 
 const resolveStorageTargetFolderId = () => {
@@ -3761,6 +3849,11 @@ const pickStorageRootDir = async () => {
   } catch (error) {
     showToast(`选择目录失败: ${String(error?.message || error || "unknown_error")}`);
   }
+};
+
+const toggleStorageSortMode = () => {
+  storageSortMode.value = storageSortMode.value === "name-desc" ? "name-asc" : "name-desc";
+  showToast(storageSortMode.value === "name-desc" ? "文件树已切换为名称降序" : "文件树已切换为名称升序");
 };
 
 ensureSelectedStorageNodeValid();
@@ -5098,6 +5191,23 @@ watch(selectedStorageNodeId, () => {
   persistStorageState();
 });
 
+watch(storageSortMode, (mode) => {
+  if (typeof window === "undefined") {
+    return;
+  }
+  try {
+    localStorage.setItem(STORAGE_SORT_MODE_STORAGE_KEY, mode === "name-desc" ? "name-desc" : "name-asc");
+  } catch {
+    // ignore storage failure
+  }
+});
+
+watch([isFileSidebarCollapsed, isFileSidebarHidden], ([collapsed, hidden]) => {
+  if (collapsed || hidden) {
+    closeWorkspaceFooterPanel();
+  }
+});
+
 watch(
   [workspaceMarkdownFiles, activeMarkdownRelPath, documentMarkdown],
   () => {
@@ -5378,8 +5488,12 @@ const onGlobalPointerDown = (event) => {
   if (target instanceof Element && target.closest(".term-context-menu")) {
     return;
   }
+  if (target instanceof Element && target.closest(".workspace-footer-panel-shell")) {
+    return;
+  }
   closeDesktopTabContextMenu();
   closeStorageNodeContextMenu();
+  closeWorkspaceFooterPanel();
 };
 
 const onGlobalKeyup = (event) => {
@@ -5398,6 +5512,7 @@ onMounted(() => {
   window.addEventListener("focus", clearBodyInteractionStyles);
   window.addEventListener("blur", closeDesktopTabContextMenu);
   window.addEventListener("blur", closeStorageNodeContextMenu);
+  window.addEventListener("blur", closeWorkspaceFooterPanel);
   window.addEventListener("blur", releasePasteShortcutLocks);
   window.addEventListener("resize", refreshContentProgress);
   if (isDesktopStorage) {
@@ -5449,6 +5564,7 @@ onBeforeUnmount(() => {
   window.removeEventListener("focus", clearBodyInteractionStyles);
   window.removeEventListener("blur", closeDesktopTabContextMenu);
   window.removeEventListener("blur", closeStorageNodeContextMenu);
+  window.removeEventListener("blur", closeWorkspaceFooterPanel);
   window.removeEventListener("blur", releasePasteShortcutLocks);
   window.removeEventListener("resize", refreshContentProgress);
   if (desktopWindowMaximizeOff) {
