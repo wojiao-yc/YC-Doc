@@ -32,6 +32,48 @@
           </svg>
         </button>
       </div>
+      <div class="editor-chrome-tabs-wrap app-chrome-no-drag">
+        <div class="editor-chrome-tabs" :class="isDark ? 'is-dark' : ''">
+          <button
+            v-for="tab in editorTabsWithMeta"
+            :key="tab.id"
+            type="button"
+            class="editor-tab"
+            :class="activeEditorTabId === tab.id ? 'editor-tab-active' : ''"
+            :title="tab.title"
+            @click="switchEditorTab(tab.id)"
+          >
+            <span class="editor-tab-icon" aria-hidden="true">
+              <svg v-if="tab.kind === 'graph'" class="chrome-icon" viewBox="0 0 16 16" fill="none">
+                <circle cx="4.2" cy="4.3" r="1.6" stroke="currentColor" stroke-width="1.1" />
+                <circle cx="11.8" cy="4.5" r="1.6" stroke="currentColor" stroke-width="1.1" />
+                <circle cx="8" cy="11.7" r="1.8" stroke="currentColor" stroke-width="1.1" />
+                <path d="M5.6 5.1l1.2.9m2.4 0 1.1-.9M5.2 5.9l1.8 4.1m2-4.1L7.3 10" stroke="currentColor" stroke-width="1.1" stroke-linecap="round" />
+              </svg>
+              <svg v-else class="chrome-icon" viewBox="0 0 16 16" fill="none">
+                <path d="M4.2 2.4h4.9l2.7 2.7v8.5H4.2V2.4z" stroke="currentColor" stroke-width="1.1" stroke-linejoin="round" />
+                <path d="M9.1 2.4v2.9h2.7" stroke="currentColor" stroke-width="1.1" stroke-linejoin="round" />
+              </svg>
+            </span>
+            <span class="editor-tab-label">{{ tab.label }}</span>
+            <span class="editor-tab-close" @mousedown.stop @click.stop="closeEditorTab(tab.id)">x</span>
+          </button>
+        </div>
+        <button
+          type="button"
+          class="editor-tab-add term-tip-btn"
+          data-tip="Open graph"
+          aria-label="Open graph"
+          @click="openWorkspaceGraph"
+        >
+          <svg class="chrome-icon" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+            <circle cx="4.2" cy="4.3" r="1.6" stroke="currentColor" stroke-width="1.1" />
+            <circle cx="11.8" cy="4.5" r="1.6" stroke="currentColor" stroke-width="1.1" />
+            <circle cx="8" cy="11.7" r="1.8" stroke="currentColor" stroke-width="1.1" />
+            <path d="M5.6 5.1l1.2.9m2.4 0 1.1-.9M5.2 5.9l1.8 4.1m2-4.1L7.3 10" stroke="currentColor" stroke-width="1.1" stroke-linecap="round" />
+          </svg>
+        </button>
+      </div>
       <div class="app-chrome-drag" @mousedown="handleChromeDragMouseDown"></div>
       <div class="app-chrome-no-drag">
         <button
@@ -243,13 +285,25 @@
       <section
         v-show="!terminalMaximized"
         ref="contentScrollRef"
-        class="flex-1 min-h-0 overflow-y-auto"
-        :class="isDark ? 'bg-slate-950' : 'bg-white'"
+        class="flex-1 min-h-0"
+        :class="[
+          isDark ? 'bg-slate-950' : 'bg-white',
+          isEditMode && isWorkspaceGraphTabActive ? 'overflow-hidden' : 'overflow-y-auto'
+        ]"
         @scroll.passive="onContentScroll"
       >
-        <div class="mx-auto relative w-full px-10 py-10" :class="isEditMode ? 'max-w-6xl' : 'max-w-none'">
+        <div
+          class="relative w-full"
+          :class="[
+            !isEditMode
+              ? 'mx-auto max-w-none px-10 py-10'
+              : (isWorkspaceGraphTabActive
+                ? 'h-full px-0 py-0'
+                : 'mx-auto max-w-6xl px-10 py-10')
+          ]"
+        >
           <transition name="fade" mode="out-in">
-            <div :key="contentPaneKey" class="flex flex-col">
+            <div :key="contentPaneKey" class="flex flex-col" :class="isEditMode && isWorkspaceGraphTabActive ? 'h-full' : ''">
               <div
                 v-if="!isEditMode"
                 class="mb-10 w-full relative mx-auto"
@@ -267,6 +321,19 @@
                     v-html="renderedMarkdown"
                   ></div>
                 </div>
+              </div>
+
+              <div
+                v-else-if="isWorkspaceGraphTabActive"
+                class="flex-1 min-h-0 h-full"
+              >
+                <WorkspaceLinkGraph
+                  :graph-data="workspaceGraphData"
+                  :active-rel-path="activeMarkdownRelPath"
+                  :is-dark="isDark"
+                  @close="closeWorkspaceGraph"
+                  @open-note="handleWorkspaceGraphOpenNote"
+                />
               </div>
 
               <div
@@ -401,7 +468,7 @@
           </transition>
         </div>
         <footer
-          v-if="!(gestureNavigationEnabled && !isEditMode)"
+          v-if="!(gestureNavigationEnabled && !isEditMode) && !isWorkspaceGraphTabActive"
           class="px-10 py-6 border-t flex items-center justify-center"
           :class="isDark ? 'border-slate-800 bg-slate-950' : 'border-gray-100 bg-white'"
         >
@@ -874,16 +941,6 @@
       </div>
     </aside>
     </div>
-
-    <WorkspaceLinkGraph
-      v-if="workspaceGraphOpen && isEditMode"
-      :graph-data="workspaceGraphData"
-      :active-rel-path="activeMarkdownRelPath"
-      :is-dark="isDark"
-      @close="closeWorkspaceGraph"
-      @open-note="handleWorkspaceGraphOpenNote"
-    />
-
     <div
       v-if="storageNodeMenu.open"
       ref="storageNodeMenuRef"
@@ -1094,7 +1151,9 @@ const isSidebarDragging = ref(false);
 const isFileSidebarCollapsed = ref(false);
 const isFileSidebarHidden = ref(false);
 const isFileSidebarDragging = ref(false);
-const workspaceGraphOpen = ref(false);
+const EDITOR_GRAPH_TAB_ID = "__workspace_graph__";
+const editorTabs = ref([]);
+const activeEditorTabId = ref("");
 const fileSidebarWidth = ref(280);
 const STORAGE_ROOT_ID = "workspace-root";
 const storageTree = ref(null);
@@ -1495,7 +1554,11 @@ const adjustVisualEditorWidth = (delta) => {
   displayWidth.value = clamp(displayWidth.value + Number(delta || 0), 520, Math.max(520, maxWidth));
 };
 
-const contentPaneKey = computed(() => (isEditMode.value ? mode.value : `${mode.value}:${currentId.value}`));
+const contentPaneKey = computed(() => (
+  isEditMode.value
+    ? `${mode.value}:${activeEditorTabId.value || activeMarkdownRelPath.value || "blank"}`
+    : `${mode.value}:${currentId.value}`
+));
 
 const renderedMarkdown = computed(() => {
   if (isEditMode.value) {
@@ -1972,6 +2035,7 @@ const loadDesktopStorageTree = async ({ preferredNodeId = "", preferredMarkdownR
     }
 
     storageTree.value = normalizeDesktopStorageNode(treeResult.tree, true);
+    pruneMissingEditorTabs();
     if (treeResult.rootPath) {
       storageRootPath.value = String(treeResult.rootPath);
     }
@@ -1981,22 +2045,29 @@ const loadDesktopStorageTree = async ({ preferredNodeId = "", preferredMarkdownR
     } else {
       ensureSelectedStorageNodeValid();
     }
-    const selected = findStorageNodeInTree(storageTree.value, selectedStorageNodeId.value);
     const preferredMarkdownPath = String(preferredMarkdownRelPath || "").trim();
+    const preferredMarkdownMatch = preferredMarkdownPath
+      ? findStorageNodeByRelPath(storageTree.value, preferredMarkdownPath)
+      : null;
+    if (preferredMarkdownMatch?.node && canAutoLoadMarkdownNode(preferredMarkdownMatch.node)) {
+      expandStorageAncestors(preferredMarkdownMatch.parentIds);
+      selectedStorageNodeId.value = String(preferredMarkdownMatch.node.id || selectedStorageNodeId.value);
+    }
+    const selected = findStorageNodeInTree(storageTree.value, selectedStorageNodeId.value);
     if (
       preferredMarkdownPath
       && canAutoLoadMarkdownNode(selected?.node)
       && String(selected?.node?.relPath || "") === preferredMarkdownPath
     ) {
-      await loadStepsFromMarkdownFile(preferredMarkdownPath, false);
+      await loadMarkdownFileInEditor(preferredMarkdownPath, { showSuccessToast: false });
     } else if (canAutoLoadMarkdownNode(selected?.node)) {
-      await loadStepsFromMarkdownFile(String(selected.node.relPath || ""), false);
+      await loadMarkdownFileInEditor(String(selected.node.relPath || ""), { showSuccessToast: false });
     } else {
       const shouldAutoPickFirstMarkdown = !selected?.node || selected.node.id === STORAGE_ROOT_ID;
       const firstMarkdown = shouldAutoPickFirstMarkdown ? findFirstMarkdownNode(storageTree.value) : null;
       if (firstMarkdown?.relPath) {
         selectedStorageNodeId.value = String(firstMarkdown.id || selectedStorageNodeId.value);
-        await loadStepsFromMarkdownFile(String(firstMarkdown.relPath), false);
+        await loadMarkdownFileInEditor(String(firstMarkdown.relPath), { showSuccessToast: false });
         return;
       }
       if (selected?.node?.type === "file" && isMarkdownFileName(selected.node.name)) {
@@ -2008,6 +2079,7 @@ const loadDesktopStorageTree = async ({ preferredNodeId = "", preferredMarkdownR
     showToast(`读取存储目录失败: ${String(error?.message || error || "unknown_error")}`);
     resetBlankEditorState();
     storageTree.value = ensureStorageTree(storageTree.value);
+    pruneMissingEditorTabs();
   } finally {
     storageLoading.value = false;
   }
@@ -2254,6 +2326,276 @@ const findStorageNodeByRelPath = (node, relPathInput, parentIds = []) => {
   return null;
 };
 
+const createEditorFileTabId = (relPathInput = "") => {
+  const relPath = normalizeRelPath(relPathInput);
+  return relPath ? `file:${relPath}` : "";
+};
+
+const dedupeEditorTabs = (tabs = []) => {
+  const seen = new Set();
+  return (Array.isArray(tabs) ? tabs : []).filter((tab) => {
+    const id = String(tab?.id || "");
+    if (!id || seen.has(id)) {
+      return false;
+    }
+    seen.add(id);
+    return true;
+  });
+};
+
+const buildEditorTab = (tabInput = {}) => {
+  const kind = tabInput.kind === "graph" ? "graph" : "file";
+  if (kind === "graph") {
+    return {
+      id: EDITOR_GRAPH_TAB_ID,
+      kind: "graph"
+    };
+  }
+
+  const relPath = normalizeRelPath(tabInput.relPath);
+  return {
+    id: createEditorFileTabId(relPath),
+    kind: "file",
+    relPath
+  };
+};
+
+const ensureEditorTabs = (tabs = []) =>
+  dedupeEditorTabs(
+    (Array.isArray(tabs) ? tabs : [])
+      .map((tab) => buildEditorTab(tab))
+      .filter((tab) => (tab.kind === "graph" ? true : Boolean(tab.relPath)))
+  );
+
+const ensureEditorFileTab = (relPathInput = "") => {
+  const relPath = normalizeRelPath(relPathInput);
+  if (!relPath) {
+    return "";
+  }
+  const tabId = createEditorFileTabId(relPath);
+  if (!editorTabs.value.some((tab) => tab.id === tabId)) {
+    editorTabs.value = ensureEditorTabs([
+      ...editorTabs.value,
+      { kind: "file", relPath }
+    ]);
+  }
+  return tabId;
+};
+
+const ensureWorkspaceGraphTab = () => {
+  if (!editorTabs.value.some((tab) => tab.id === EDITOR_GRAPH_TAB_ID)) {
+    editorTabs.value = ensureEditorTabs([
+      ...editorTabs.value,
+      { kind: "graph" }
+    ]);
+  }
+  return EDITOR_GRAPH_TAB_ID;
+};
+
+const resolveEditorTabLabel = (tab) => {
+  if (tab?.kind === "graph") {
+    return "Graph";
+  }
+  const relPath = normalizeRelPath(tab?.relPath);
+  const matched = findStorageNodeByRelPath(storageTree.value, relPath);
+  const baseName = String(
+    matched?.node?.name
+    || basenameOfRelPath(relPath)
+    || relPath
+    || "Untitled"
+  );
+  return stripMarkdownExtension(baseName) || "Untitled";
+};
+
+const editorTabsWithMeta = computed(() =>
+  editorTabs.value.map((tab) => ({
+    ...tab,
+    label: resolveEditorTabLabel(tab),
+    title: tab.kind === "graph" ? "Graph" : String(tab.relPath || "")
+  }))
+);
+
+const isWorkspaceGraphTabActive = computed(() => activeEditorTabId.value === EDITOR_GRAPH_TAB_ID);
+
+const pickNeighborFileTab = (tabs = [], preferredIndex = 0) => {
+  const list = Array.isArray(tabs) ? tabs : [];
+  if (!list.length) {
+    return null;
+  }
+  const safeIndex = clamp(Number(preferredIndex) || 0, 0, Math.max(0, list.length - 1));
+  for (let offset = 0; offset < list.length; offset += 1) {
+    const right = list[safeIndex + offset];
+    if (right?.kind === "file") {
+      return right;
+    }
+    const left = list[safeIndex - offset];
+    if (offset > 0 && left?.kind === "file") {
+      return left;
+    }
+  }
+  return list.find((tab) => tab?.kind === "file") || null;
+};
+
+const pruneMissingEditorTabs = () => {
+  const nextTabs = ensureEditorTabs(
+    editorTabs.value.filter((tab) =>
+      tab.kind === "graph" || Boolean(findStorageNodeByRelPath(storageTree.value, tab.relPath))
+    )
+  );
+  editorTabs.value = nextTabs;
+  if (activeEditorTabId.value && !nextTabs.some((tab) => tab.id === activeEditorTabId.value)) {
+    const currentRelPath = normalizeRelPath(activeMarkdownRelPath.value);
+    if (currentRelPath && findStorageNodeByRelPath(storageTree.value, currentRelPath)?.node) {
+      activeEditorTabId.value = ensureEditorFileTab(activeMarkdownRelPath.value);
+      return;
+    }
+    activeEditorTabId.value = nextTabs[0]?.id || "";
+  }
+};
+
+const dropEditorTabsForNode = (nodeRelPathInput = "", nodeType = "file") => {
+  const nodeRelPath = normalizeRelPath(nodeRelPathInput);
+  if (!nodeRelPath) {
+    return;
+  }
+  editorTabs.value = ensureEditorTabs(
+    editorTabs.value.filter((tab) =>
+      tab.kind === "graph" || !isRelPathAffectedByNode(tab.relPath, nodeRelPath, nodeType)
+    )
+  );
+};
+
+const remapEditorTabsForNode = (previousRelPathInput = "", nextRelPathInput = "", nodeType = "file") => {
+  const previousRelPath = normalizeRelPath(previousRelPathInput);
+  const nextRelPath = normalizeRelPath(nextRelPathInput);
+  if (!previousRelPath || !nextRelPath || previousRelPath === nextRelPath) {
+    return;
+  }
+
+  const activeTab = editorTabs.value.find((tab) => tab.id === activeEditorTabId.value) || null;
+  const nextTabs = editorTabs.value.map((tab) => {
+    if (tab.kind !== "file" || !isRelPathAffectedByNode(tab.relPath, previousRelPath, nodeType)) {
+      return tab;
+    }
+    const suffix = nodeType === "folder"
+      ? String(tab.relPath || "").slice(previousRelPath.length).replace(/^\/+/, "")
+      : "";
+    const mappedRelPath = nodeType === "folder" && suffix ? `${nextRelPath}/${suffix}` : nextRelPath;
+    return buildEditorTab({
+      kind: "file",
+      relPath: mappedRelPath
+    });
+  });
+
+  editorTabs.value = ensureEditorTabs(nextTabs);
+
+  if (activeTab?.kind === "file" && isRelPathAffectedByNode(activeTab.relPath, previousRelPath, nodeType)) {
+    const suffix = nodeType === "folder"
+      ? String(activeTab.relPath || "").slice(previousRelPath.length).replace(/^\/+/, "")
+      : "";
+    const mappedRelPath = nodeType === "folder" && suffix ? `${nextRelPath}/${suffix}` : nextRelPath;
+    activeEditorTabId.value = createEditorFileTabId(mappedRelPath);
+  }
+};
+
+const mapRelPathThroughNodeChange = (fileRelPathInput = "", previousRelPathInput = "", nextRelPathInput = "", nodeType = "file") => {
+  const fileRelPath = normalizeRelPath(fileRelPathInput);
+  const previousRelPath = normalizeRelPath(previousRelPathInput);
+  const nextRelPath = normalizeRelPath(nextRelPathInput);
+  if (!fileRelPath || !previousRelPath || !nextRelPath || !isRelPathAffectedByNode(fileRelPath, previousRelPath, nodeType)) {
+    return fileRelPath;
+  }
+  if (nodeType !== "folder") {
+    return nextRelPath;
+  }
+  const suffix = fileRelPath.slice(previousRelPath.length).replace(/^\/+/, "");
+  return suffix ? `${nextRelPath}/${suffix}` : nextRelPath;
+};
+
+const loadMarkdownFileInEditor = async (relPathInput, { showSuccessToast = false } = {}) => {
+  const relPath = normalizeRelPath(relPathInput);
+  if (!relPath) {
+    return false;
+  }
+  const loaded = await loadStepsFromMarkdownFile(relPath, showSuccessToast);
+  if (!loaded) {
+    return false;
+  }
+  activeEditorTabId.value = ensureEditorFileTab(relPath);
+  return true;
+};
+
+const switchEditorTab = async (tabIdInput = "") => {
+  const tabId = String(tabIdInput || "").trim();
+  const targetTab = editorTabs.value.find((tab) => tab.id === tabId);
+  if (!targetTab) {
+    return;
+  }
+  if (targetTab.kind === "graph") {
+    activeEditorTabId.value = ensureWorkspaceGraphTab();
+    scheduleWikiLinkIndexRebuild();
+    return;
+  }
+  await openMarkdownFileByRelPath(targetTab.relPath, {
+    showMissingToast: false
+  });
+};
+
+const closeEditorTab = async (tabIdInput = "") => {
+  const tabId = String(tabIdInput || "").trim();
+  const index = editorTabs.value.findIndex((tab) => tab.id === tabId);
+  if (index < 0) {
+    return;
+  }
+
+  const tab = editorTabs.value[index];
+  const remainingTabs = ensureEditorTabs(editorTabs.value.filter((item) => item.id !== tabId));
+  const graphWasActive = isWorkspaceGraphTabActive.value;
+  const closedLoadedFile = tab.kind === "file"
+    && normalizeRelPath(tab.relPath) === normalizeRelPath(activeMarkdownRelPath.value);
+
+  editorTabs.value = remainingTabs;
+
+  if (tab.kind === "graph") {
+    if (activeEditorTabId.value === tabId) {
+      const currentRelPath = normalizeRelPath(activeMarkdownRelPath.value);
+      activeEditorTabId.value = currentRelPath ? ensureEditorFileTab(currentRelPath) : (remainingTabs[0]?.id || "");
+    }
+    return;
+  }
+
+  if (!closedLoadedFile) {
+    if (activeEditorTabId.value === tabId) {
+      const nextFileTab = pickNeighborFileTab(remainingTabs, index);
+      if (nextFileTab?.relPath) {
+        await openMarkdownFileByRelPath(nextFileTab.relPath, {
+          showMissingToast: false
+        });
+      } else {
+        activeEditorTabId.value = remainingTabs.find((item) => item.kind === "graph")?.id || "";
+      }
+    }
+    return;
+  }
+
+  const nextFileTab = pickNeighborFileTab(remainingTabs, index);
+  if (nextFileTab?.relPath) {
+    await openMarkdownFileByRelPath(nextFileTab.relPath, {
+      showMissingToast: false
+    });
+    if (graphWasActive && remainingTabs.some((item) => item.kind === "graph")) {
+      activeEditorTabId.value = EDITOR_GRAPH_TAB_ID;
+    }
+    return;
+  }
+
+  await persistActiveMarkdownBeforeSwitch();
+  resetBlankEditorState();
+  activeEditorTabId.value = graphWasActive && remainingTabs.some((item) => item.kind === "graph")
+    ? EDITOR_GRAPH_TAB_ID
+    : "";
+};
+
 const createWikiLinkFileByRelPath = async (relPathInput = "") => {
   const normalizedRelPath = normalizeRelPath(ensureMarkdownExtension(relPathInput));
   if (!normalizedRelPath) {
@@ -2405,20 +2747,19 @@ const selectStorageNode = async (id) => {
       ...storageFolderExpandedMap.value,
       [targetId]: true
     };
-    await persistActiveMarkdownBeforeSwitch();
-    resetBlankEditorState();
   } else if (matched?.node?.type === "file" && isMarkdownFileName(matched.node.name)) {
-    if (isMarkdownFileTooLarge(matched.node.size)) {
-      showToast(`Markdown 文件过大，无法载入: ${matched.node.name} (${formatBytes(matched.node.size)})`);
-      await persistActiveMarkdownBeforeSwitch();
-      resetBlankEditorState();
+    const targetRelPath = String(matched.node.relPath || "");
+    if (normalizeRelPath(targetRelPath) === normalizeRelPath(activeMarkdownRelPath.value)) {
+      activeEditorTabId.value = ensureEditorFileTab(targetRelPath);
       persistStorageState();
       return;
     }
-    await loadStepsFromMarkdownFile(String(matched.node.relPath || ""), true);
-  } else {
-    await persistActiveMarkdownBeforeSwitch();
-    resetBlankEditorState();
+    if (isMarkdownFileTooLarge(matched.node.size)) {
+      showToast(`Markdown 文件过大，无法载入: ${matched.node.name} (${formatBytes(matched.node.size)})`);
+      persistStorageState();
+      return;
+    }
+    await loadMarkdownFileInEditor(targetRelPath, { showSuccessToast: true });
   }
   persistStorageState();
 };
@@ -2728,6 +3069,9 @@ const renameStorageNode = async (nodeId, nextName) => {
     previousRelPath,
     matched.node.type
   );
+  const renamedActiveRelPath = affectedActiveFile
+    ? mapRelPathThroughNodeChange(activeMarkdownRelPath.value, previousRelPath, joinStorageRelPath(dirnameOfRelPath(previousRelPath), trimmedName), matched.node.type)
+    : "";
 
   if (isDesktopStorage && desktopDataBridge?.renameWorkspaceNode) {
     try {
@@ -2742,8 +3086,16 @@ const renameStorageNode = async (nodeId, nextName) => {
       if (!result?.ok) {
         throw new Error(String(result?.error || "rename_workspace_node_failed"));
       }
-      selectedStorageNodeId.value = String(result.relPath || matched.node.id);
-      await loadDesktopStorageTree();
+      const nextNodeRelPath = String(result.relPath || joinStorageRelPath(dirnameOfRelPath(previousRelPath), trimmedName));
+      const nextActiveRelPath = affectedActiveFile
+        ? mapRelPathThroughNodeChange(activeMarkdownRelPath.value, previousRelPath, nextNodeRelPath, matched.node.type)
+        : "";
+      remapEditorTabsForNode(previousRelPath, nextNodeRelPath, matched.node.type);
+      selectedStorageNodeId.value = String(nextNodeRelPath || matched.node.id);
+      await loadDesktopStorageTree({
+        preferredNodeId: String(nextNodeRelPath || matched.node.id),
+        preferredMarkdownRelPath: nextActiveRelPath
+      });
       persistStorageState();
       showToast(`已重命名为 ${result.name || trimmedName}`);
       return true;
@@ -2760,10 +3112,11 @@ const renameStorageNode = async (nodeId, nextName) => {
   }
 
   selectedStorageNodeId.value = renamedNode.id;
+  remapEditorTabsForNode(previousRelPath, String(renamedNode.relPath || ""), matched.node.type);
   if (renamedNode.type === "file" && isMarkdownFileName(renamedNode.name)) {
     activeMarkdownRelPath.value = String(renamedNode.relPath || "");
-  } else {
-    resetBlankEditorState();
+  } else if (renamedActiveRelPath) {
+    activeMarkdownRelPath.value = renamedActiveRelPath;
   }
   persistStorageState();
   showToast(`已重命名为 ${trimmedName}`);
@@ -2802,6 +3155,7 @@ const deleteStorageNode = async (nodeId) => {
     targetRelPath,
     matched.node.type
   );
+  const graphWasActive = isWorkspaceGraphTabActive.value;
   if (affectedActiveFile) {
     clearScheduledMarkdownSave();
   }
@@ -2815,7 +3169,25 @@ const deleteStorageNode = async (nodeId) => {
         throw new Error(String(result?.error || "delete_workspace_node_failed"));
       }
       selectedStorageNodeId.value = matched.parentId || STORAGE_ROOT_ID;
-      await loadDesktopStorageTree();
+      dropEditorTabsForNode(targetRelPath, matched.node.type);
+      await loadDesktopStorageTree({
+        preferredNodeId: matched.parentId || STORAGE_ROOT_ID
+      });
+      pruneMissingEditorTabs();
+      const nextFileTab = editorTabs.value.find((tab) => tab.kind === "file");
+      if (affectedActiveFile && nextFileTab?.relPath) {
+        await openMarkdownFileByRelPath(nextFileTab.relPath, {
+          showMissingToast: false
+        });
+        if (graphWasActive && editorTabs.value.some((tab) => tab.kind === "graph")) {
+          activeEditorTabId.value = EDITOR_GRAPH_TAB_ID;
+        }
+      } else if (affectedActiveFile) {
+        resetBlankEditorState();
+        activeEditorTabId.value = graphWasActive && editorTabs.value.some((tab) => tab.kind === "graph")
+          ? EDITOR_GRAPH_TAB_ID
+          : "";
+      }
       persistStorageState();
       showToast(`已删除${targetLabel}: ${matched.node.name}`);
       return;
@@ -2831,7 +3203,21 @@ const deleteStorageNode = async (nodeId) => {
     return;
   }
   selectedStorageNodeId.value = removed.parentId || STORAGE_ROOT_ID;
-  resetBlankEditorState();
+  dropEditorTabsForNode(targetRelPath, matched.node.type);
+  const nextFileTab = editorTabs.value.find((tab) => tab.kind === "file");
+  if (affectedActiveFile && nextFileTab?.relPath) {
+    await openMarkdownFileByRelPath(nextFileTab.relPath, {
+      showMissingToast: false
+    });
+    if (graphWasActive && editorTabs.value.some((tab) => tab.kind === "graph")) {
+      activeEditorTabId.value = EDITOR_GRAPH_TAB_ID;
+    }
+  } else if (affectedActiveFile) {
+    resetBlankEditorState();
+    activeEditorTabId.value = graphWasActive && editorTabs.value.some((tab) => tab.kind === "graph")
+      ? EDITOR_GRAPH_TAB_ID
+      : "";
+  }
   persistStorageState();
   showToast(`已删除${targetLabel}: ${matched.node.name}`);
 };
@@ -3007,6 +3393,12 @@ const openMarkdownFileByRelPath = async (relPathInput, { anchor = "", rawPos = n
   }
 
   if (relPath === normalizeRelPath(activeMarkdownRelPath.value)) {
+    const currentMatched = findStorageNodeByRelPath(storageTree.value, relPath);
+    if (currentMatched?.node) {
+      expandStorageAncestors(currentMatched.parentIds);
+      selectedStorageNodeId.value = String(currentMatched.node.id || selectedStorageNodeId.value);
+    }
+    activeEditorTabId.value = ensureEditorFileTab(relPath);
     return jumpWithinCurrentDocument({ rawPos, anchor });
   }
 
@@ -4742,12 +5134,12 @@ const toggleDark = () => {
 };
 
 const openWorkspaceGraph = () => {
-  workspaceGraphOpen.value = true;
+  activeEditorTabId.value = ensureWorkspaceGraphTab();
   scheduleWikiLinkIndexRebuild();
 };
 
 const closeWorkspaceGraph = () => {
-  workspaceGraphOpen.value = false;
+  void closeEditorTab(EDITOR_GRAPH_TAB_ID);
 };
 
 const handleWorkspaceGraphOpenNote = (relPathInput = "") => {
@@ -4759,7 +5151,11 @@ const handleWorkspaceGraphOpenNote = (relPathInput = "") => {
 const toggleMode = async () => {
   const nextMode = isEditMode.value ? "view" : "edit";
   if (nextMode === "view") {
-    workspaceGraphOpen.value = false;
+    editorTabs.value = ensureEditorTabs(editorTabs.value.filter((tab) => tab.kind !== "graph"));
+    if (activeEditorTabId.value === EDITOR_GRAPH_TAB_ID) {
+      const currentRelPath = normalizeRelPath(activeMarkdownRelPath.value);
+      activeEditorTabId.value = currentRelPath ? ensureEditorFileTab(currentRelPath) : "";
+    }
     await flushPendingMarkdownSave();
   }
   mode.value = nextMode;

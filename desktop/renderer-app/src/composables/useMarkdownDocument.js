@@ -525,11 +525,11 @@ export const useMarkdownDocument = ({
 
   const loadStepsFromMarkdownFile = async (relPath, showSuccessToast = false) => {
     if (!isDesktopStorage || !canWorkspaceFileIO) {
-      return;
+      return false;
     }
     const targetRelPath = normalizeRelPath(relPath);
     if (!targetRelPath) {
-      return;
+      return false;
     }
     await persistActiveMarkdownBeforeSwitch(targetRelPath);
     markdownHydrating.value = true;
@@ -542,13 +542,13 @@ export const useMarkdownDocument = ({
           const actual = formatBytes(result?.size);
           const limit = formatBytes(result?.limitBytes || MAX_MARKDOWN_FILE_BYTES);
           showToast(`Markdown file too large, skipped: ${targetRelPath} (${actual} > ${limit})`);
-          return;
+          return false;
         }
         throw new Error(String(result?.error || "read_workspace_file_failed"));
       }
       if (isMarkdownFileTooLarge(result?.size) || String(result.content || "").length > MAX_MARKDOWN_FILE_BYTES) {
         showToast(`Markdown file too large, skipped: ${targetRelPath}`);
-        return;
+        return false;
       }
       const rawMarkdown = normalizeMarkdownText(result.content || "");
       loadMarkdown(rawMarkdown, { markAsSaved: true, relPath: targetRelPath });
@@ -556,8 +556,10 @@ export const useMarkdownDocument = ({
       if (showSuccessToast) {
         showToast(`Markdown loaded: ${targetRelPath}`);
       }
+      return true;
     } catch (error) {
       showToast(`Load markdown failed: ${String(error?.message || error || "unknown_error")}`);
+      return false;
     } finally {
       markdownHydrating.value = false;
     }

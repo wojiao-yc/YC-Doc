@@ -55,6 +55,111 @@ body {
   background: rgba(2, 6, 23, 0.92);
 }
 
+.editor-chrome-tabs-wrap {
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 100%;
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+  padding: 0 6px;
+}
+
+.editor-chrome-tabs {
+  min-width: 0;
+  flex: 1 1 auto;
+  height: 100%;
+  display: flex;
+  align-items: flex-end;
+  gap: 4px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: none;
+}
+
+.editor-chrome-tabs::-webkit-scrollbar {
+  display: none;
+}
+
+.editor-tab {
+  height: 34px;
+  max-width: 220px;
+  min-width: 0;
+  padding: 0 8px 0 10px;
+  border: 1px solid transparent;
+  border-bottom: 0;
+  border-radius: 10px 10px 0 0;
+  background: transparent;
+  color: #64748b;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+}
+
+.editor-tab:hover {
+  background: rgba(241, 245, 249, 0.9);
+  color: #0f172a;
+}
+
+.editor-tab-active {
+  background: rgba(255, 255, 255, 0.98);
+  color: #0f172a;
+  border-color: #e2e8f0;
+}
+
+.editor-tab-icon {
+  font-size: 10px;
+  line-height: 1;
+  color: #f97316;
+  flex: 0 0 auto;
+}
+
+.editor-tab-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+  line-height: 1;
+}
+
+.editor-tab-close {
+  width: 18px;
+  height: 18px;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: inherit;
+  opacity: 0.78;
+  flex: 0 0 auto;
+}
+
+.editor-tab-close:hover {
+  background: rgba(148, 163, 184, 0.18);
+  opacity: 1;
+}
+
+.editor-tab-add {
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: #64748b;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+.editor-tab-add:hover {
+  background: #f1f5f9;
+  color: #0f172a;
+}
+
 .fade-enter-active,
 .fade-leave-active {
   transition: opacity 0.25s ease;
@@ -1130,6 +1235,30 @@ body {
 .dark-ui .term-window-btn-close:hover {
   background: rgba(244, 63, 94, 0.22);
   color: #fecdd3;
+}
+
+.dark-ui .editor-tab {
+  color: #94a3b8;
+}
+
+.dark-ui .editor-tab:hover {
+  background: rgba(30, 41, 59, 0.92);
+  color: #f8fafc;
+}
+
+.dark-ui .editor-tab-active {
+  background: rgba(15, 23, 42, 0.98);
+  color: #f8fafc;
+  border-color: #334155;
+}
+
+.dark-ui .editor-tab-add {
+  color: #94a3b8;
+}
+
+.dark-ui .editor-tab-add:hover {
+  background: #1e293b;
+  color: #f8fafc;
 }
 
 .dark-ui .term-tip-btn::after {

@@ -1,10 +1,10 @@
 <template>
-  <div class="workspace-graph-mask" :class="{ 'is-dark': isDark }" @mousedown.self="$emit('close')">
+  <div class="workspace-graph-root" :class="{ 'is-dark': isDark }">
     <section class="workspace-graph-shell" :class="{ 'is-dark': isDark }">
       <header class="workspace-graph-header">
         <div class="workspace-graph-heading">
           <p class="workspace-graph-eyebrow">Workspace Link Graph</p>
-          <h2 class="workspace-graph-title">Visualize notes, backlinks, and isolated islands</h2>
+          <h2 class="workspace-graph-title">Relation Graph</h2>
           <p class="workspace-graph-subtitle">
             {{ graphStats.nodeCount }} notes
             <span class="workspace-graph-dot">·</span>
@@ -701,17 +701,21 @@ onBeforeUnmount(() => {
 </script>
 
 <style scoped>
-.workspace-graph-mask {
-  position: fixed;
-  inset: 0;
-  z-index: 160;
-  padding: 18px;
-  background: rgba(15, 23, 42, 0.24);
-  backdrop-filter: blur(14px);
+.workspace-graph-root {
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  background:
+    radial-gradient(circle at top right, rgba(249, 115, 22, 0.08), transparent 28%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(248, 250, 252, 0.98));
 }
 
-.workspace-graph-mask.is-dark {
-  background: rgba(2, 6, 23, 0.52);
+.workspace-graph-root.is-dark {
+  background:
+    radial-gradient(circle at top right, rgba(249, 115, 22, 0.14), transparent 28%),
+    linear-gradient(180deg, rgba(2, 6, 23, 0.98), rgba(15, 23, 42, 0.98));
 }
 
 .workspace-graph-shell {
@@ -720,21 +724,17 @@ onBeforeUnmount(() => {
   display: flex;
   flex-direction: column;
   min-height: 0;
-  border-radius: 28px;
+  border-radius: 0;
   overflow: hidden;
-  border: 1px solid rgba(148, 163, 184, 0.28);
-  background:
-    radial-gradient(circle at top right, rgba(249, 115, 22, 0.12), transparent 34%),
-    linear-gradient(180deg, rgba(255, 255, 255, 0.97), rgba(250, 250, 249, 0.96));
-  box-shadow: 0 28px 70px rgba(15, 23, 42, 0.18);
+  border: 0;
+  background: transparent;
+  box-shadow: none;
 }
 
 .workspace-graph-shell.is-dark {
-  border-color: rgba(51, 65, 85, 0.85);
-  background:
-    radial-gradient(circle at top right, rgba(249, 115, 22, 0.18), transparent 34%),
-    linear-gradient(180deg, rgba(2, 6, 23, 0.96), rgba(15, 23, 42, 0.96));
-  box-shadow: 0 30px 76px rgba(2, 6, 23, 0.46);
+  border-color: transparent;
+  background: transparent;
+  box-shadow: none;
 }
 
 .workspace-graph-header {
@@ -742,8 +742,14 @@ onBeforeUnmount(() => {
   align-items: flex-start;
   justify-content: space-between;
   gap: 18px;
-  padding: 20px 22px 18px;
+  padding: 18px 22px 16px;
   border-bottom: 1px solid rgba(148, 163, 184, 0.18);
+  background: rgba(255, 255, 255, 0.82);
+  backdrop-filter: blur(12px);
+}
+
+.workspace-graph-shell.is-dark .workspace-graph-header {
+  background: rgba(2, 6, 23, 0.72);
 }
 
 .workspace-graph-heading {
@@ -1075,10 +1081,6 @@ onBeforeUnmount(() => {
 }
 
 @media (max-width: 1080px) {
-  .workspace-graph-mask {
-    padding: 12px;
-  }
-
   .workspace-graph-header {
     flex-direction: column;
     align-items: stretch;
