@@ -1,4 +1,4 @@
-<template>
+﻿<template>
   <div
     id="app"
     v-cloak
@@ -17,7 +17,7 @@
       <div class="app-chrome-no-drag">
         <button
           type="button"
-          class="term-window-btn term-tip-btn"
+          class="term-window-btn term-tip-btn chrome-sidebar-toggle-btn"
           :data-tip="isFileSidebarHidden ? '展开左边栏' : '收起左边栏'"
           :aria-label="isFileSidebarHidden ? '展开左边栏' : '收起左边栏'"
           @click="toggleFileSidebarCollapse"
@@ -48,7 +48,7 @@
       <div class="app-chrome-no-drag">
         <button
           type="button"
-          class="term-window-btn term-tip-btn"
+          class="term-window-btn term-tip-btn chrome-sidebar-toggle-btn"
           :data-tip="isSidebarHidden ? '展开右边栏' : '收起右边栏'"
           :aria-label="isSidebarHidden ? '展开右边栏' : '收起右边栏'"
           @click="toggleSidebarCollapse"
@@ -209,7 +209,9 @@
                 </span>
               </template>
               <template v-else>
-                <span class="file-tree-toggle-placeholder"></span>
+                <span class="file-tree-file-icon-shell">
+                  <AppIcon name="file" class="file-tree-file-icon" />
+                </span>
               </template>
             </span>
             <span class="file-tree-label truncate text-xs">{{ item.name }}</span>
@@ -237,12 +239,12 @@
           <div class="relative workspace-footer-panel-shell">
             <button
               type="button"
-              class="term-window-btn term-tip-btn file-sidebar-tool-btn"
+              class="term-window-btn term-tip-btn file-sidebar-tool-btn workspace-footer-tool-btn"
               data-tip="工作区信息"
               aria-label="工作区信息"
               @click.stop="toggleWorkspaceFooterPanel('info')"
             >
-              <AppIcon name="info" class="chrome-icon file-sidebar-icon" />
+              <AppIcon name="info" class="chrome-icon file-sidebar-icon workspace-footer-icon" />
             </button>
             <div
               v-if="workspaceFooterPanel === 'info'"
@@ -267,12 +269,12 @@
           <div class="relative workspace-footer-panel-shell">
             <button
               type="button"
-              class="term-window-btn term-tip-btn file-sidebar-tool-btn"
+              class="term-window-btn term-tip-btn file-sidebar-tool-btn workspace-footer-tool-btn"
               data-tip="工作区设置"
               aria-label="工作区设置"
               @click.stop="toggleWorkspaceFooterPanel('settings')"
             >
-              <AppIcon name="settings" class="chrome-icon file-sidebar-icon" />
+              <AppIcon name="settings" class="chrome-icon file-sidebar-icon workspace-footer-icon" />
             </button>
             <div
               v-if="workspaceFooterPanel === 'settings'"
@@ -299,11 +301,54 @@
                 <AppIcon name="open-folder" class="workspace-footer-action-icon" />
                 <span>打开当前目录</span>
               </button>
+              <div
+                v-if="canPickWorkspaceRoot || canOpenWorkspaceRoot"
+                class="workspace-footer-action-divider"
+              ></div>
+              <button
+                type="button"
+                class="workspace-footer-action"
+                :class="isDark ? 'is-dark' : ''"
+                @click="handleWorkspaceFooterEditorSetting('editor-width-narrower')"
+              >
+                <AppIcon name="arrow-left" class="workspace-footer-action-icon" />
+                <span>收窄编辑区</span>
+              </button>
+              <button
+                type="button"
+                class="workspace-footer-action"
+                :class="isDark ? 'is-dark' : ''"
+                @click="handleWorkspaceFooterEditorSetting('editor-width-wider')"
+              >
+                <AppIcon name="arrow-right" class="workspace-footer-action-icon" />
+                <span>放宽编辑区</span>
+              </button>
+              <button
+                type="button"
+                class="workspace-footer-action"
+                :class="isDark ? 'is-dark' : ''"
+                @click="handleWorkspaceFooterEditorSetting('editor-width-reset')"
+              >
+                <AppIcon name="restore" class="workspace-footer-action-icon" />
+                <span>重置编辑区宽度</span>
+              </button>
+              <button
+                type="button"
+                class="workspace-footer-action"
+                :class="isDark ? 'is-dark' : ''"
+                @click="handleWorkspaceFooterEditorSetting('editor-debug-toggle')"
+              >
+                <AppIcon name="tool" class="workspace-footer-action-icon" />
+                <span>{{ showEditorDebugPanel ? '隐藏调试面板' : '显示调试面板' }}</span>
+              </button>
+              <p class="workspace-footer-settings-note">
+                当前编辑区宽度 {{ displayWidth }}px
+              </p>
               <p
                 v-if="!canPickWorkspaceRoot && !canOpenWorkspaceRoot"
                 class="workspace-footer-empty"
               >
-                当前环境不支持工作区设置
+                当前环境不支持工作区切换，仍可使用下方编辑器设置
               </p>
             </div>
           </div>
@@ -398,110 +443,6 @@
                 v-else
                 class="min-h-[520px] flex flex-col"
               >
-                <div class="px-1 pb-4 flex flex-col items-start gap-3">
-                  <span class="text-sm font-medium" :class="isDark ? 'text-slate-100' : 'text-gray-700'">Markdown 编辑</span>
-                  <div class="flex w-full items-center gap-2 flex-wrap">
-                    <button
-                      type="button"
-                      class="px-2 py-1 text-xs rounded-lg transition-all"
-                      :class="isDark ? 'bg-slate-800 hover:bg-slate-700 text-slate-200' : 'bg-white hover:bg-gray-100 text-gray-700 border border-gray-200'"
-                      @mousedown.prevent
-                      @click="insertImageToMarkdown"
-                    >
-                      插入图片
-                    </button>
-                    <button
-                      v-if="isDesktopPty"
-                      type="button"
-                      class="px-2 py-1 text-xs rounded-lg transition-all"
-                      :class="isDark ? 'bg-slate-800 hover:bg-slate-700 text-slate-200' : 'bg-white hover:bg-gray-100 text-gray-700 border border-gray-200'"
-                      @mousedown.prevent
-                      @click="openDesktopImageFolder"
-                    >
-                      图片目录
-                    </button>
-                    <button
-                      type="button"
-                      class="px-2 py-1 text-xs rounded-lg transition-all"
-                      :class="isDark ? 'bg-slate-800 hover:bg-slate-700 text-slate-200' : 'bg-white hover:bg-gray-100 text-gray-700 border border-gray-200'"
-                      @mousedown.prevent
-                      @click="adjustVisualEditorWidth(-80)"
-                    >
-                      更窄
-                    </button>
-                    <button
-                      type="button"
-                      class="px-2 py-1 text-xs rounded-lg transition-all"
-                      :class="isDark ? 'bg-slate-800 hover:bg-slate-700 text-slate-200' : 'bg-white hover:bg-gray-100 text-gray-700 border border-gray-200'"
-                      @mousedown.prevent
-                      @click="adjustVisualEditorWidth(80)"
-                    >
-                      更宽
-                    </button>
-                    <span class="text-xs font-mono px-2 py-1 rounded-lg" :class="isDark ? 'bg-slate-800 text-slate-300' : 'bg-gray-200 text-gray-600'">
-                      {{ displayWidth }}px
-                    </span>
-                    <button
-                      type="button"
-                      class="px-2 py-1 text-xs rounded-lg transition-all"
-                      :class="isDark ? 'bg-slate-800 hover:bg-slate-700 text-slate-200' : 'bg-white hover:bg-gray-100 text-gray-700 border border-gray-200'"
-                      @mousedown.prevent
-                      @click="resetDisplayWidth"
-                    >
-                      重置宽度
-                    </button>
-                    <button
-                      type="button"
-                      class="px-2 py-1 text-xs rounded-lg transition-all"
-                      :class="isDark ? 'bg-orange-500/20 hover:bg-orange-500/30 text-orange-200 border border-orange-500/40' : 'bg-orange-50 hover:bg-orange-100 text-orange-700 border border-orange-200'"
-                      @mousedown.prevent
-                      @click="handleManualSaveCurrentMarkdown"
-                    >
-                      保存
-                    </button>
-                    <span class="text-xs px-2 py-1 rounded-lg"
-                      :class="saveStatusChipClass"
-                      :title="saveStatusTooltip"
-                    >
-                      {{ saveStatusLabel }}
-                    </span>
-                    <span class="text-xs px-2 py-1 rounded-lg border"
-                      :class="isDark ? 'bg-slate-800 text-slate-300 border-slate-700' : 'bg-gray-100 text-gray-700 border-gray-200'"
-                      :title="currentBlockDebugTitle"
-                    >
-                      {{ currentBlockLabel }}
-                    </span>
-                    <span class="text-xs px-2 py-1 rounded-lg border"
-                      :class="isDark ? 'bg-slate-800 text-slate-300 border-slate-700' : 'bg-gray-100 text-gray-700 border-gray-200'"
-                    >
-                      Outline {{ semanticOutline.length }}
-                    </span>
-                  </div>
-                  <div
-                    class="w-full rounded-lg border px-2 py-2 text-[11px] font-mono leading-5 max-h-44 overflow-auto"
-                    :class="isDark ? 'bg-slate-900/70 text-slate-200 border-slate-700' : 'bg-gray-50 text-slate-700 border-gray-200'"
-                  >
-                    <div class="flex items-center gap-2 flex-wrap mb-1">
-                      <span
-                        class="px-1.5 py-0.5 rounded border"
-                        :class="isDark ? 'bg-slate-800 border-slate-700 text-slate-200' : 'bg-white border-gray-300 text-gray-700'"
-                      >
-                        Inline Segments {{ activeInlineSegmentCount }}
-                      </span>
-                      <span
-                        class="px-1.5 py-0.5 rounded border"
-                        :class="isDark ? 'bg-slate-800 border-slate-700 text-slate-200' : 'bg-white border-gray-300 text-gray-700'"
-                      >
-                        Inline Tokens {{ activeInlineTokenCount }}
-                      </span>
-                    </div>
-                    <div v-if="inlineDebugLines.length" class="space-y-0.5">
-                      <div v-for="(line, index) in inlineDebugLines" :key="`inline-debug-${index}`">{{ line }}</div>
-                    </div>
-                    <div v-else class="opacity-70">No inline debug data for current block.</div>
-                  </div>
-                </div>
-
                 <div class="relative flex-1 overflow-y-auto py-2">
                   <div class="mx-auto" :style="displayStyle">
                     <EditorShell
@@ -519,6 +460,60 @@
                       @wiki-link-activate="handleEditorWikiLinkActivate"
                       @external-link-activate="handleEditorExternalLinkActivate"
                     />
+                  </div>
+                </div>
+                <div
+                  v-if="showEditorDebugPanel"
+                  class="px-1 pt-3 pb-2"
+                >
+                  <div
+                    class="w-full rounded-lg border px-3 py-3 text-[11px] font-mono leading-5 max-h-44 overflow-auto"
+                    :class="isDark ? 'bg-slate-900/70 text-slate-200 border-slate-700' : 'bg-gray-50 text-slate-700 border-gray-200'"
+                  >
+                    <div class="flex items-center gap-2 flex-wrap mb-2">
+                      <span
+                        class="px-1.5 py-0.5 rounded border"
+                        :class="saveStatusChipClass"
+                        :title="saveStatusTooltip"
+                      >
+                        {{ saveStatusLabel }}
+                      </span>
+                      <span
+                        class="px-1.5 py-0.5 rounded border"
+                        :class="isDark ? 'bg-slate-800 border-slate-700 text-slate-200' : 'bg-white border-gray-300 text-gray-700'"
+                        :title="currentBlockDebugTitle"
+                      >
+                        {{ currentBlockLabel }}
+                      </span>
+                      <span
+                        class="px-1.5 py-0.5 rounded border"
+                        :class="isDark ? 'bg-slate-800 border-slate-700 text-slate-200' : 'bg-white border-gray-300 text-gray-700'"
+                      >
+                        Outline {{ semanticOutline.length }}
+                      </span>
+                      <span
+                        class="px-1.5 py-0.5 rounded border"
+                        :class="isDark ? 'bg-slate-800 border-slate-700 text-slate-200' : 'bg-white border-gray-300 text-gray-700'"
+                      >
+                        Width {{ displayWidth }}px
+                      </span>
+                      <span
+                        class="px-1.5 py-0.5 rounded border"
+                        :class="isDark ? 'bg-slate-800 border-slate-700 text-slate-200' : 'bg-white border-gray-300 text-gray-700'"
+                      >
+                        Inline Segments {{ activeInlineSegmentCount }}
+                      </span>
+                      <span
+                        class="px-1.5 py-0.5 rounded border"
+                        :class="isDark ? 'bg-slate-800 border-slate-700 text-slate-200' : 'bg-white border-gray-300 text-gray-700'"
+                      >
+                        Inline Tokens {{ activeInlineTokenCount }}
+                      </span>
+                    </div>
+                    <div v-if="inlineDebugLines.length" class="space-y-0.5">
+                      <div v-for="(line, index) in inlineDebugLines" :key="`inline-debug-${index}`">{{ line }}</div>
+                    </div>
+                    <div v-else class="opacity-70">No inline debug data for current block.</div>
                   </div>
                 </div>
               </div>
@@ -1062,6 +1057,7 @@ import AppIcon from "./components/AppIcon.vue";
 import ToastMessage from "./components/ToastMessage.vue";
 import WorkspaceLinkGraph from "./components/WorkspaceLinkGraph.vue";
 import EditorShell from "./editor";
+import { setContextMenuRuntimeOptions } from "./editor/extensions/context-menu.js";
 import { useSemanticStore } from "./editor/state/semantic-store";
 import { useMarkdownDocument } from "./composables/useMarkdownDocument";
 import { useResizable } from "./composables/useResizable";
@@ -1196,6 +1192,7 @@ const terminalTab = ref("terminal");
 const mainRef = ref(null);
 const contentScrollRef = ref(null);
 const markdownEditorRef = ref(null);
+const showEditorDebugPanel = ref(false);
 const editorSelection = ref({ anchor: 0, head: 0 });
 const draggedStepIndex = ref(-1);
 const terminalViewportRef = ref(null);
@@ -1682,7 +1679,6 @@ async function focusStepInEditMode(index) {
 
 const {
   activeMarkdownRelPath,
-  appendMarkdownImage,
   clearScheduledMarkdownSave,
   documentMarkdown,
   extractMarkdownSections,
@@ -4606,7 +4602,7 @@ const createDesktopTerminal = async () => {
     return;
   }
   const shell = shellFromExecutor();
-  const sid = await createDesktopSession(shell);
+  const sid = await createDesktopSession(shell, storageRootPath.value || runnerCwd.value || "");
   if (!sid) {
     return;
   }
@@ -5400,45 +5396,55 @@ const toggleMode = async () => {
   });
 };
 
-const insertImageToMarkdown = async () => {
-  if (isDesktopPty.value && desktopWindowBridge?.pickImage) {
-    try {
-      const picked = await desktopWindowBridge.pickImage();
-      if (!picked || picked.canceled) {
-        return;
-      }
-      if (picked.ok && picked.markdownUrl) {
-        appendMarkdownImage(picked.markdownUrl);
-        showToast("已插入图片");
-        return;
-      }
-      showToast(`插入失败: ${picked?.error || "unknown_error"}`);
-      return;
-    } catch (error) {
-      showToast(`插入失败: ${error?.message || "unknown_error"}`);
-      return;
-    }
-  }
-
-  showToast("Web 版请将图片放在 web/public/images，并使用 /images/xxx.png");
-};
-
-const openDesktopImageFolder = async () => {
-  if (!(isDesktopPty.value && desktopWindowBridge?.openImageDir)) {
-    showToast("仅桌面版支持打开图片目录");
-    return;
+const requestEditorContextImageMarkdown = async () => {
+  if (!(isDesktopPty.value && desktopWindowBridge?.pickImage)) {
+    showToast("当前环境不支持直接插入图片");
+    return "";
   }
   try {
-    const result = await desktopWindowBridge.openImageDir();
-    if (result?.ok) {
-      showToast("已打开图片目录");
-    } else {
-      showToast(`打开失败: ${result?.error || "unknown_error"}`);
+    const picked = await desktopWindowBridge.pickImage();
+    if (!picked || picked.canceled) {
+      return "";
     }
+    if (picked.ok && picked.markdownUrl) {
+      showToast("已插入图片");
+      return `![image](${picked.markdownUrl})`;
+    }
+    showToast(`插入失败: ${picked?.error || "unknown_error"}`);
   } catch (error) {
-    showToast(`打开失败: ${error?.message || "unknown_error"}`);
+    showToast(`插入失败: ${error?.message || "unknown_error"}`);
   }
+  return "";
 };
+
+const handleEditorContextSettingCommand = async (commandIdInput = "") => {
+  const commandId = String(commandIdInput || "");
+  if (commandId === "editor-width-narrower") {
+    adjustVisualEditorWidth(-80);
+    return true;
+  }
+  if (commandId === "editor-width-wider") {
+    adjustVisualEditorWidth(80);
+    return true;
+  }
+  if (commandId === "editor-width-reset") {
+    resetDisplayWidth();
+    return true;
+  }
+  if (commandId === "editor-debug-toggle") {
+    showEditorDebugPanel.value = !showEditorDebugPanel.value;
+    return true;
+  }
+  return false;
+};
+
+const handleWorkspaceFooterEditorSetting = async (commandIdInput = "") => {
+  await handleEditorContextSettingCommand(commandIdInput);
+};
+
+setContextMenuRuntimeOptions({
+  requestImageMarkdown: requestEditorContextImageMarkdown
+});
 
 const openTerminalPanel = (tab = terminalTab.value) => {
   if (isDesktopPty.value && tab === "runner") {
@@ -5670,6 +5676,7 @@ onMounted(() => {
 });
 
 onBeforeUnmount(() => {
+  setContextMenuRuntimeOptions({});
   releaseTransientPointerState({ syncTerminal: false });
   cancelDesktopRenameDialog();
   cancelStorageRenameDialog();

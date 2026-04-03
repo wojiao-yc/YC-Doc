@@ -8,6 +8,7 @@ const SUBMENU_GAP = 2;
 const SUBMENU_OPEN_DELAY_MS = 140;
 const SUBMENU_CLOSE_DELAY_MS = 240;
 const DEFAULT_LINK_URL = "https://";
+let contextMenuRuntimeOptions = {};
 const TABLE_CELL_FORMAT_COMMAND_IDS = new Set([
   "add-link",
   "add-external-link",
@@ -20,6 +21,12 @@ const TABLE_CELL_FORMAT_COMMAND_IDS = new Set([
   "format-comment",
   "format-clear"
 ]);
+
+export const setContextMenuRuntimeOptions = (nextOptions = {}) => {
+  contextMenuRuntimeOptions = nextOptions && typeof nextOptions === "object"
+    ? nextOptions
+    : {};
+};
 
 const safeNumber = (value, fallback = 0) => {
   const numeric = Number(value);
@@ -1068,6 +1075,18 @@ const commandInsertDatabase = (view) =>
     "|  |  |  |  |\n| --- | --- | --- | --- |\n|  |  |  |  |"
   );
 
+const commandInsertImage = async (view) => {
+  const handler = contextMenuRuntimeOptions?.requestImageMarkdown;
+  if (typeof handler !== "function") {
+    return false;
+  }
+  const markdown = String(await handler() || "").trim();
+  if (!markdown) {
+    return false;
+  }
+  return replaceSelection(view, markdown);
+};
+
 const writeClipboardText = async (text) => {
   const clipboard = globalThis?.navigator?.clipboard;
   if (!clipboard || typeof clipboard.writeText !== "function") {
@@ -1233,6 +1252,8 @@ const executeCommand = async (view, commandId, menuContext = {}) => {
         return commandInsertCallout(view);
       case "insert-divider":
         return commandInsertDivider(view);
+      case "insert-image":
+        return commandInsertImage(view);
       case "insert-code-block":
         return commandInsertCodeBlock(view);
       case "insert-math-block":
@@ -1326,6 +1347,47 @@ const MENU_DEFINITION = [
   { id: "select-all", icon: "*", label: "全选" }
 ];
 
+const EDITOR_INSERT_IMAGE_ITEM = Object.freeze({
+  id: "insert-image",
+  icon: "img",
+  label: "图片"
+});
+
+const EDITOR_SETTINGS_MENU_ITEM = Object.freeze({
+  id: "editor-settings",
+  icon: "cfg",
+  label: "设置",
+  children: [
+    { id: "editor-width-narrower", icon: "<-", label: "收窄编辑区" },
+    { id: "editor-width-wider", icon: "->", label: "放宽编辑区" },
+    { id: "editor-width-reset", icon: "[]", label: "重置编辑区宽度" },
+    { type: "separator" },
+    { id: "editor-debug-toggle", icon: "dbg", label: "切换调试面板" }
+  ]
+});
+
+const withEditorMenuExtras = (itemsInput = []) => {
+  return (Array.isArray(itemsInput) ? itemsInput : []).map((item) => {
+    if (!item || item.type === "separator" || item.id !== "insert" || !Array.isArray(item.children)) {
+      return item;
+    }
+    const separatorIndex = item.children.findIndex((child, index, list) =>
+      child?.type === "separator" && list[index + 1]?.id === "insert-code-block"
+    );
+    const insertChildren = separatorIndex >= 0
+      ? [
+          ...item.children.slice(0, separatorIndex + 1),
+          EDITOR_INSERT_IMAGE_ITEM,
+          ...item.children.slice(separatorIndex + 1)
+        ]
+      : [...item.children, EDITOR_INSERT_IMAGE_ITEM];
+    return {
+      ...item,
+      children: insertChildren
+    };
+  });
+};
+
 const TABLE_ROW_ACTIONS = [
   { id: "table-row-insert-above", icon: "^", label: "在上方新增行" },
   { id: "table-row-insert-below", icon: "v", label: "在下方新增行" },
@@ -1403,9 +1465,15 @@ const CONTEXT_MENU_ICON_NAME_BY_ID = Object.freeze({
   "insert-table": "apps",
   "insert-callout": "notification",
   "insert-divider": "minimize",
+  "insert-image": "image",
   "insert-code-block": "code-block",
   "insert-math-block": "formula",
   "insert-database": "storage",
+  "editor-settings": "settings",
+  "editor-width-narrower": "arrow-left",
+  "editor-width-wider": "arrow-right",
+  "editor-width-reset": "restore",
+  "editor-debug-toggle": "tool",
   "clipboard-cut": "scissor",
   "clipboard-copy": "copy",
   "clipboard-paste": "paste",
@@ -1479,8 +1547,9 @@ const disposeMountedContextMenuIcons = (rootInput) => {
 
 const menuDefinitionForContext = (menuContext = {}) => {
   const tableContext = menuContext?.table || null;
+  const rootMenu = withEditorMenuExtras(MENU_DEFINITION);
   if (!tableContext?.blockId) {
-    return MENU_DEFINITION;
+    return rootMenu;
   }
   if (tableContext.activeHandleAxis === "row") {
     return TABLE_ROW_ACTIONS;
@@ -1488,7 +1557,7 @@ const menuDefinitionForContext = (menuContext = {}) => {
   if (tableContext.activeHandleAxis === "column") {
     return [...TABLE_COLUMN_ACTIONS, { type: "separator" }, ...TABLE_SORT_ACTIONS];
   }
-  return [...TABLE_MENU_DEFINITION, { type: "separator" }, ...MENU_DEFINITION];
+  return [...TABLE_MENU_DEFINITION, { type: "separator" }, ...rootMenu];
 };
 
 const withDisabledState = (items, view, menuContext = {}) => {
@@ -1497,18 +1566,31 @@ const withDisabledState = (items, view, menuContext = {}) => {
   const canWriteClipboard = Boolean(globalThis?.navigator?.clipboard?.writeText);
   const hasBlockRange = Number.isFinite(menuContext?.blockRange?.from) && Number.isFinite(menuContext?.blockRange?.to)
     && Number(menuContext.blockRange.to) > Number(menuContext.blockRange.from);
+  const canInsertImage = typeof contextMenuRuntimeOptions?.requestImageMarkdown === "function";
+  const canOpenEditorSettings = typeof contextMenuRuntimeOptions?.onEditorSettingCommand === "function";
   return (Array.isArray(items) ? items : []).map((item) => {
     if (item?.type === "separator") {
       return item;
     }
     const id = String(item?.id || "");
-    const disabled = id === "clipboard-cut" || id === "clipboard-copy"
-      ? selection.empty || !canWriteClipboard
-      : (id === "clipboard-paste" || id === "clipboard-paste-plain")
-        ? !canReadClipboard
-        : id === "select-block"
-          ? !hasBlockRange
-        : false;
+    let disabled = false;
+    if (id === "clipboard-cut" || id === "clipboard-copy") {
+      disabled = selection.empty || !canWriteClipboard;
+    } else if (id === "clipboard-paste" || id === "clipboard-paste-plain") {
+      disabled = !canReadClipboard;
+    } else if (id === "select-block") {
+      disabled = !hasBlockRange;
+    } else if (id === "insert-image") {
+      disabled = !canInsertImage;
+    } else if (
+      id === "editor-settings"
+      || id === "editor-width-narrower"
+      || id === "editor-width-wider"
+      || id === "editor-width-reset"
+      || id === "editor-debug-toggle"
+    ) {
+      disabled = !canOpenEditorSettings;
+    }
     return {
       ...item,
       disabled,

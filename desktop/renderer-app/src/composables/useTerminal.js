@@ -378,7 +378,7 @@ export const useTerminal = (_activeStep, showToast) => {
     }
   };
 
-  const createDesktopSession = async (shell) => {
+  const createDesktopSession = async (shell, cwdOverride = "") => {
     if (!isDesktopPty.value) {
       return "";
     }
@@ -386,7 +386,7 @@ export const useTerminal = (_activeStep, showToast) => {
     try {
       const created = await desktopBridge.createSession({
         shell,
-        cwd: runnerCwd.value || ""
+        cwd: String(cwdOverride || runnerCwd.value || "")
       });
       const sid = String(created?.sessionId || "");
       if (!sid) {
