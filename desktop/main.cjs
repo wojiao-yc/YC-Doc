@@ -262,6 +262,8 @@ const pickUniqueName = (targetDir, requestedName, asFolder) => {
 const readWorkspaceTreeNode = (absPath, relPath = "") => {
   const name = relPath ? path.basename(absPath) : "workspace";
   const stat = fs.statSync(absPath);
+  const createdAt = Number.isFinite(Number(stat.birthtimeMs)) ? Number(stat.birthtimeMs) : 0;
+  const updatedAt = Number.isFinite(Number(stat.mtimeMs)) ? Number(stat.mtimeMs) : 0;
 
   if (!stat.isDirectory()) {
     return {
@@ -270,6 +272,8 @@ const readWorkspaceTreeNode = (absPath, relPath = "") => {
       relPath,
       absPath,
       size: stat.size,
+      createdAt,
+      updatedAt,
       children: []
     };
   }
@@ -284,12 +288,15 @@ const readWorkspaceTreeNode = (absPath, relPath = "") => {
       continue;
     }
     if (entry.isFile()) {
+      const childStat = fs.statSync(childAbs);
       children.push({
         type: "file",
         name: entry.name,
         relPath: childRel,
         absPath: childAbs,
-        size: fs.statSync(childAbs).size,
+        size: childStat.size,
+        createdAt: Number.isFinite(Number(childStat.birthtimeMs)) ? Number(childStat.birthtimeMs) : 0,
+        updatedAt: Number.isFinite(Number(childStat.mtimeMs)) ? Number(childStat.mtimeMs) : 0,
         children: []
       });
     }
@@ -307,6 +314,8 @@ const readWorkspaceTreeNode = (absPath, relPath = "") => {
     relPath,
     absPath,
     size: 0,
+    createdAt,
+    updatedAt,
     children
   };
 };

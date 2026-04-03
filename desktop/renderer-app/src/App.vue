@@ -25,8 +25,8 @@
           <AppIcon name="panel-left" :collapsed="isFileSidebarHidden" class="chrome-icon" />
         </button>
       </div>
-      <div class="editor-chrome-tabs-wrap app-chrome-no-drag">
-        <div class="editor-chrome-tabs" :class="isDark ? 'is-dark' : ''">
+      <div class="editor-chrome-tabs-wrap">
+        <div class="editor-chrome-tabs app-chrome-no-drag" :class="isDark ? 'is-dark' : ''">
           <button
             v-for="tab in editorTabsWithMeta"
             :key="tab.id"
@@ -43,17 +43,8 @@
             <span class="editor-tab-close" @mousedown.stop @click.stop="closeEditorTab(tab.id)">x</span>
           </button>
         </div>
-        <button
-          type="button"
-          class="editor-tab-add term-tip-btn"
-          data-tip="Open graph"
-          aria-label="Open graph"
-          @click="openWorkspaceGraph"
-        >
-          <AppIcon name="graph" class="chrome-icon" />
-        </button>
+        <div class="editor-chrome-drag-fill" @mousedown="handleChromeDragMouseDown"></div>
       </div>
-      <div class="app-chrome-drag" @mousedown="handleChromeDragMouseDown"></div>
       <div class="app-chrome-no-drag">
         <button
           type="button"
@@ -132,16 +123,42 @@
           >
             <AppIcon name="new-folder" class="chrome-icon file-sidebar-icon" />
           </button>
-          <button
-            type="button"
-            class="term-window-btn term-tip-btn file-sidebar-tool-btn"
-            :class="storageSortMode === 'name-desc' ? 'is-active' : ''"
-            :data-tip="storageSortTooltip"
-            :aria-label="storageSortTooltip"
-            @click="toggleStorageSortMode"
-          >
-            <AppIcon :name="storageSortMode === 'name-desc' ? 'sort-desc' : 'sort-asc'" class="chrome-icon file-sidebar-icon" />
-          </button>
+          <div class="relative storage-sort-menu-shell">
+            <button
+              type="button"
+              class="term-window-btn term-tip-btn file-sidebar-tool-btn"
+              :class="(isStorageSortMenuOpen || storageSortMode !== STORAGE_SORT_DEFAULT_MODE) ? 'is-active' : ''"
+              :data-tip="storageSortTooltip"
+              :aria-label="storageSortTooltip"
+              @click.stop="toggleStorageSortMenu"
+            >
+              <AppIcon :name="storageSortIconName" class="chrome-icon file-sidebar-icon" />
+            </button>
+            <div
+              v-if="isStorageSortMenuOpen"
+              class="storage-sort-menu"
+              :class="isDark ? 'is-dark' : ''"
+              @mousedown.stop
+            >
+              <template v-for="option in STORAGE_SORT_OPTIONS" :key="option.value">
+                <div v-if="option.dividerBefore" class="storage-sort-menu-divider"></div>
+                <button
+                  type="button"
+                  class="storage-sort-menu-item"
+                  :class="[
+                    isDark ? 'is-dark' : '',
+                    storageSortMode === option.value ? 'is-active' : ''
+                  ]"
+                  @click.stop="applyStorageSortMode(option.value)"
+                >
+                  <span class="storage-sort-menu-label">{{ option.label }}</span>
+                  <span class="storage-sort-menu-check" aria-hidden="true">
+                    <AppIcon v-if="storageSortMode === option.value" name="check" class="storage-sort-menu-check-icon" />
+                  </span>
+                </button>
+              </template>
+            </div>
+          </div>
           <button
             type="button"
             class="term-window-btn term-tip-btn file-sidebar-tool-btn"
@@ -154,40 +171,49 @@
         </div>
       </div>
 
-      <nav class="flex-1 min-h-0 overflow-y-auto p-2">
+      <nav class="file-tree-nav flex-1 min-h-0 overflow-y-auto p-2" :class="isDark ? 'is-dark' : ''">
         <button
           v-for="item in visibleStorageNodes"
           :key="item.id"
           type="button"
-          class="w-full rounded-lg mb-1 transition-all flex items-center gap-2 text-left"
+          class="file-tree-row w-full rounded-lg mb-1 transition-all text-left"
           :title="isFileSidebarCollapsed ? item.name : ''"
-          :style="{ padding: '6px 8px', paddingLeft: `${8 + item.depth * 14}px` }"
           :class="selectedStorageNodeId === item.id
             ? (isDark ? 'bg-orange-500/15 text-orange-200' : 'bg-orange-50 text-orange-700')
             : (isDark ? 'text-slate-300 hover:bg-slate-900/70' : 'text-gray-700 hover:bg-gray-100')"
           @click="selectStorageNode(item.id)"
           @contextmenu.prevent.stop="openStorageNodeContextMenu($event, item.id)"
         >
-          <span class="w-4 h-4 inline-flex items-center justify-center text-[11px]">
-            <template v-if="item.type === 'folder'">
-              <span class="file-tree-toggle" @click.stop="toggleStorageFolder(item.id)">
-                <AppIcon
-                  :name="isStorageFolderExpanded(item.id) ? 'chevron-down' : 'chevron-right'"
-                  class="file-tree-chevron"
-                />
-              </span>
-            </template>
-            <template v-else>
-              <span class="file-tree-toggle-placeholder"></span>
-            </template>
-          </span>
-          <span class="inline-flex items-center justify-center">
+          <span v-if="isFileSidebarCollapsed" class="file-tree-collapsed-icon">
             <AppIcon
               :name="item.type === 'folder' ? (isStorageFolderExpanded(item.id) ? 'folder-open' : 'folder') : 'file'"
-              class="file-tree-node-icon"
+              class="file-tree-collapsed-glyph"
             />
           </span>
-          <span v-if="!isFileSidebarCollapsed" class="truncate text-xs">{{ item.name }}</span>
+          <template v-else>
+            <span class="file-tree-guides" :style="{ width: `${item.depth * FILE_TREE_INDENT_STEP}px` }" aria-hidden="true">
+              <span
+                v-for="guideDepth in item.guideDepths"
+                :key="guideDepth"
+                class="file-tree-guide"
+                :style="{ left: `${guideDepth * FILE_TREE_INDENT_STEP + FILE_TREE_GUIDE_OFFSET}px` }"
+              ></span>
+            </span>
+            <span class="file-tree-toggle-slot">
+              <template v-if="item.type === 'folder'">
+                <span class="file-tree-toggle" @click.stop="toggleStorageFolder(item.id)">
+                  <AppIcon
+                    :name="isStorageFolderExpanded(item.id) ? 'chevron-down' : 'chevron-right'"
+                    class="file-tree-chevron"
+                  />
+                </span>
+              </template>
+              <template v-else>
+                <span class="file-tree-toggle-placeholder"></span>
+              </template>
+            </span>
+            <span class="file-tree-label truncate text-xs">{{ item.name }}</span>
+          </template>
         </button>
       </nav>
 
@@ -1203,6 +1229,20 @@ const FILE_SIDEBAR_MIN_WIDTH = 220;
 const FILE_SIDEBAR_MAX_WIDTH = 520;
 const FILE_SIDEBAR_HIDE_SNAP = 44;
 const FILE_SIDEBAR_COLLAPSE_SNAP = FILE_SIDEBAR_COLLAPSED_WIDTH + 30;
+const FILE_TREE_INDENT_STEP = 18;
+const FILE_TREE_GUIDE_OFFSET = 7;
+const STORAGE_SORT_DEFAULT_MODE = "name-asc";
+const STORAGE_SORT_OPTIONS = Object.freeze([
+  { value: "name-asc", label: "文件名 (A-Z)" },
+  { value: "name-desc", label: "文件名 (Z-A)" },
+  { value: "updated-desc", label: "编辑时间（从新到旧）", dividerBefore: true },
+  { value: "updated-asc", label: "编辑时间（从旧到新）" },
+  { value: "created-desc", label: "创建时间（从新到旧）", dividerBefore: true },
+  { value: "created-asc", label: "创建时间（从旧到新）" }
+]);
+const STORAGE_SORT_OPTION_MAP = Object.freeze(
+  Object.fromEntries(STORAGE_SORT_OPTIONS.map((option) => [option.value, option]))
+);
 const desktopPrimaryTerminalRef = ref(null);
 const desktopSecondaryTerminalRef = ref(null);
 const desktopSessions = ref([]);
@@ -1226,6 +1266,7 @@ const storageRenameDialog = ref({
   value: "",
   kind: "file"
 });
+const isStorageSortMenuOpen = ref(false);
 const workspaceFooterPanel = ref("");
 const storageRenameInputRef = ref(null);
 const storageNodeMenuRef = ref(null);
@@ -1924,6 +1965,12 @@ const prev = async () => {
   await focusStepInEditMode(previousIndex);
 };
 
+const normalizeStorageSortMode = (mode) => (
+  STORAGE_SORT_OPTION_MAP[String(mode || "").trim()]
+    ? String(mode || "").trim()
+    : STORAGE_SORT_DEFAULT_MODE
+);
+
 if (typeof window !== "undefined") {
   try {
     gestureNavigationEnabled.value = localStorage.getItem(GESTURE_NAV_STORAGE_KEY) === "1";
@@ -1946,7 +1993,7 @@ if (typeof window !== "undefined") {
       selectedStorageNodeId.value = selectedId;
     }
     const rawStorageSortMode = String(localStorage.getItem(STORAGE_SORT_MODE_STORAGE_KEY) || "").trim();
-    storageSortMode.value = rawStorageSortMode === "name-desc" ? "name-desc" : "name-asc";
+    storageSortMode.value = normalizeStorageSortMode(rawStorageSortMode);
   } catch {
     gestureNavigationEnabled.value = false;
     collapseHeaderInView.value = false;
@@ -1954,7 +2001,7 @@ if (typeof window !== "undefined") {
     storageTree.value = null;
     storageFolderExpandedMap.value = { [STORAGE_ROOT_ID]: true };
     selectedStorageNodeId.value = STORAGE_ROOT_ID;
-    storageSortMode.value = "name-asc";
+    storageSortMode.value = STORAGE_SORT_DEFAULT_MODE;
   }
 }
 
@@ -1966,6 +2013,8 @@ const createDefaultStorageTree = () => ({
   name: "Local Storage",
   relPath: "",
   absPath: "",
+  createdAt: Date.now(),
+  updatedAt: Date.now(),
   children: [
     {
       id: makeStorageNodeId("file"),
@@ -1973,6 +2022,8 @@ const createDefaultStorageTree = () => ({
       name: "未命名.md",
       relPath: "未命名.md",
       absPath: "",
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
       children: []
     }
   ]
@@ -1986,15 +2037,17 @@ const normalizeStorageNode = (source, fallbackId, fallbackName) => {
   const id = String(raw.id || fallbackId || makeStorageNodeId(type));
   const relPath = String(raw.relPath || "");
   const absPath = String(raw.absPath || "");
+  const createdAt = Number(raw.createdAt || 0);
+  const updatedAt = Number(raw.updatedAt || 0);
   const name = String(raw.name || fallbackName || (type === "folder" ? "新建文件夹" : "未命名.md")).trim()
     || (type === "folder" ? "新建文件夹" : "未命名.md");
   if (type === "file") {
-    return { id, type, name, relPath, absPath, children: [] };
+    return { id, type, name, relPath, absPath, createdAt, updatedAt, children: [] };
   }
   const children = Array.isArray(raw.children)
     ? raw.children.map((item, index) => normalizeStorageNode(item, `${id}-${index}`, "未命名"))
     : [];
-  return { id, type, name, relPath, absPath, children };
+  return { id, type, name, relPath, absPath, createdAt, updatedAt, children };
 };
 
 const ensureStorageTree = (source) => {
@@ -2015,6 +2068,8 @@ const ensureStorageTree = (source) => {
       name: "未命名.md",
       relPath: "未命名.md",
       absPath: "",
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
       children: []
     });
   }
@@ -2029,6 +2084,8 @@ if (isDesktopStorage) {
     name: "存储根目录",
     relPath: "",
     absPath: "",
+    createdAt: 0,
+    updatedAt: 0,
     children: []
   };
 }
@@ -2039,6 +2096,8 @@ const normalizeDesktopStorageNode = (source, isRoot = false) => {
   const relPath = String(raw.relPath || "");
   const absPath = String(raw.absPath || "");
   const size = Number(raw.size || 0);
+  const createdAt = Number(raw.createdAt || 0);
+  const updatedAt = Number(raw.updatedAt || 0);
   const id = isRoot ? STORAGE_ROOT_ID : (relPath || makeStorageNodeId(type));
   const name = String(raw.name || (isRoot ? "存储根目录" : (type === "folder" ? "新建文件夹" : "未命名.md")));
   const children = Array.isArray(raw.children)
@@ -2051,6 +2110,8 @@ const normalizeDesktopStorageNode = (source, isRoot = false) => {
     relPath,
     absPath,
     size,
+    createdAt,
+    updatedAt,
     children
   };
 };
@@ -2226,12 +2287,39 @@ const findFirstMarkdownNode = (node) => {
   return null;
 };
 
+const compareStorageNodeNames = (a, b) =>
+  String(a?.name || "").localeCompare(String(b?.name || ""), "zh-CN");
+
+const getStorageNodeSortTime = (node, field) => {
+  const value = Number(node?.[field] || 0);
+  return Number.isFinite(value) ? value : 0;
+};
+
 const compareStorageNodes = (a, b) => {
   if (a.type !== b.type) {
     return a.type === "folder" ? -1 : 1;
   }
-  const direction = storageSortMode.value === "name-desc" ? -1 : 1;
-  return direction * String(a.name || "").localeCompare(String(b.name || ""), "zh-CN");
+  const mode = normalizeStorageSortMode(storageSortMode.value);
+  if (mode === "name-desc") {
+    return -1 * compareStorageNodeNames(a, b);
+  }
+  if (mode === "updated-desc" || mode === "updated-asc") {
+    const direction = mode === "updated-desc" ? -1 : 1;
+    const delta = getStorageNodeSortTime(a, "updatedAt") - getStorageNodeSortTime(b, "updatedAt");
+    if (delta !== 0) {
+      return direction * delta;
+    }
+    return compareStorageNodeNames(a, b);
+  }
+  if (mode === "created-desc" || mode === "created-asc") {
+    const direction = mode === "created-desc" ? -1 : 1;
+    const delta = getStorageNodeSortTime(a, "createdAt") - getStorageNodeSortTime(b, "createdAt");
+    if (delta !== 0) {
+      return direction * delta;
+    }
+    return compareStorageNodeNames(a, b);
+  }
+  return compareStorageNodeNames(a, b);
 };
 
 const fileSidebarPanelWidth = computed(() => {
@@ -2314,9 +2402,16 @@ const storageStats = computed(() => {
   return `${Math.max(0, folderCount - 1)} 文件夹 / ${fileCount} 文件`;
 });
 
-const storageSortTooltip = computed(() =>
-  storageSortMode.value === "name-desc" ? "排序：名称降序" : "排序：名称升序"
+const storageSortLabel = computed(() =>
+  STORAGE_SORT_OPTION_MAP[normalizeStorageSortMode(storageSortMode.value)]?.label
+    || STORAGE_SORT_OPTION_MAP[STORAGE_SORT_DEFAULT_MODE].label
 );
+
+const storageSortIconName = computed(() =>
+  normalizeStorageSortMode(storageSortMode.value).endsWith("-desc") ? "sort-desc" : "sort-asc"
+);
+
+const storageSortTooltip = computed(() => "\u6392\u5e8f\uff1a" + storageSortLabel.value);
 
 const workspaceDisplayName = computed(() => {
   if (isDesktopStorage) {
@@ -2331,7 +2426,7 @@ const isStorageFolderExpanded = (id) => storageFolderExpandedMap.value[id] !== f
 
 const visibleStorageNodes = computed(() => {
   const list = [];
-  const walk = (node, depth) => {
+  const walk = (node, depth, guideDepths = []) => {
     if (!node) {
       return;
     }
@@ -2340,20 +2435,21 @@ const visibleStorageNodes = computed(() => {
       type: node.type,
       name: node.name,
       relPath: node.relPath || "",
-      depth
+      depth,
+      guideDepths
     });
     if (node.type !== "folder" || !isStorageFolderExpanded(node.id)) {
       return;
     }
     const ordered = [...(Array.isArray(node.children) ? node.children : [])].sort(compareStorageNodes);
     for (const child of ordered) {
-      walk(child, depth + 1);
+      walk(child, depth + 1, [...guideDepths, depth]);
     }
   };
   const rootChildren = Array.isArray(storageTree.value?.children) ? storageTree.value.children : [];
   const orderedRoots = [...rootChildren].sort(compareStorageNodes);
   for (const child of orderedRoots) {
-    walk(child, 0);
+    walk(child, 0, []);
   }
   return list;
 });
@@ -2702,6 +2798,8 @@ const createWikiLinkFileByRelPath = async (relPathInput = "") => {
       relPath: normalizedRelPath,
       absPath: "",
       size: 0,
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
       children: []
     };
     if (!createStorageNodeAt(String(parentMatch.node.id || STORAGE_ROOT_ID), fileNode)) {
@@ -2831,17 +2929,38 @@ const toggleStorageFolder = (id) => {
   persistStorageState();
 };
 
+const closeStorageSortMenu = () => {
+  isStorageSortMenuOpen.value = false;
+};
+
+const toggleStorageSortMenu = () => {
+  closeWorkspaceFooterPanel();
+  isStorageSortMenuOpen.value = !isStorageSortMenuOpen.value;
+};
+
+const applyStorageSortMode = (mode) => {
+  const nextMode = normalizeStorageSortMode(mode);
+  const changed = storageSortMode.value !== nextMode;
+  storageSortMode.value = nextMode;
+  closeStorageSortMenu();
+  if (changed) {
+    showToast("\u6587\u4ef6\u6811\u5df2\u6309" + STORAGE_SORT_OPTION_MAP[nextMode].label + "\u6392\u5e8f");
+  }
+};
+
 const closeWorkspaceFooterPanel = () => {
   workspaceFooterPanel.value = "";
 };
 
 const toggleWorkspaceFooterPanel = (panel) => {
   const targetPanel = String(panel || "").trim();
+  closeStorageSortMenu();
   workspaceFooterPanel.value = workspaceFooterPanel.value === targetPanel ? "" : targetPanel;
 };
 
 const handleWorkspaceFooterPrimaryAction = async () => {
   closeWorkspaceFooterPanel();
+  closeStorageSortMenu();
   if (canPickWorkspaceRoot) {
     await pickStorageRootDir();
     return;
@@ -2853,6 +2972,7 @@ const handleWorkspaceFooterPrimaryAction = async () => {
 
 const handleWorkspaceFooterSwitch = async () => {
   closeWorkspaceFooterPanel();
+  closeStorageSortMenu();
   if (!canPickWorkspaceRoot) {
     return;
   }
@@ -2861,6 +2981,7 @@ const handleWorkspaceFooterSwitch = async () => {
 
 const handleWorkspaceFooterOpenDir = async () => {
   closeWorkspaceFooterPanel();
+  closeStorageSortMenu();
   await openStorageRootDir();
 };
 
@@ -2953,6 +3074,8 @@ const createStorageFile = async () => {
     name,
     relPath: parentRel ? `${parentRel}/${name}` : name,
     absPath: "",
+    createdAt: Date.now(),
+    updatedAt: Date.now(),
     children: []
   };
   if (!createStorageNodeAt(folderId, fileNode)) {
@@ -3003,6 +3126,8 @@ const createStorageFolder = async () => {
     name,
     relPath: parentRel ? `${parentRel}/${name}` : name,
     absPath: "",
+    createdAt: Date.now(),
+    updatedAt: Date.now(),
     children: []
   };
   if (!createStorageNodeAt(folderId, folderNode)) {
@@ -3849,11 +3974,6 @@ const pickStorageRootDir = async () => {
   } catch (error) {
     showToast(`选择目录失败: ${String(error?.message || error || "unknown_error")}`);
   }
-};
-
-const toggleStorageSortMode = () => {
-  storageSortMode.value = storageSortMode.value === "name-desc" ? "name-asc" : "name-desc";
-  showToast(storageSortMode.value === "name-desc" ? "文件树已切换为名称降序" : "文件树已切换为名称升序");
 };
 
 ensureSelectedStorageNodeValid();
@@ -4713,7 +4833,10 @@ const handleWindowClose = () => {
 };
 
 const handleChromeDragMouseDown = (event) => {
-  if (event.button !== 0 || !windowIsMaximized.value) {
+  if (event.button !== 0) {
+    return;
+  }
+  if (!desktopFullscreen.value && !windowIsMaximized.value) {
     return;
   }
   if (!desktopWindowBridge?.dragFromMaximized) {
@@ -4725,6 +4848,7 @@ const handleChromeDragMouseDown = (event) => {
     clientX: Number(event.clientX || 0),
     viewportWidth: Number(window.innerWidth || 1)
   }).then(() => {
+    void syncDesktopFullscreenState();
     void syncDesktopMaximizeState();
   });
 };
@@ -5196,7 +5320,7 @@ watch(storageSortMode, (mode) => {
     return;
   }
   try {
-    localStorage.setItem(STORAGE_SORT_MODE_STORAGE_KEY, mode === "name-desc" ? "name-desc" : "name-asc");
+    localStorage.setItem(STORAGE_SORT_MODE_STORAGE_KEY, normalizeStorageSortMode(mode));
   } catch {
     // ignore storage failure
   }
@@ -5204,6 +5328,7 @@ watch(storageSortMode, (mode) => {
 
 watch([isFileSidebarCollapsed, isFileSidebarHidden], ([collapsed, hidden]) => {
   if (collapsed || hidden) {
+    closeStorageSortMenu();
     closeWorkspaceFooterPanel();
   }
 });
@@ -5488,11 +5613,15 @@ const onGlobalPointerDown = (event) => {
   if (target instanceof Element && target.closest(".term-context-menu")) {
     return;
   }
+  if (target instanceof Element && target.closest(".storage-sort-menu-shell")) {
+    return;
+  }
   if (target instanceof Element && target.closest(".workspace-footer-panel-shell")) {
     return;
   }
   closeDesktopTabContextMenu();
   closeStorageNodeContextMenu();
+  closeStorageSortMenu();
   closeWorkspaceFooterPanel();
 };
 
@@ -5512,6 +5641,7 @@ onMounted(() => {
   window.addEventListener("focus", clearBodyInteractionStyles);
   window.addEventListener("blur", closeDesktopTabContextMenu);
   window.addEventListener("blur", closeStorageNodeContextMenu);
+  window.addEventListener("blur", closeStorageSortMenu);
   window.addEventListener("blur", closeWorkspaceFooterPanel);
   window.addEventListener("blur", releasePasteShortcutLocks);
   window.addEventListener("resize", refreshContentProgress);
@@ -5564,6 +5694,7 @@ onBeforeUnmount(() => {
   window.removeEventListener("focus", clearBodyInteractionStyles);
   window.removeEventListener("blur", closeDesktopTabContextMenu);
   window.removeEventListener("blur", closeStorageNodeContextMenu);
+  window.removeEventListener("blur", closeStorageSortMenu);
   window.removeEventListener("blur", closeWorkspaceFooterPanel);
   window.removeEventListener("blur", releasePasteShortcutLocks);
   window.removeEventListener("resize", refreshContentProgress);
