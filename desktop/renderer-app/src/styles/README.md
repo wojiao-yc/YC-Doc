@@ -1,10 +1,15 @@
-# Styles 目录说明
+# Styles Guide
 
-本文档用于说明 `desktop/renderer-app/src/styles` 下每个样式文件的职责，以及哪些样式仍然由 JS 在运行时动态计算。
+This directory now follows one rule:
 
-## 1. 样式加载顺序（覆盖优先级）
+1. `styles/` defines structure and selector ownership.
+2. `themes/` defines the visual result through CSS variables.
 
-样式由 `src/main.js` 按以下顺序引入，后引入文件会覆盖前面的同权重规则：
+If you want to change how something looks, prefer editing a theme file first.
+
+## Load Order
+
+Imported by [main.js](/d:/python/project/Homepage/YC-Doc/desktop/renderer-app/src/main.js) in this order:
 
 1. `main.css`
 2. `editor.css`
@@ -19,98 +24,261 @@
 11. `editor-context-menu.css`
 12. `editor-context-menu-icons.css`
 
-## 2. 每个样式文件负责什么
+Later files can override earlier files.
 
-| 文件 | 主要作用 | 关键选择器/变量 |
-| --- | --- | --- |
-| `main.css` | 应用壳层与非编辑器区域样式（窗口栏、侧栏、终端、弹层、暗色模式等） | `.app-chrome-*`、`.sidebar-*`、`.term-*`、`.runner-*`、`.dark-ui *` |
-| `editor.css` | 编辑器宿主的最基础透明背景兜底 | `.yc-editor-shell`、`.yc-editor-host .cm-editor` |
-| `document-layout.css` | 文档画布布局、内边距、背景渐变 | `:root --yc-doc-*`、`.yc-editor-shell`、`.yc-editor-shell::before` |
-| `typography.css` | 正文字体、字号、行高、光标色、段落间距 | `.cm-scroller`、`.cm-content`、`.cm-block-paragraph` |
-| `headings.css` | H1~H6 标题排版 | `.cm-block-heading-l1` ~ `.cm-block-heading-l6` |
-| `lists.css` | 无序/有序/任务列表、层级缩进、任务框 | `--yc-list-level`、`.cm-task-checkbox-widget` |
-| `blockquote.css` | 引用块与 callout 提示块 | `.cm-block-blockquote`、`.cm-block-callout-*` |
-| `code-block.css` | 代码块字体、背景、圆角、当前块视觉 | `.cm-block-code-block` |
-| `special-blocks.css` | 分割线、图片块、数学块、表格块、源代码折叠态、拖拽/高亮/插入手柄 | `.cm-image-widget*`、`.cm-math-widget*`、`.cm-table-widget*` |
-| `editor-theme.css` | 编辑器交互主题（选区、光标、搜索命中、行高亮、行内格式 token） | `.cm-selectionBackground`、`.cm-inline-*`、`.cm-source-*` |
-| `editor-context-menu.css` | 编辑器右键菜单容器、项、分割线、暗色模式 | `.yc-editor-context-*` |
-| `editor-context-menu-icons.css` | 右键菜单图标映射（可自由替换） | `.yc-editor-context-icon[data-icon-id="..."]::before` |
+## File Ownership
 
-## 3. 文章内容语法块 -> 对应样式
+`main.css`
+- App shell, tabs, sidebars, terminal, preview markdown, settings window, toasts.
 
-| 文章元素/语法 | 对应样式文件 | 关键类名 |
-| --- | --- | --- |
-| 普通段落 | `typography.css` | `.cm-block-paragraph` |
-| 标题（# ~ ######） | `headings.css` | `.cm-block-heading-*` |
-| 列表/任务列表 | `lists.css` | `.cm-block-bullet-list-item`、`.cm-block-task-list-item` |
-| 引用/Callout | `blockquote.css` | `.cm-block-blockquote`、`.cm-block-callout-*` |
-| 代码块 | `code-block.css` | `.cm-block-code-block` |
-| 分割线 | `special-blocks.css` | `.cm-block-thematic-break` |
-| 图片块 | `special-blocks.css` | `.cm-block-image`、`.cm-image-widget*` |
-| 数学块/行内数学 | `special-blocks.css` | `.cm-block-math-block`、`.cm-inline-math-widget` |
-| 表格块 | `special-blocks.css` | `.cm-table-widget*` |
-| 表格内文本格式（粗体/斜体/删除线/代码/高亮/上下标/链接） | `special-blocks.css` | `.cm-table-widget-cell-editor strong/em/del/code/mark/sup/sub/a` |
-| 行内格式 token（链接/高亮/注释/删除线/行内代码等） | `editor-theme.css` | `.cm-inline-link`、`.cm-inline-mark`、`.cm-inline-comment`、`.cm-inline-codespan` |
+`editor.css`
+- Minimal editor host baseline.
 
-## 4. 可直接调的核心变量
+`document-layout.css`
+- Editor canvas spacing and document layout.
 
-建议优先改变量，不改结构类名。
+`typography.css`
+- Editor body typography structure.
 
-### 4.1 文档布局变量（`document-layout.css`）
+`headings.css`
+- Heading selectors and heading-level structure.
 
-- `--yc-doc-side-padding`
-- `--yc-doc-top-padding`
-- `--yc-doc-bottom-padding`
-- `--yc-doc-bg-light`
-- `--yc-doc-bg-dark`
+`lists.css`
+- Bullet, ordered, and task list structure.
 
-### 4.2 表格变量（`special-blocks.css`，`.cm-table-widget`）
+`blockquote.css`
+- Blockquote and callout structure.
 
-- `--yc-table-gutter-top/right/bottom/left`：表格四边手柄与留白
-- `--yc-table-highlight-color`：行列拖拽与选中高亮主色
-- `--yc-table-highlight-bg`：行列高亮背景
-- `--yc-table-highlight-radius`：高亮圆角
+`code-block.css`
+- Code block structure.
 
-### 4.3 图片变量（`special-blocks.css` + JS 动态注入）
+`special-blocks.css`
+- Thematic break, image/math/table widgets, special block wrappers.
 
-- `--yc-image-width`：图片展示宽度（由 `presentation.js` 在每个图片 widget 上设置）
+`editor-theme.css`
+- Editor interaction tokens: selection, inline marks, wikilinks, autocomplete.
 
-### 4.4 交互过渡变量（`editor-theme.css`）
+`editor-context-menu.css`
+- Editor right-click menu layout.
 
-- `--yc-block-transition-duration`：块高亮/颜色过渡时长
+`editor-context-menu-icons.css`
+- Icon glyph mapping for context menu items.
 
-## 5. 仍在 JS 里动态计算的样式（必须运行时）
+## Syntax Map
 
-以下项目不是“写死视觉值”，而是跟鼠标坐标/布局尺寸/拖拽状态绑定，无法完全静态放进 CSS：
+Editor paragraph
+- `typography.css`
+- `.cm-block-paragraph`
 
-| 位置 | 动态项 | 说明 |
-| --- | --- | --- |
-| `editor/extensions/context-menu.js` | 右键菜单与子菜单 `left/top` | 由鼠标位置与视口边界实时计算 |
-| `editor/extensions/presentation.js` | 表格拖拽落点指示器 `left/top/width/height` | 由拖拽目标实时计算 |
-| `editor/extensions/presentation.js` | `document.body.style.userSelect` | 拖拽过程中临时禁选，结束恢复 |
-| `App.vue`、`composables/useResizable.js` | 面板宽度/分割比例/菜单定位等 `:style` | 这些是状态驱动布局，不是固定视觉 token |
+Editor headings
+- `headings.css`
+- `.cm-block-heading-*`
 
-## 6. 已迁移到 CSS 可控的项（本次整理）
+Editor lists and task lists
+- `lists.css`
+- `.cm-block-bullet-list-item`
+- `.cm-block-ordered-list-item`
+- `.cm-block-task-list-item`
 
-1. 表格对齐：从 `th/td.style.textAlign` 改为 `data-table-align + CSS`，可在 `special-blocks.css` 统一改。
-2. 图片错误隐藏：从 `img.style.display = "none"` 改为 `is-image-error` 类控制。
-3. 块行过渡：从 `EditorView.baseTheme` 内联样式改到 `editor-theme.css`。
-4. 图片宽度：通过 `--yc-image-width` 变量承接，样式层可统一控制表现。
+Editor blockquotes and callouts
+- `blockquote.css`
+- `.cm-block-blockquote`
+- `.cm-block-callout-*`
 
-## 7. 右键菜单图标如何改
+Editor code blocks
+- `code-block.css`
+- `.cm-block-code-block`
 
-仅需改 `editor-context-menu-icons.css`：
+Editor thematic break
+- `special-blocks.css`
+- `.cm-block-thematic-break`
+
+Editor images
+- `special-blocks.css`
+- `.cm-block-image`
+- `.cm-image-widget*`
+
+Editor math
+- `special-blocks.css`
+- `.cm-block-math-block`
+- `.cm-inline-math-widget`
+- `.cm-math-widget*`
+
+Editor tables
+- `special-blocks.css`
+- `.cm-table-widget*`
+
+Preview markdown
+- `main.css`
+- `.markdown-render`
+
+Inline syntax tokens
+- `editor-theme.css`
+- `.cm-inline-*`
+- `.cm-source-*`
+- `.cm-wiki-link*`
+
+## Theme-First Variables
+
+These are expected to live in `themes/*/index.css`.
+
+Typography
+- `--yc-font-ui`
+- `--yc-font-body`
+- `--yc-font-heading`
+- `--yc-font-code`
+- `--yc-font-mono`
+- `--yc-font-widget-mono`
+- `--yc-font-checkbox`
+- `--yc-doc-font-size`
+- `--yc-doc-line-height`
+- `--yc-preview-font-size`
+- `--yc-preview-line-height`
+
+Headings
+- `--yc-heading-color`
+- `--yc-heading-font-weight`
+- `--yc-heading-letter-spacing`
+- `--yc-heading-l1-size`
+- `--yc-heading-l1-line-height`
+- `--yc-heading-l2-size`
+- `--yc-heading-l2-line-height`
+- `--yc-heading-l3-size`
+- `--yc-heading-l3-line-height`
+- `--yc-heading-l4-size`
+- `--yc-heading-l4-line-height`
+- `--yc-heading-l5-size`
+- `--yc-heading-l5-line-height`
+- `--yc-heading-l5-weight`
+- `--yc-heading-l6-size`
+- `--yc-heading-l6-line-height`
+- `--yc-heading-l6-weight`
+
+Blockquote and callout
+- `--yc-blockquote-accent`
+- `--yc-blockquote-color`
+- `--yc-callout-note-bg`
+- `--yc-callout-note-border`
+- `--yc-callout-note-title`
+- `--yc-callout-note-body`
+- `--yc-callout-tip-bg`
+- `--yc-callout-tip-border`
+- `--yc-callout-tip-title`
+- `--yc-callout-warning-bg`
+- `--yc-callout-warning-border`
+- `--yc-callout-warning-title`
+- `--yc-callout-danger-bg`
+- `--yc-callout-danger-border`
+- `--yc-callout-danger-title`
+
+Code
+- `--yc-code-block-font-size`
+- `--yc-code-block-line-height`
+- `--yc-code-block-color`
+- `--yc-code-block-bg`
+- `--yc-code-block-radius`
+- `--yc-preview-code-inline-radius`
+- `--yc-preview-code-inline-padding`
+- `--yc-preview-code-inline-bg`
+- `--yc-preview-code-inline-color`
+- `--yc-preview-code-block-radius`
+- `--yc-preview-code-block-padding`
+
+Preview links and tasks
+- `--yc-preview-image-radius`
+- `--yc-preview-task-offset-y`
+- `--yc-preview-task-check-size`
+- `--yc-preview-task-gap`
+- `--yc-preview-task-border-width`
+- `--yc-preview-task-radius`
+- `--yc-preview-link-radius`
+- `--yc-preview-link-padding`
+- `--yc-preview-link-hover-mix`
+- `--yc-preview-link-hover-mix-dark`
+
+Special blocks
+- `--yc-thematic-break-gradient`
+- `--yc-thematic-break-line-height`
+- `--yc-special-block-border`
+- `--yc-special-block-bg`
+
+Images
+- `--yc-image-widget-radius`
+- `--yc-image-widget-shadow`
+- `--yc-image-widget-shadow-hover`
+- `--yc-image-widget-toolbar-bg`
+- `--yc-image-widget-toolbar-bg-hover`
+- `--yc-image-widget-toolbar-text`
+- `--yc-image-resize-handle-color`
+- `--yc-image-error-text`
+- `--yc-image-error-bg`
+
+Math
+- `--yc-math-widget-outline`
+- `--yc-math-widget-btn-color`
+- `--yc-math-widget-btn-bg`
+- `--yc-math-widget-btn-bg-hover`
+- `--yc-math-fallback-color`
+
+Tables
+- `--yc-table-highlight-color`
+- `--yc-table-highlight-bg`
+- `--yc-table-highlight-bg-strong`
+- `--yc-table-border`
+- `--yc-table-head-bg`
+- `--yc-table-code-bg`
+- `--yc-table-code-shadow`
+- `--yc-table-mark-bg`
+- `--yc-table-mark-shadow`
+- `--yc-table-link`
+- `--yc-table-handle-color`
+- `--yc-table-handle-active`
+- `--yc-table-edge-btn-bg`
+- `--yc-table-edge-btn-bg-hover`
+- `--yc-table-edge-btn-color`
+- `--yc-table-edge-btn-active`
+
+Shell and meta UI
+- `--yc-toast-bg`
+- `--yc-toast-text`
+- `--yc-toast-shadow`
+- `--yc-header-title-color`
+- `--yc-header-sub-color`
+- `--yc-header-dot-color`
+- `--yc-header-page-bg`
+- `--yc-header-page-border`
+- `--yc-header-page-text`
+- `--yc-header-input-bg`
+- `--yc-header-input-border`
+- `--yc-header-input-text`
+- `--yc-header-input-focus-border`
+- `--yc-header-input-focus-shadow`
+
+## What Still Belongs In JS
+
+These are runtime-calculated and should stay in JS:
+
+- Context menu screen position
+- Drag/drop insertion caret position
+- Table drag indicator geometry
+- Resizable panel widths and split ratios
+- Temporary `user-select` locking during drag
+- Inline widget width values like `--yc-image-width`
+
+## How To Create A New Theme
+
+1. Add a folder under `src/themes/<theme-id>/index.css`
+2. Scope variables with `#app[data-theme="<theme-id>"]`
+3. Add theme metadata in [registry.js](/d:/python/project/Homepage/YC-Doc/desktop/renderer-app/src/themes/registry.js)
+4. Import the theme stylesheet in [main.js](/d:/python/project/Homepage/YC-Doc/desktop/renderer-app/src/main.js)
+
+Minimal example:
 
 ```css
-.yc-editor-context-icon[data-icon-id="table-row-insert-above"]::before {
-  content: "↑";
+#app[data-theme="my-theme"] {
+  --yc-font-body: "IBM Plex Serif", serif;
+  --yc-heading-color: #1f2937;
+  --yc-code-block-bg: #f7f3ea;
+  --yc-table-highlight-color: #b45309;
 }
 ```
-
-你可以继续使用字符、符号、或替换成你自己的图标字体映射。
-
-## 8. 新增样式文件注意事项
-
-1. 文件放在 `src/styles/`。
-2. 在 `src/main.js` 中 `import "./styles/你的文件.css";`。
-3. 若需要覆盖已有规则，放在被覆盖文件之后引入。

@@ -3,6 +3,8 @@
     id="app"
     v-cloak
     class="flex h-screen min-h-0 overflow-hidden bg-[#fcfcfc] text-slate-900 flex-col"
+    :data-theme="activeThemeId"
+    :data-theme-mode="currentThemeMode"
     :class="{
       'dark-ui': isDark,
       'desktop-frameless-windowed': isDesktopWindowControls && !windowIsMaximized
@@ -304,104 +306,10 @@
               class="term-window-btn term-tip-btn file-sidebar-tool-btn workspace-footer-tool-btn"
               data-tip="工作区设置"
               aria-label="工作区设置"
-              @click.stop="toggleWorkspaceFooterPanel('settings')"
+              @click.stop="openSettingsWindow('general')"
             >
               <AppIcon name="settings" class="chrome-icon file-sidebar-icon workspace-footer-icon" />
             </button>
-            <div
-              v-if="workspaceFooterPanel === 'settings'"
-              class="workspace-footer-popover workspace-footer-actions"
-              :class="isDark ? 'is-dark' : ''"
-            >
-              <button
-                v-if="canPickWorkspaceRoot"
-                type="button"
-                class="workspace-footer-action"
-                :class="isDark ? 'is-dark' : ''"
-                @click="handleWorkspaceFooterSwitch"
-              >
-                <AppIcon name="workspace-switch" class="workspace-footer-action-icon" />
-                <span>切换工作区</span>
-              </button>
-              <button
-                v-if="canOpenWorkspaceRoot"
-                type="button"
-                class="workspace-footer-action"
-                :class="isDark ? 'is-dark' : ''"
-                @click="handleWorkspaceFooterOpenDir"
-              >
-                <AppIcon name="open-folder" class="workspace-footer-action-icon" />
-                <span>打开当前目录</span>
-              </button>
-              <div
-                v-if="canPickWorkspaceRoot || canOpenWorkspaceRoot"
-                class="workspace-footer-action-divider"
-              ></div>
-              <button
-                type="button"
-                class="workspace-footer-action"
-                :class="isDark ? 'is-dark' : ''"
-                @click="handleWorkspaceFooterEditorSetting('editor-width-narrower')"
-              >
-                <AppIcon name="arrow-left" class="workspace-footer-action-icon" />
-                <span>收窄编辑区</span>
-              </button>
-              <button
-                type="button"
-                class="workspace-footer-action"
-                :class="isDark ? 'is-dark' : ''"
-                @click="handleWorkspaceFooterEditorSetting('editor-width-wider')"
-              >
-                <AppIcon name="arrow-right" class="workspace-footer-action-icon" />
-                <span>放宽编辑区</span>
-              </button>
-              <button
-                type="button"
-                class="workspace-footer-action"
-                :class="isDark ? 'is-dark' : ''"
-                @click="handleWorkspaceFooterEditorSetting('editor-width-reset')"
-              >
-                <AppIcon name="restore" class="workspace-footer-action-icon" />
-                <span>重置编辑区宽度</span>
-              </button>
-              <button
-                type="button"
-                class="workspace-footer-action"
-                :class="isDark ? 'is-dark' : ''"
-                @click="handleWorkspaceFooterEditorSetting('editor-debug-toggle')"
-              >
-                <AppIcon name="tool" class="workspace-footer-action-icon" />
-                <span>{{ showEditorDebugPanel ? '隐藏调试面板' : '显示调试面板' }}</span>
-              </button>
-              <div class="workspace-footer-action-divider"></div>
-              <button
-                type="button"
-                class="workspace-footer-action"
-                :class="[
-                  isDark ? 'is-dark' : '',
-                  workspaceFooterViewMenu.open ? 'is-open' : ''
-                ]"
-                @click.stop="toggleWorkspaceFooterViewMenu"
-              >
-                <AppIcon name="settings" class="workspace-footer-action-icon" />
-                <span>展示模式设置</span>
-                <span class="workspace-footer-action-trailing" aria-hidden="true">
-                  <AppIcon
-                    :name="workspaceFooterViewMenu.open ? 'chevron-down' : 'chevron-right'"
-                    class="workspace-footer-action-chevron"
-                  />
-                </span>
-              </button>
-              <p class="workspace-footer-settings-note">
-                当前编辑区宽度 {{ displayWidth }}px
-              </p>
-              <p
-                v-if="!canPickWorkspaceRoot && !canOpenWorkspaceRoot"
-                class="workspace-footer-empty"
-              >
-                当前环境不支持工作区切换，仍可使用下方编辑器设置
-              </p>
-            </div>
           </div>
         </div>
       </div>
@@ -1045,15 +953,7 @@
           🗑 删除当前步骤
         </button>
 
-        <div class="grid grid-cols-2 gap-2">
-          <button
-            type="button"
-            class="px-3 py-2 text-sm rounded-lg transition-all"
-            :class="isDark ? 'bg-slate-800 text-slate-100 hover:bg-slate-700' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'"
-            @click="toggleDark"
-          >
-            🌙 主题
-          </button>
+        <div class="grid grid-cols-1 gap-2">
           <button
             type="button"
             class="px-3 py-2 text-sm rounded-lg transition-all bg-orange-500 text-white hover:bg-orange-600"
@@ -1086,27 +986,175 @@
     </div>
 
     <div
-      v-if="workspaceFooterViewMenu.open"
-      class="term-context-menu workspace-footer-view-menu"
+      v-if="settingsWindow.open"
+      class="settings-window-mask"
       :class="isDark ? 'is-dark' : ''"
-      role="menu"
-      tabindex="-1"
-      :style="{ left: `${workspaceFooterViewMenu.x}px`, top: `${workspaceFooterViewMenu.y}px` }"
-      @mousedown.stop
+      @mousedown.self="closeSettingsWindow"
     >
-      <label class="term-context-item workspace-footer-view-menu-item" :class="isDark ? 'is-dark' : ''">
-        <input v-model="gestureNavigationEnabled" type="checkbox" :class="isDark ? 'accent-cyan-400' : 'accent-orange-500'" />
-        <span>翻页模式</span>
-      </label>
-      <label class="term-context-item workspace-footer-view-menu-item" :class="isDark ? 'is-dark' : ''">
-        <input v-model="collapseHeaderInView" type="checkbox" :class="isDark ? 'accent-cyan-400' : 'accent-orange-500'" />
-        <span>展示模式收起顶栏</span>
-      </label>
-      <label class="term-context-item workspace-footer-view-menu-item" :class="isDark ? 'is-dark' : ''">
-        <input v-model="collapseStepsSidebarInView" type="checkbox" :class="isDark ? 'accent-cyan-400' : 'accent-orange-500'" />
-        <span>展示模式收起原始步骤栏</span>
-      </label>
+      <div
+        class="settings-window"
+        :class="isDark ? 'is-dark' : ''"
+        @mousedown.stop
+      >
+        <aside class="settings-window-sidebar" :class="isDark ? 'is-dark' : ''">
+          <div class="settings-window-sidebar-title">设置</div>
+          <button
+            v-for="section in SETTINGS_SECTIONS"
+            :key="section.id"
+            type="button"
+            class="settings-window-nav-item"
+            :class="[
+              isDark ? 'is-dark' : '',
+              settingsWindow.section === section.id ? 'is-active' : ''
+            ]"
+            @click="openSettingsWindow(section.id)"
+          >
+            <AppIcon :name="section.icon" class="settings-window-nav-icon" />
+            <span>{{ section.label }}</span>
+          </button>
+        </aside>
+
+        <section class="settings-window-content" :class="isDark ? 'is-dark' : ''">
+          <div class="settings-window-header">
+            <div>
+              <div class="settings-window-eyebrow">工作区设置</div>
+              <h2 class="settings-window-title">{{ currentSettingsSectionLabel }}</h2>
+            </div>
+            <button
+              type="button"
+              class="settings-window-close"
+              :class="isDark ? 'is-dark' : ''"
+              aria-label="关闭设置"
+              @click="closeSettingsWindow"
+            >
+              <AppIcon name="close" class="settings-window-close-icon" />
+            </button>
+          </div>
+
+          <div class="settings-window-scroll">
+            <template v-if="settingsWindow.section === 'general'">
+              <div class="settings-window-card" :class="isDark ? 'is-dark' : ''">
+                <div class="settings-window-card-title">工作区</div>
+                <div class="settings-window-card-text">当前工作区名称 {{ workspaceDisplayName }}</div>
+                <div class="settings-window-card-text">{{ storageStats }}</div>
+                <div class="settings-window-path">{{ storageLocationText }}</div>
+                <div class="settings-window-actions">
+                  <button
+                    v-if="canPickWorkspaceRoot"
+                    type="button"
+                    class="settings-window-button is-accent"
+                    @click="handleWorkspaceFooterSwitch"
+                  >
+                    切换工作区
+                  </button>
+                  <button
+                    v-if="canOpenWorkspaceRoot"
+                    type="button"
+                    class="settings-window-button"
+                    :class="isDark ? 'is-dark' : ''"
+                    @click="handleWorkspaceFooterOpenDir"
+                  >
+                    打开当前目录
+                  </button>
+                </div>
+              </div>
+            </template>
+
+            <template v-else-if="settingsWindow.section === 'editor'">
+              <div class="settings-window-card" :class="isDark ? 'is-dark' : ''">
+                <div class="settings-window-card-title">编辑区布局</div>
+                <div class="settings-window-card-text">当前编辑区宽度 {{ displayWidth }}px</div>
+                <div class="settings-window-actions">
+                  <button type="button" class="settings-window-button" :class="isDark ? 'is-dark' : ''" @click="handleWorkspaceFooterEditorSetting('editor-width-narrower')">收窄</button>
+                  <button type="button" class="settings-window-button" :class="isDark ? 'is-dark' : ''" @click="handleWorkspaceFooterEditorSetting('editor-width-wider')">放宽</button>
+                  <button type="button" class="settings-window-button" :class="isDark ? 'is-dark' : ''" @click="handleWorkspaceFooterEditorSetting('editor-width-reset')">重置</button>
+                </div>
+              </div>
+              <div class="settings-window-card" :class="isDark ? 'is-dark' : ''">
+                <div class="settings-window-card-title">调试面板</div>
+                <div class="settings-window-card-text">编辑器底部调试信息面板。</div>
+                <label class="settings-window-toggle-row" :class="isDark ? 'is-dark' : ''">
+                  <span>{{ showEditorDebugPanel ? '已开启' : '已关闭' }}</span>
+                  <input
+                    :checked="showEditorDebugPanel"
+                    type="checkbox"
+                    :class="isDark ? 'accent-cyan-400' : 'accent-orange-500'"
+                    @change="handleWorkspaceFooterEditorSetting('editor-debug-toggle')"
+                  />
+                </label>
+              </div>
+            </template>
+
+            <template v-else-if="settingsWindow.section === 'view'">
+              <div class="settings-window-card" :class="isDark ? 'is-dark' : ''">
+                <div class="settings-window-card-title">展示模式</div>
+                <div class="settings-window-card-text">控制阅读态的翻页和界面折叠。</div>
+                <label class="settings-window-toggle-row" :class="isDark ? 'is-dark' : ''">
+                  <span>翻页模式</span>
+                  <input v-model="gestureNavigationEnabled" type="checkbox" :class="isDark ? 'accent-cyan-400' : 'accent-orange-500'" />
+                </label>
+                <label class="settings-window-toggle-row" :class="isDark ? 'is-dark' : ''">
+                  <span>展示模式收起顶栏</span>
+                  <input v-model="collapseHeaderInView" type="checkbox" :class="isDark ? 'accent-cyan-400' : 'accent-orange-500'" />
+                </label>
+                <label class="settings-window-toggle-row" :class="isDark ? 'is-dark' : ''">
+                  <span>展示模式收起原始步骤栏</span>
+                  <input v-model="collapseStepsSidebarInView" type="checkbox" :class="isDark ? 'accent-cyan-400' : 'accent-orange-500'" />
+                </label>
+              </div>
+            </template>
+
+            <template v-else-if="settingsWindow.section === 'appearance'">
+              <div class="settings-window-card" :class="isDark ? 'is-dark' : ''">
+                <div class="settings-window-card-title">主题</div>
+                <div class="settings-window-card-text">主题已改成注册式管理。内置主题和导入主题都从同一入口切换，拖拽条、滚动条、菜单等会跟随主题 token。</div>
+                <div class="settings-theme-grid">
+                  <button
+                    v-for="theme in availableThemes"
+                    :key="theme.id"
+                    type="button"
+                    class="settings-theme-card"
+                    :class="[activeThemeId === theme.id ? 'is-active' : '', isDark ? 'is-dark' : '']"
+                    @click="applyThemeSelection(theme.id)"
+                  >
+                    <span class="settings-theme-swatch" :style="{ background: theme.swatch }"></span>
+                    <span class="settings-theme-name">{{ theme.label }}</span>
+                    <span class="settings-theme-meta">{{ theme.metaLabel }}</span>
+                  </button>
+                </div>
+                <div class="settings-window-actions">
+                  <button type="button" class="settings-window-button is-accent" @click="triggerThemeImport">导入主题</button>
+                  <button
+                    v-if="activeImportedTheme"
+                    type="button"
+                    class="settings-window-button"
+                    :class="isDark ? 'is-dark' : ''"
+                    @click="removeImportedTheme(activeImportedTheme.id)"
+                  >
+                    移除当前导入主题
+                  </button>
+                </div>
+                <div v-if="activeImportedTheme" class="settings-window-note">
+                  当前导入主题基础模式：
+                  <button type="button" class="settings-window-link" @click="setImportedThemeMode(activeImportedTheme.id, 'light')">浅色</button>
+                  /
+                  <button type="button" class="settings-window-link" @click="setImportedThemeMode(activeImportedTheme.id, 'dark')">深色</button>
+                </div>
+                <div class="settings-window-note">支持导入 `.css` 或 `.json`。JSON 可使用 `name`、`mode`、`css`/`cssText`、`xtermTheme` 字段。</div>
+              </div>
+            </template>
+          </div>
+        </section>
+      </div>
     </div>
+
+    <input
+      ref="settingsThemeFileInputRef"
+      type="file"
+      class="sr-only"
+      accept=".css,.json,application/json,text/css"
+      @change="handleThemeFileImport"
+    />
 
     <div v-if="desktopRenameDialog.open" class="term-rename-mask" @mousedown.self="cancelDesktopRenameDialog">
       <div class="term-rename-card" @mousedown.stop>
@@ -1166,6 +1214,15 @@ import { useResizable } from "./composables/useResizable";
 import { useSteps } from "./composables/useSteps";
 import { useTerminal } from "./composables/useTerminal";
 import { useToast } from "./composables/useToast";
+import {
+  DEFAULT_THEME_ID,
+  buildThemeCatalog,
+  fallbackThemeIdForMode,
+  normalizeImportedThemeDefinition,
+  resolveThemeDefinition,
+  resolveThemeMode,
+  resolveXtermTheme
+} from "./themes/registry.js";
 import { extractHeadingsFromMarkdown, findHeadingMatch, slugifyHeading } from "./utils/heading-slug";
 import { renderMarkdownToHtml } from "./utils/render-markdown";
 import { buildWikiLinkIndex } from "./utils/wiki-link-index";
@@ -1284,10 +1341,16 @@ const preprocessMathFormulas = (markdown) => {
 };
 
 const mode = ref("edit");
-const isDark = ref(false);
 const gestureNavigationEnabled = ref(false);
 const collapseHeaderInView = ref(false);
 const collapseStepsSidebarInView = ref(false);
+const availableThemes = computed(() => buildThemeCatalog(importedThemes.value));
+const currentThemeDefinition = computed(() => resolveThemeDefinition(activeThemeId.value, importedThemes.value));
+const currentThemeMode = computed(() => resolveThemeMode(activeThemeId.value, importedThemes.value));
+const isDark = computed(() => currentThemeMode.value === "dark");
+const activeImportedTheme = computed(() => (
+  currentThemeDefinition.value?.kind === "imported" ? currentThemeDefinition.value : null
+));
 const isEditMode = computed(() => mode.value === "edit");
 const terminalPanelHeight = ref(320);
 const terminalMaximized = ref(false);
@@ -1376,11 +1439,13 @@ const storageRenameDialog = ref({
 });
 const isStorageSortMenuOpen = ref(false);
 const workspaceFooterPanel = ref("");
-const workspaceFooterViewMenu = ref({
+const settingsWindow = ref({
   open: false,
-  x: 0,
-  y: 0
+  section: "general"
 });
+const activeThemeId = ref(DEFAULT_THEME_ID);
+const importedThemes = ref([]);
+const settingsThemeFileInputRef = ref(null);
 const storageRenameInputRef = ref(null);
 const storageNodeMenuRef = ref(null);
 const desktopTabMenu = ref({
@@ -1652,7 +1717,16 @@ const STORAGE_TREE_STORAGE_KEY = "yc-doc.storage-tree.v1";
 const STORAGE_EXPANDED_STORAGE_KEY = "yc-doc.storage-expanded.v1";
 const STORAGE_SELECTED_STORAGE_KEY = "yc-doc.storage-selected.v1";
 const STORAGE_SORT_MODE_STORAGE_KEY = "yc-doc.storage-sort-mode.v1";
+const THEME_PREFS_STORAGE_KEY = "yc-doc.theme-prefs.v2";
+const LEGACY_THEME_PREFS_STORAGE_KEY = "yc-doc.theme-prefs.v1";
 const WIKI_LINK_INDEX_DEBOUNCE_MS = 220;
+const CUSTOM_THEME_STYLE_ID = "yc-doc-custom-theme-style";
+const SETTINGS_SECTIONS = Object.freeze([
+  { id: "general", label: "通用", icon: "settings" },
+  { id: "editor", label: "编辑器", icon: "tool" },
+  { id: "view", label: "展示模式", icon: "image" },
+  { id: "appearance", label: "外观", icon: "apps" }
+]);
 
 const { toast, showToast } = useToast();
 const createEmptyWikiLinkIndex = () => ({
@@ -2093,8 +2167,82 @@ const normalizeStorageSortMode = (mode) => (
     : STORAGE_SORT_DEFAULT_MODE
 );
 
+const ensureCustomThemeStyleElement = () => {
+  if (typeof document === "undefined") {
+    return null;
+  }
+  let styleEl = document.getElementById(CUSTOM_THEME_STYLE_ID);
+  if (!(styleEl instanceof HTMLStyleElement)) {
+    styleEl = document.createElement("style");
+    styleEl.id = CUSTOM_THEME_STYLE_ID;
+    document.head.appendChild(styleEl);
+  }
+  return styleEl;
+};
+
+const applyImportedThemeStyle = () => {
+  if (typeof document === "undefined") {
+    return;
+  }
+  const existing = document.getElementById(CUSTOM_THEME_STYLE_ID);
+  const importedTheme = activeImportedTheme.value;
+  if (!importedTheme?.cssText) {
+    existing?.remove();
+    return;
+  }
+  const styleEl = ensureCustomThemeStyleElement();
+  if (!styleEl) {
+    return;
+  }
+  styleEl.textContent = String(importedTheme.cssText || "");
+};
+
+const persistThemePrefs = () => {
+  if (typeof window === "undefined") {
+    return;
+  }
+  try {
+    localStorage.setItem(THEME_PREFS_STORAGE_KEY, JSON.stringify({
+      activeThemeId: activeThemeId.value,
+      importedThemes: importedThemes.value
+    }));
+  } catch {
+    // ignore storage failure
+  }
+};
+
+const applyThemePreference = () => {
+  if (typeof document !== "undefined") {
+    document.documentElement.dataset.ycTheme = String(activeThemeId.value || DEFAULT_THEME_ID);
+    document.documentElement.dataset.ycThemeMode = currentThemeMode.value;
+    document.documentElement.style.colorScheme = currentThemeMode.value;
+  }
+  applyImportedThemeStyle();
+  persistThemePrefs();
+};
+
 if (typeof window !== "undefined") {
   try {
+    const rawThemePrefs = localStorage.getItem(THEME_PREFS_STORAGE_KEY) || localStorage.getItem(LEGACY_THEME_PREFS_STORAGE_KEY);
+    if (rawThemePrefs) {
+      const parsedThemePrefs = JSON.parse(rawThemePrefs);
+      const nextImportedThemes = Array.isArray(parsedThemePrefs?.importedThemes)
+        ? parsedThemePrefs.importedThemes
+        : (parsedThemePrefs?.importedTheme ? [parsedThemePrefs.importedTheme] : []);
+      importedThemes.value = nextImportedThemes
+        .map((theme) => normalizeImportedThemeDefinition(theme))
+        .filter(Boolean);
+      activeThemeId.value = String(parsedThemePrefs?.activeThemeId || DEFAULT_THEME_ID).trim() || DEFAULT_THEME_ID;
+      if (!buildThemeCatalog(importedThemes.value).some((theme) => theme?.id === activeThemeId.value)) {
+        activeThemeId.value = DEFAULT_THEME_ID;
+      }
+      if (
+        activeThemeId.value.startsWith("imported-theme")
+        && !importedThemes.value.some((theme) => theme?.id === activeThemeId.value)
+      ) {
+        activeThemeId.value = DEFAULT_THEME_ID;
+      }
+    }
     gestureNavigationEnabled.value = localStorage.getItem(GESTURE_NAV_STORAGE_KEY) === "1";
     collapseHeaderInView.value = localStorage.getItem(VIEW_HEADER_COLLAPSE_STORAGE_KEY) === "1";
     collapseStepsSidebarInView.value = localStorage.getItem(VIEW_STEPS_SIDEBAR_COLLAPSE_STORAGE_KEY) === "1";
@@ -2124,8 +2272,12 @@ if (typeof window !== "undefined") {
     storageFolderExpandedMap.value = { [STORAGE_ROOT_ID]: true };
     selectedStorageNodeId.value = STORAGE_ROOT_ID;
     storageSortMode.value = STORAGE_SORT_DEFAULT_MODE;
+    activeThemeId.value = DEFAULT_THEME_ID;
+    importedThemes.value = [];
   }
 }
+
+applyThemePreference();
 
 const makeStorageNodeId = (prefix) => `${prefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
 
@@ -3571,19 +3723,6 @@ const applyStorageSortMode = (mode) => {
 
 const closeWorkspaceFooterPanel = () => {
   workspaceFooterPanel.value = "";
-  workspaceFooterViewMenu.value = {
-    open: false,
-    x: 0,
-    y: 0
-  };
-};
-
-const closeWorkspaceFooterViewMenu = () => {
-  workspaceFooterViewMenu.value = {
-    open: false,
-    x: 0,
-    y: 0
-  };
 };
 
 const toggleWorkspaceFooterPanel = (panel) => {
@@ -3594,39 +3733,138 @@ const toggleWorkspaceFooterPanel = (panel) => {
     return;
   }
   workspaceFooterPanel.value = targetPanel;
-  if (targetPanel !== "settings") {
-    closeWorkspaceFooterViewMenu();
+};
+
+const currentSettingsSectionLabel = computed(() =>
+  SETTINGS_SECTIONS.find((section) => section.id === settingsWindow.value.section)?.label || "设置"
+);
+
+const openSettingsWindow = (sectionInput = "general") => {
+  const nextSection = SETTINGS_SECTIONS.some((section) => section.id === sectionInput)
+    ? sectionInput
+    : "general";
+  closeWorkspaceFooterPanel();
+  closeStorageSortMenu();
+  settingsWindow.value = {
+    open: true,
+    section: nextSection
+  };
+};
+
+const closeSettingsWindow = () => {
+  settingsWindow.value = {
+    open: false,
+    section: settingsWindow.value.section || "general"
+  };
+};
+
+const applyThemeSelection = (themeIdInput = DEFAULT_THEME_ID) => {
+  const themeId = String(themeIdInput || "").trim() || DEFAULT_THEME_ID;
+  const nextTheme = resolveThemeDefinition(themeId, importedThemes.value);
+  activeThemeId.value = nextTheme?.id || DEFAULT_THEME_ID;
+  applyThemePreference();
+};
+
+const setImportedThemeMode = (themeIdInput = "", modeInput = "light") => {
+  const themeId = String(themeIdInput || "").trim();
+  if (!themeId) {
+    return;
+  }
+  const themeIndex = importedThemes.value.findIndex((theme) => theme?.id === themeId);
+  if (themeIndex < 0) {
+    return;
+  }
+  const currentTheme = importedThemes.value[themeIndex];
+  const nextTheme = normalizeImportedThemeDefinition({
+    ...currentTheme,
+    mode: modeInput
+  });
+  if (!nextTheme) {
+    return;
+  }
+  importedThemes.value = importedThemes.value.map((theme, index) => (
+    index === themeIndex ? nextTheme : theme
+  ));
+  if (activeThemeId.value === themeId) {
+    applyThemePreference();
+  } else {
+    persistThemePrefs();
   }
 };
 
-const toggleWorkspaceFooterViewMenu = (event) => {
-  if (workspaceFooterViewMenu.value.open) {
-    closeWorkspaceFooterViewMenu();
-    workspaceFooterPanel.value = "settings";
+const removeImportedTheme = (themeIdInput = "") => {
+  const themeId = String(themeIdInput || "").trim();
+  if (!themeId) {
     return;
   }
-  const trigger = event?.currentTarget;
-  if (!(trigger instanceof Element)) {
+  const currentTheme = importedThemes.value.find((theme) => theme?.id === themeId);
+  if (!currentTheme) {
     return;
   }
-  const rect = trigger.getBoundingClientRect();
-  const menuWidth = 220;
-  const menuHeight = 132;
-  const viewportWidth = typeof window === "undefined" ? 0 : Number(window.innerWidth || 0);
-  const viewportHeight = typeof window === "undefined" ? 0 : Number(window.innerHeight || 0);
-  let x = Math.round(rect.right + 8);
-  let y = Math.round(rect.top - 6);
-  if (viewportWidth > 0 && x + menuWidth > viewportWidth - 12) {
-    x = Math.round(rect.left - menuWidth - 8);
+  importedThemes.value = importedThemes.value.filter((theme) => theme?.id !== themeId);
+  if (activeThemeId.value === themeId) {
+    activeThemeId.value = fallbackThemeIdForMode(currentTheme.mode);
   }
-  if (viewportHeight > 0 && y + menuHeight > viewportHeight - 12) {
-    y = Math.max(12, Math.round(viewportHeight - menuHeight - 12));
+  applyThemePreference();
+};
+
+const triggerThemeImport = () => {
+  settingsThemeFileInputRef.value?.click?.();
+};
+
+const parseImportedThemeFile = async (file) => {
+  const fileName = String(file?.name || "").trim() || "导入主题";
+  const rawText = await file.text();
+  const lowerName = fileName.toLowerCase();
+  if (lowerName.endsWith(".json")) {
+    const parsed = JSON.parse(rawText);
+    const nextTheme = normalizeImportedThemeDefinition({
+      ...parsed,
+      name: String(parsed?.name || fileName.replace(/\.[^.]+$/, "") || "导入主题").trim(),
+      importedAt: Date.now()
+    }, isDark.value ? "dark" : "light");
+    if (!nextTheme) {
+      throw new Error("theme_json_missing_css");
+    }
+    return nextTheme;
   }
-  workspaceFooterViewMenu.value = {
-    open: true,
-    x: Math.max(12, x),
-    y: Math.max(12, y)
-  };
+  const nextTheme = normalizeImportedThemeDefinition({
+    name: fileName.replace(/\.[^.]+$/, "") || "导入主题",
+    mode: isDark.value ? "dark" : "light",
+    importedAt: Date.now(),
+    cssText: rawText
+  }, isDark.value ? "dark" : "light");
+  if (!nextTheme) {
+    throw new Error("invalid_theme_file");
+  }
+  return nextTheme;
+};
+
+const handleThemeFileImport = async (event) => {
+  const input = event?.target;
+  const file = input?.files?.[0];
+  if (!file) {
+    return;
+  }
+  try {
+    const nextTheme = normalizeImportedThemeDefinition(await parseImportedThemeFile(file), isDark.value ? "dark" : "light");
+    if (!nextTheme) {
+      throw new Error("invalid_theme_file");
+    }
+    importedThemes.value = [
+      ...importedThemes.value.filter((theme) => theme?.id !== nextTheme.id),
+      nextTheme
+    ];
+    activeThemeId.value = nextTheme.id;
+    applyThemePreference();
+    showToast(`已导入主题: ${nextTheme.label}`);
+  } catch (error) {
+    showToast(`导入主题失败: ${String(error?.message || error || "unknown_error")}`);
+  } finally {
+    if (input) {
+      input.value = "";
+    }
+  }
 };
 
 const handleWorkspaceFooterPrimaryAction = async () => {
@@ -5834,26 +6072,19 @@ const handleChromeDragMouseDown = (event) => {
   });
 };
 
-const xtermLightTheme = {
-  background: "#ffffff",
-  foreground: "#0f172a",
-  cursor: "#f97316"
-};
-
-const xtermDarkTheme = {
-  background: "#0f172a",
-  foreground: "#e2e8f0",
-  cursor: "#fb923c"
-};
-
 const applyXtermTheme = () => {
+  const xtermTheme = resolveXtermTheme(activeThemeId.value, importedThemes.value);
   for (const pane of ["primary", "secondary"]) {
     const term = termOf(pane);
     if (term) {
-      term.options.theme = isDark.value ? xtermDarkTheme : xtermLightTheme;
+      term.options.theme = xtermTheme;
     }
   }
 };
+
+watch([activeThemeId, importedThemes], () => {
+  applyXtermTheme();
+}, { deep: true });
 
 const releasePasteShortcutLocks = () => {
   panePasteShortcutLock.primary = false;
@@ -6027,7 +6258,7 @@ const buildPaneTerminal = async (pane) => {
           convertEol: false,
           rightClickSelectsWord: true,
           allowTransparency: false,
-          theme: isDark.value ? xtermDarkTheme : xtermLightTheme
+          theme: resolveXtermTheme(activeThemeId.value, importedThemes.value)
         });
         const fit = new FitAddon();
         term.loadAddon(fit);
@@ -6038,7 +6269,7 @@ const buildPaneTerminal = async (pane) => {
             xtermNodes[i].remove();
           }
         }
-        term.options.theme = isDark.value ? xtermDarkTheme : xtermLightTheme;
+        term.options.theme = resolveXtermTheme(activeThemeId.value, importedThemes.value);
         fit.fit();
 
         term.attachCustomKeyEventHandler((ev) => {
@@ -6215,9 +6446,13 @@ watch(terminalOpen, (open) => {
   }
 });
 
-watch(isDark, () => {
-  applyXtermTheme();
-});
+watch(importedThemes, () => {
+  if (activeImportedTheme.value) {
+    applyThemePreference();
+    return;
+  }
+  persistThemePrefs();
+}, { deep: true });
 
 watch([currentId, mode, terminalMaximized, terminalOpen, terminalPanelHeight], () => {
   nextTick(() => {
@@ -6344,10 +6579,6 @@ watch([desktopSplit, primaryPaneSessionId, secondaryPaneSessionId], async () => 
   }
   await syncDesktopTerminalSize();
 });
-
-const toggleDark = () => {
-  isDark.value = !isDark.value;
-};
 
 const openWorkspaceGraph = () => {
   activeEditorTabId.value = ensureWorkspaceGraphTab();
@@ -6590,6 +6821,12 @@ const onKeydown = (event) => {
     return;
   }
 
+  if (event.key === "Escape" && settingsWindow.value.open) {
+    event.preventDefault();
+    closeSettingsWindow();
+    return;
+  }
+
   if (event.key === "Escape" && !isEditMode.value) {
     event.preventDefault();
     toggleMode();
@@ -6671,6 +6908,9 @@ onMounted(() => {
 onBeforeUnmount(() => {
   setContextMenuRuntimeOptions({});
   setPresentationRuntimeOptions({});
+  if (typeof document !== "undefined") {
+    document.getElementById(CUSTOM_THEME_STYLE_ID)?.remove();
+  }
   releaseTransientPointerState({ syncTerminal: false });
   cancelDesktopRenameDialog();
   cancelStorageRenameDialog();

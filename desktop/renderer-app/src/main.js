@@ -1,5 +1,9 @@
-﻿import { createApp } from "vue";
+import { createApp } from "vue";
 import App from "./App.vue";
+import "./themes/base/index.css";
+import "./themes/default-light/index.css";
+import "./themes/default-dark/index.css";
+import "./themes/paper-amber/index.css";
 import "./styles/main.css";
 import "./styles/editor.css";
 import "./styles/document-layout.css";

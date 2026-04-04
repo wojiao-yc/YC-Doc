@@ -62,7 +62,7 @@
                 orient="auto"
                 markerUnits="strokeWidth"
               >
-                <path d="M0,0 L0,6 L9,3 z" :fill="isDark ? '#cbd5e1' : '#64748b'" />
+                <path d="M0,0 L0,6 L9,3 z" fill="var(--yc-graph-arrow)" />
               </marker>
             </defs>
 
@@ -306,7 +306,7 @@ const hashIndexOf = (valueInput = "") => {
 const colorForKey = (keyInput = "") => {
   const key = String(keyInput || "").trim();
   if (!key || key === "Root" || key === "No tag") {
-    return props.isDark ? "#64748b" : "#94a3b8";
+    return "var(--yc-graph-root-node)";
   }
   return PALETTE[hashIndexOf(key) % PALETTE.length];
 };
@@ -708,14 +708,14 @@ onBeforeUnmount(() => {
   display: flex;
   flex-direction: column;
   background:
-    radial-gradient(circle at top right, rgba(249, 115, 22, 0.08), transparent 28%),
-    linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(248, 250, 252, 0.98));
+    radial-gradient(circle at top right, color-mix(in srgb, var(--yc-accent) 10%, transparent), transparent 28%),
+    linear-gradient(180deg, color-mix(in srgb, var(--yc-bg-panel) 98%, transparent), color-mix(in srgb, var(--yc-bg-panel-alt) 98%, transparent));
 }
 
 .workspace-graph-root.is-dark {
   background:
-    radial-gradient(circle at top right, rgba(249, 115, 22, 0.14), transparent 28%),
-    linear-gradient(180deg, rgba(2, 6, 23, 0.98), rgba(15, 23, 42, 0.98));
+    radial-gradient(circle at top right, color-mix(in srgb, var(--yc-accent) 16%, transparent), transparent 28%),
+    linear-gradient(180deg, color-mix(in srgb, var(--yc-bg-panel-muted) 98%, transparent), color-mix(in srgb, var(--yc-bg-panel) 98%, transparent));
 }
 
 .workspace-graph-shell {
@@ -743,13 +743,13 @@ onBeforeUnmount(() => {
   justify-content: space-between;
   gap: 18px;
   padding: 18px 22px 16px;
-  border-bottom: 1px solid rgba(148, 163, 184, 0.18);
-  background: rgba(255, 255, 255, 0.82);
+  border-bottom: 1px solid color-mix(in srgb, var(--yc-border-strong) 42%, transparent);
+  background: color-mix(in srgb, var(--yc-bg-overlay) 84%, transparent);
   backdrop-filter: blur(12px);
 }
 
 .workspace-graph-shell.is-dark .workspace-graph-header {
-  background: rgba(2, 6, 23, 0.72);
+  background: color-mix(in srgb, var(--yc-bg-overlay) 78%, transparent);
 }
 
 .workspace-graph-heading {
@@ -762,7 +762,7 @@ onBeforeUnmount(() => {
   font-weight: 700;
   letter-spacing: 0.12em;
   text-transform: uppercase;
-  color: #f97316;
+  color: var(--yc-accent);
 }
 
 .workspace-graph-title {
@@ -770,22 +770,22 @@ onBeforeUnmount(() => {
   font-size: 24px;
   line-height: 1.1;
   font-weight: 700;
-  color: #0f172a;
+  color: var(--yc-text-primary);
 }
 
 .workspace-graph-shell.is-dark .workspace-graph-title {
-  color: #f8fafc;
+  color: var(--yc-text-primary);
 }
 
 .workspace-graph-subtitle {
   margin: 10px 0 0;
   font-size: 13px;
   line-height: 1.5;
-  color: #64748b;
+  color: var(--yc-text-muted);
 }
 
 .workspace-graph-shell.is-dark .workspace-graph-subtitle {
-  color: #94a3b8;
+  color: var(--yc-text-muted);
 }
 
 .workspace-graph-dot {
@@ -806,19 +806,19 @@ onBeforeUnmount(() => {
   align-items: center;
   gap: 8px;
   font-size: 12px;
-  color: #475569;
+  color: var(--yc-text-secondary);
 }
 
 .workspace-graph-shell.is-dark .workspace-graph-control,
 .workspace-graph-shell.is-dark .workspace-graph-toggle {
-  color: #cbd5e1;
+  color: var(--yc-text-secondary);
 }
 
 .workspace-graph-select,
 .workspace-graph-btn {
-  border: 1px solid rgba(148, 163, 184, 0.28);
-  background: rgba(255, 255, 255, 0.86);
-  color: #0f172a;
+  border: 1px solid color-mix(in srgb, var(--yc-border-strong) 62%, transparent);
+  background: color-mix(in srgb, var(--yc-bg-panel) 88%, transparent);
+  color: var(--yc-text-primary);
   border-radius: 12px;
   padding: 9px 12px;
   font-size: 12px;
@@ -828,26 +828,26 @@ onBeforeUnmount(() => {
 
 .workspace-graph-shell.is-dark .workspace-graph-select,
 .workspace-graph-shell.is-dark .workspace-graph-btn {
-  border-color: rgba(71, 85, 105, 0.8);
-  background: rgba(15, 23, 42, 0.8);
-  color: #e2e8f0;
+  border-color: color-mix(in srgb, var(--yc-border-strong) 80%, transparent);
+  background: color-mix(in srgb, var(--yc-bg-panel) 84%, transparent);
+  color: var(--yc-text-primary);
 }
 
 .workspace-graph-btn:hover,
 .workspace-graph-select:hover {
-  border-color: rgba(249, 115, 22, 0.55);
+  border-color: color-mix(in srgb, var(--yc-accent) 56%, transparent);
   transform: translateY(-1px);
 }
 
 .workspace-graph-btn.is-primary {
-  border-color: rgba(249, 115, 22, 0.42);
-  background: rgba(249, 115, 22, 0.12);
-  color: #c2410c;
+  border-color: color-mix(in srgb, var(--yc-accent) 42%, transparent);
+  background: var(--yc-accent-soft);
+  color: var(--yc-text-on-accent);
 }
 
 .workspace-graph-shell.is-dark .workspace-graph-btn.is-primary {
-  color: #fdba74;
-  background: rgba(249, 115, 22, 0.18);
+  color: var(--yc-text-on-accent);
+  background: var(--yc-accent-soft);
 }
 
 .workspace-graph-body {
@@ -864,14 +864,14 @@ onBeforeUnmount(() => {
   overflow: hidden;
   cursor: grab;
   background:
-    radial-gradient(circle at center, rgba(255, 255, 255, 0.5), transparent 62%),
-    linear-gradient(180deg, rgba(248, 250, 252, 0.9), rgba(241, 245, 249, 0.92));
+    radial-gradient(circle at center, color-mix(in srgb, var(--yc-bg-panel) 50%, transparent), transparent 62%),
+    linear-gradient(180deg, color-mix(in srgb, var(--yc-bg-panel-alt) 90%, transparent), color-mix(in srgb, var(--yc-bg-panel-muted) 92%, transparent));
 }
 
 .workspace-graph-shell.is-dark .workspace-graph-viewport {
   background:
-    radial-gradient(circle at center, rgba(30, 41, 59, 0.55), transparent 62%),
-    linear-gradient(180deg, rgba(3, 7, 18, 0.88), rgba(15, 23, 42, 0.92));
+    radial-gradient(circle at center, color-mix(in srgb, var(--yc-bg-panel-alt) 55%, transparent), transparent 62%),
+    linear-gradient(180deg, color-mix(in srgb, var(--yc-bg-panel-muted) 88%, transparent), color-mix(in srgb, var(--yc-bg-panel) 92%, transparent));
 }
 
 .workspace-graph-viewport.is-panning {
@@ -885,16 +885,16 @@ onBeforeUnmount(() => {
 }
 
 .workspace-graph-edge {
-  stroke: rgba(100, 116, 139, 0.38);
+  stroke: var(--yc-graph-edge);
   transition: stroke-opacity 0.12s ease, stroke 0.12s ease;
 }
 
 .workspace-graph-shell.is-dark .workspace-graph-edge {
-  stroke: rgba(148, 163, 184, 0.28);
+  stroke: var(--yc-graph-edge);
 }
 
 .workspace-graph-edge.is-highlighted {
-  stroke: rgba(249, 115, 22, 0.72);
+  stroke: var(--yc-graph-edge-active);
 }
 
 .workspace-graph-edge.is-dimmed {
@@ -911,63 +911,63 @@ onBeforeUnmount(() => {
 }
 
 .workspace-graph-node-halo {
-  fill: rgba(249, 115, 22, 0.14);
+  fill: color-mix(in srgb, var(--yc-accent) 16%, transparent);
 }
 
 .workspace-graph-node-dot {
-  stroke: rgba(255, 255, 255, 0.86);
+  stroke: color-mix(in srgb, var(--yc-bg-panel) 88%, transparent);
   stroke-width: 1.5;
 }
 
 .workspace-graph-shell.is-dark .workspace-graph-node-dot {
-  stroke: rgba(15, 23, 42, 0.95);
+  stroke: color-mix(in srgb, var(--yc-bg-panel) 95%, transparent);
 }
 
 .workspace-graph-node-ring {
   fill: none;
-  stroke: rgba(15, 23, 42, 0.08);
+  stroke: color-mix(in srgb, var(--yc-text-primary) 8%, transparent);
   stroke-width: 1.1;
 }
 
 .workspace-graph-shell.is-dark .workspace-graph-node-ring {
-  stroke: rgba(248, 250, 252, 0.15);
+  stroke: color-mix(in srgb, var(--yc-text-primary) 15%, transparent);
 }
 
 .workspace-graph-node.is-active .workspace-graph-node-ring,
 .workspace-graph-node.is-hovered .workspace-graph-node-ring {
-  stroke: rgba(249, 115, 22, 0.65);
+  stroke: color-mix(in srgb, var(--yc-accent) 68%, transparent);
   stroke-width: 1.8;
 }
 
 .workspace-graph-node-label {
   font-size: 13px;
   font-weight: 600;
-  fill: #1e293b;
+  fill: var(--yc-graph-label-fill);
   paint-order: stroke;
-  stroke: rgba(255, 255, 255, 0.88);
+  stroke: var(--yc-graph-label-stroke);
   stroke-width: 4px;
   stroke-linejoin: round;
   pointer-events: none;
 }
 
 .workspace-graph-shell.is-dark .workspace-graph-node-label {
-  fill: #f8fafc;
-  stroke: rgba(2, 6, 23, 0.9);
+  fill: var(--yc-graph-label-fill);
+  stroke: var(--yc-graph-label-stroke);
 }
 
 .workspace-graph-overlay-card {
   position: absolute;
   border-radius: 18px;
-  border: 1px solid rgba(148, 163, 184, 0.26);
-  background: rgba(255, 255, 255, 0.88);
-  box-shadow: 0 18px 36px rgba(15, 23, 42, 0.12);
+  border: 1px solid var(--yc-graph-overlay-border);
+  background: var(--yc-graph-overlay-bg);
+  box-shadow: var(--yc-shadow-panel);
   backdrop-filter: blur(12px);
 }
 
 .workspace-graph-shell.is-dark .workspace-graph-overlay-card {
-  border-color: rgba(71, 85, 105, 0.7);
-  background: rgba(15, 23, 42, 0.8);
-  box-shadow: 0 20px 42px rgba(2, 6, 23, 0.32);
+  border-color: var(--yc-graph-overlay-border);
+  background: var(--yc-graph-overlay-bg);
+  box-shadow: var(--yc-shadow-panel);
 }
 
 .workspace-graph-legend-card {
@@ -990,7 +990,7 @@ onBeforeUnmount(() => {
   font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: #f97316;
+  color: var(--yc-accent);
 }
 
 .workspace-graph-legend-list {
@@ -1006,11 +1006,11 @@ onBeforeUnmount(() => {
   align-items: center;
   gap: 10px;
   font-size: 12px;
-  color: #334155;
+  color: var(--yc-text-secondary);
 }
 
 .workspace-graph-shell.is-dark .workspace-graph-legend-item {
-  color: #e2e8f0;
+  color: var(--yc-text-secondary);
 }
 
 .workspace-graph-legend-swatch {
@@ -1027,11 +1027,11 @@ onBeforeUnmount(() => {
 }
 
 .workspace-graph-legend-count {
-  color: #64748b;
+  color: var(--yc-text-muted);
 }
 
 .workspace-graph-shell.is-dark .workspace-graph-legend-count {
-  color: #94a3b8;
+  color: var(--yc-text-muted);
 }
 
 .workspace-graph-inspector-title {
@@ -1039,23 +1039,23 @@ onBeforeUnmount(() => {
   font-size: 16px;
   line-height: 1.35;
   font-weight: 700;
-  color: #0f172a;
+  color: var(--yc-text-primary);
 }
 
 .workspace-graph-shell.is-dark .workspace-graph-inspector-title {
-  color: #f8fafc;
+  color: var(--yc-text-primary);
 }
 
 .workspace-graph-inspector-path {
   margin-top: 6px;
   font-size: 12px;
   line-height: 1.45;
-  color: #64748b;
+  color: var(--yc-text-muted);
   word-break: break-word;
 }
 
 .workspace-graph-shell.is-dark .workspace-graph-inspector-path {
-  color: #94a3b8;
+  color: var(--yc-text-muted);
 }
 
 .workspace-graph-inspector-stats {
@@ -1071,13 +1071,13 @@ onBeforeUnmount(() => {
   border-radius: 999px;
   padding: 5px 9px;
   font-size: 11px;
-  color: #475569;
-  background: rgba(148, 163, 184, 0.14);
+  color: var(--yc-text-secondary);
+  background: var(--yc-bg-subtle-hover);
 }
 
 .workspace-graph-shell.is-dark .workspace-graph-inspector-stats span {
-  color: #cbd5e1;
-  background: rgba(51, 65, 85, 0.56);
+  color: var(--yc-text-secondary);
+  background: var(--yc-bg-subtle-hover);
 }
 
 @media (max-width: 1080px) {

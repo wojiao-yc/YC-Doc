@@ -29,23 +29,14 @@
 .yc-editor-host .cm-line.cm-list-level-6 { --yc-list-level: 6; }
 
 .yc-editor-host .cm-line.cm-block-task-list-item.cm-task-unchecked {
-  color: #334155;
+  color: var(--yc-text-secondary);
 }
 
 .yc-editor-host .cm-line.cm-block-task-list-item.cm-task-checked {
-  color: #64748b;
+  color: var(--yc-text-muted);
   text-decoration-line: line-through;
   text-decoration-thickness: 1.35px;
-  text-decoration-color: rgba(100, 116, 139, 0.55);
-}
-
-.yc-editor-shell.is-dark .yc-editor-host .cm-line.cm-block-task-list-item.cm-task-unchecked {
-  color: #cbd5e1;
-}
-
-.yc-editor-shell.is-dark .yc-editor-host .cm-line.cm-block-task-list-item.cm-task-checked {
-  color: #94a3b8;
-  text-decoration-color: rgba(148, 163, 184, 0.55);
+  text-decoration-color: color-mix(in srgb, var(--yc-text-muted) 55%, transparent);
 }
 
 .yc-editor-host .cm-list-prefix-widget {
@@ -54,7 +45,7 @@
   justify-content: flex-end;
   min-width: 1rem;
   margin-right: 0.3rem;
-  color: #64748b;
+  color: var(--yc-text-muted);
   font-variant-numeric: tabular-nums;
   user-select: none;
   pointer-events: none;
@@ -75,9 +66,9 @@
   width: 16px;
   height: 16px;
   border-radius: 4px;
-  border: 1.5px solid #cbd5e1;
-  background: #ffffff;
-  color: #ffffff;
+  border: 1.5px solid var(--yc-checkbox-border);
+  background: var(--yc-checkbox-bg);
+  color: var(--yc-checkbox-check);
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -98,21 +89,7 @@
 }
 
 .yc-editor-host .cm-task-checkbox-widget.is-checked {
-  background: #f97316;
-  border-color: #ea580c;
-  color: #ffffff;
-}
-
-.yc-editor-shell.is-dark .yc-editor-host .cm-list-prefix-widget {
-  color: #94a3b8;
-}
-
-.yc-editor-shell.is-dark .yc-editor-host .cm-task-checkbox-widget {
-  background: #0f172a;
-  border-color: #475569;
-}
-
-.yc-editor-shell.is-dark .yc-editor-host .cm-task-checkbox-widget.is-checked {
-  background: #f97316;
-  border-color: #fb923c;
+  background: var(--yc-checkbox-checked-bg);
+  border-color: var(--yc-checkbox-checked-border);
+  color: var(--yc-checkbox-check);
 }

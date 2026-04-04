@@ -1638,7 +1638,7 @@ class EditorContextMenuController {
   }
 
   isDarkMode() {
-    return Boolean(this.view.dom.closest(".yc-editor-shell.is-dark"));
+    return Boolean(this.view.dom.closest('.yc-editor-shell')?.closest('#app')?.dataset?.themeMode === "dark");
   }
 
   getMenuButtons(menuEl) {

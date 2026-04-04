@@ -1,50 +1,32 @@
 import { defaultHighlightStyle, syntaxHighlighting } from "@codemirror/language";
 import { EditorView } from "@codemirror/view";
 
-const lightTheme = EditorView.theme({
-  "&": {
-    color: "#0f172a",
-    backgroundColor: "#ffffff"
-  },
-  ".cm-content": {
-    caretColor: "#f97316"
-  },
-  ".cm-cursor, .cm-dropCursor": {
-    borderLeftColor: "#f97316"
-  },
-  ".cm-selectionBackground, ::selection": {
-    backgroundColor: "#fed7aa"
-  },
-  ".cm-gutters": {
-    border: "none",
-    backgroundColor: "transparent",
-    color: "#94a3b8"
-  }
-});
-
-const darkTheme = EditorView.theme(
+const createBaseTheme = (dark = false) => EditorView.theme(
   {
     "&": {
-      color: "#e2e8f0",
-      backgroundColor: "#0b1220"
+      color: "var(--yc-text-primary)",
+      backgroundColor: "transparent"
     },
     ".cm-content": {
-      caretColor: "#fb923c"
+      caretColor: "var(--yc-accent)"
     },
     ".cm-cursor, .cm-dropCursor": {
-      borderLeftColor: "#fb923c"
+      borderLeftColor: "var(--yc-accent)"
     },
     ".cm-selectionBackground, ::selection": {
-      backgroundColor: "#7c2d12"
+      backgroundColor: "var(--yc-editor-selection)"
     },
     ".cm-gutters": {
       border: "none",
       backgroundColor: "transparent",
-      color: "#64748b"
+      color: "var(--yc-text-subtle)"
     }
   },
-  { dark: true }
+  { dark }
 );
+
+const lightTheme = createBaseTheme(false);
+const darkTheme = createBaseTheme(true);
 
 export const createEditorThemeExtension = (isDark = false) => [
   syntaxHighlighting(defaultHighlightStyle, { fallback: true }),

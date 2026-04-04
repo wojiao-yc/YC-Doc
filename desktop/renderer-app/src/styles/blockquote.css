@@ -1,15 +1,13 @@
 .yc-editor-host .cm-line.cm-block-blockquote {
-  --yc-quote-accent: #8b5cf6;
-  border-left: 3px solid var(--yc-quote-accent);
+  border-left: 3px solid var(--yc-blockquote-accent);
   background: transparent;
-  color: #1f2937;
+  color: var(--yc-blockquote-color);
   padding-left: 0.9rem;
   padding-right: 0.2rem;
 }
 
 .yc-editor-shell.is-dark .yc-editor-host .cm-line.cm-block-blockquote {
-  --yc-quote-accent: #a78bfa;
-  color: #e2e8f0;
+  color: var(--yc-blockquote-color);
 }
 
 .yc-editor-host .cm-line.cm-block-blockquote.cm-block-start {
@@ -22,10 +20,10 @@
 }
 
 .yc-editor-host .cm-line.cm-block-blockquote.cm-block-callout {
-  --yc-callout-bg: #cfd9e6;
-  --yc-callout-border: #bac8da;
-  --yc-callout-title: #0b66d0;
-  --yc-callout-body: #1f2937;
+  --yc-callout-bg: var(--yc-callout-note-bg);
+  --yc-callout-border: var(--yc-callout-note-border);
+  --yc-callout-title: var(--yc-callout-note-title);
+  --yc-callout-body: var(--yc-callout-note-body);
   border-left: 0;
   background: var(--yc-callout-bg);
   box-shadow: inset 0 0 0 1px var(--yc-callout-border);
@@ -35,10 +33,10 @@
 }
 
 .yc-editor-shell.is-dark .yc-editor-host .cm-line.cm-block-blockquote.cm-block-callout {
-  --yc-callout-bg: rgba(44, 60, 82, 0.9);
-  --yc-callout-border: rgba(112, 136, 171, 0.55);
-  --yc-callout-title: #7eb9ff;
-  --yc-callout-body: #dbeafe;
+  --yc-callout-bg: var(--yc-callout-note-bg);
+  --yc-callout-border: var(--yc-callout-note-border);
+  --yc-callout-title: var(--yc-callout-note-title);
+  --yc-callout-body: var(--yc-callout-note-body);
 }
 
 .yc-editor-host .cm-line.cm-block-blockquote.cm-block-callout.cm-block-start {
@@ -60,23 +58,23 @@
 }
 
 .yc-editor-host .cm-line.cm-block-blockquote.cm-block-callout-tip {
-  --yc-callout-bg: #d5e9df;
-  --yc-callout-border: #b8d9c8;
-  --yc-callout-title: #0f766e;
+  --yc-callout-bg: var(--yc-callout-tip-bg);
+  --yc-callout-border: var(--yc-callout-tip-border);
+  --yc-callout-title: var(--yc-callout-tip-title);
 }
 
 .yc-editor-host .cm-line.cm-block-blockquote.cm-block-callout-warning,
 .yc-editor-host .cm-line.cm-block-blockquote.cm-block-callout-caution {
-  --yc-callout-bg: #efe0c7;
-  --yc-callout-border: #e0cda7;
-  --yc-callout-title: #b45309;
+  --yc-callout-bg: var(--yc-callout-warning-bg);
+  --yc-callout-border: var(--yc-callout-warning-border);
+  --yc-callout-title: var(--yc-callout-warning-title);
 }
 
 .yc-editor-host .cm-line.cm-block-blockquote.cm-block-callout-danger,
 .yc-editor-host .cm-line.cm-block-blockquote.cm-block-callout-important {
-  --yc-callout-bg: #ecd3d3;
-  --yc-callout-border: #dfc0c0;
-  --yc-callout-title: #b91c1c;
+  --yc-callout-bg: var(--yc-callout-danger-bg);
+  --yc-callout-border: var(--yc-callout-danger-border);
+  --yc-callout-title: var(--yc-callout-danger-title);
 }
 
 .yc-editor-host .cm-callout-label-widget {
@@ -84,7 +82,7 @@
   align-items: center;
   gap: 0.28rem;
   margin-right: 0.24rem;
-  color: var(--yc-callout-title, #0b66d0);
+  color: var(--yc-callout-title);
   font-weight: 700;
   line-height: 1;
   vertical-align: text-bottom;
@@ -101,5 +99,5 @@
 }
 
 .yc-editor-shell.is-dark .yc-editor-host .cm-callout-label-widget {
-  color: var(--yc-callout-title, #7eb9ff);
+  color: var(--yc-callout-title);
 }

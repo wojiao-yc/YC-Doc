@@ -350,7 +350,7 @@ export const createWikiLinkAutocompleteExtension = ({
       this.panel.style.display = "block";
       this.panel.classList.toggle(
         "is-dark",
-        Boolean(document.getElementById("app")?.classList.contains("dark-ui"))
+        Boolean(document.getElementById("app")?.dataset?.themeMode === "dark")
       );
       this.list.innerHTML = "";
       let selectedButton = null;

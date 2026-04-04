@@ -1,17 +1,17 @@
 .yc-editor-host .cm-scroller {
-  font-family: "Source Serif 4", "Source Han Serif SC", "Noto Serif CJK SC", "Iowan Old Style", Georgia, serif;
-  font-size: 17px;
-  line-height: 1.88;
+  font-family: var(--yc-font-body);
+  font-size: var(--yc-doc-font-size);
+  line-height: var(--yc-doc-line-height);
 }
 
 .yc-editor-host .cm-content {
-  color: #1f2937;
-  caret-color: #f97316;
+  color: var(--yc-text-secondary);
+  caret-color: var(--yc-accent);
 }
 
 .yc-editor-shell.is-dark .yc-editor-host .cm-content {
-  color: #e2e8f0;
-  caret-color: #fb923c;
+  color: var(--yc-text-primary);
+  caret-color: var(--yc-accent);
 }
 
 .yc-editor-host .cm-content,

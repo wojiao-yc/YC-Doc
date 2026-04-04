@@ -33,14 +33,10 @@
   position: absolute;
   width: 2px;
   border-radius: 999px;
-  background: #f97316;
-  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.88);
+  background: var(--yc-accent);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--yc-bg-panel) 88%, transparent);
   pointer-events: none;
   z-index: 5;
-}
-
-.yc-editor-shell.is-dark .yc-editor-drop-caret {
-  box-shadow: 0 0 0 1px rgba(15, 23, 42, 0.88);
 }
 
 .yc-editor-host .cm-editor {
