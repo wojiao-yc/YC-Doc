@@ -32,12 +32,21 @@
             :key="tab.id"
             type="button"
             class="editor-tab"
-            :class="activeEditorTabId === tab.id ? 'editor-tab-active' : ''"
+            :class="[
+              activeEditorTabId === tab.id ? 'editor-tab-active' : '',
+              draggedEditorTabDropId === tab.id && draggedEditorTabDropSide === 'before' ? 'is-drop-before' : '',
+              draggedEditorTabDropId === tab.id && draggedEditorTabDropSide === 'after' ? 'is-drop-after' : ''
+            ]"
             :title="tab.title"
+            draggable="true"
             @click="switchEditorTab(tab.id)"
+            @dragstart="onEditorTabDragStart(tab.id)"
+            @dragover="onEditorTabDragOver($event, tab.id)"
+            @drop="onEditorTabDrop($event, tab.id)"
+            @dragend="onEditorTabDragEnd"
           >
             <span class="editor-tab-icon" aria-hidden="true">
-              <AppIcon :name="tab.kind === 'graph' ? 'graph' : 'file'" class="chrome-icon" />
+              <AppIcon :name="tab.displayKind" class="chrome-icon" />
             </span>
             <span class="editor-tab-label">{{ tab.label }}</span>
             <span class="editor-tab-close" @mousedown.stop @click.stop="closeEditorTab(tab.id)">x</span>
@@ -171,22 +180,42 @@
         </div>
       </div>
 
-      <nav class="file-tree-nav flex-1 min-h-0 overflow-y-auto p-2" :class="isDark ? 'is-dark' : ''">
+      <nav
+        ref="fileTreeNavRef"
+        class="file-tree-nav flex-1 min-h-0 overflow-y-auto p-2"
+        :class="[
+          isDark ? 'is-dark' : '',
+          isStorageTreeImportActive ? 'is-import-active' : ''
+        ]"
+        tabindex="0"
+        @dragover="onStorageTreeRootDragOver"
+        @drop="onStorageTreeRootDrop"
+        @dragleave="onStorageTreeRootDragLeave"
+        @paste.capture="onStorageTreePaste"
+      >
         <button
           v-for="item in visibleStorageNodes"
           :key="item.id"
           type="button"
           class="file-tree-row w-full rounded-lg mb-1 transition-all text-left"
           :title="isFileSidebarCollapsed ? item.name : ''"
-          :class="selectedStorageNodeId === item.id
-            ? (isDark ? 'bg-orange-500/15 text-orange-200' : 'bg-orange-50 text-orange-700')
-            : (isDark ? 'text-slate-300 hover:bg-slate-900/70' : 'text-gray-700 hover:bg-gray-100')"
+          :class="[
+            selectedStorageNodeId === item.id
+              ? (isDark ? 'bg-orange-500/15 text-orange-200' : 'bg-orange-50 text-orange-700')
+              : (isDark ? 'text-slate-300 hover:bg-slate-900/70' : 'text-gray-700 hover:bg-gray-100'),
+            storageTreeDropTargetId === item.id ? 'is-drop-target' : ''
+          ]"
+          :draggable="item.id !== STORAGE_ROOT_ID"
           @click="selectStorageNode(item.id)"
           @contextmenu.prevent.stop="openStorageNodeContextMenu($event, item.id)"
+          @dragstart="onStorageNodeDragStart($event, item.id)"
+          @dragend="onStorageNodeDragEnd"
+          @dragover="onStorageNodeDragOver($event, item.id)"
+          @drop="onStorageNodeDrop($event, item.id)"
         >
           <span v-if="isFileSidebarCollapsed" class="file-tree-collapsed-icon">
             <AppIcon
-              :name="item.type === 'folder' ? (isStorageFolderExpanded(item.id) ? 'folder-open' : 'folder') : 'file'"
+              :name="storageNodeIconName(item)"
               class="file-tree-collapsed-glyph"
             />
           </span>
@@ -210,7 +239,7 @@
               </template>
               <template v-else>
                 <span class="file-tree-file-icon-shell">
-                  <AppIcon name="file" class="file-tree-file-icon" />
+                  <AppIcon :name="storageNodeIconName(item)" class="file-tree-file-icon" />
                 </span>
               </template>
             </span>
@@ -231,6 +260,9 @@
             :class="isDark ? 'is-dark' : ''"
             :title="storageLocationText"
             @click="handleWorkspaceFooterPrimaryAction"
+            @dragover="onStorageTreeRootDragOver"
+            @drop="onStorageTreeRootDrop"
+            @dragleave="onStorageTreeRootDragLeave"
           >
             <AppIcon name="workspace-switch" class="workspace-switch-icon" />
             <span class="truncate text-sm">{{ workspaceDisplayName }}</span>
@@ -341,6 +373,25 @@
                 <AppIcon name="tool" class="workspace-footer-action-icon" />
                 <span>{{ showEditorDebugPanel ? '隐藏调试面板' : '显示调试面板' }}</span>
               </button>
+              <div class="workspace-footer-action-divider"></div>
+              <button
+                type="button"
+                class="workspace-footer-action"
+                :class="[
+                  isDark ? 'is-dark' : '',
+                  workspaceFooterViewMenu.open ? 'is-open' : ''
+                ]"
+                @click.stop="toggleWorkspaceFooterViewMenu"
+              >
+                <AppIcon name="settings" class="workspace-footer-action-icon" />
+                <span>展示模式设置</span>
+                <span class="workspace-footer-action-trailing" aria-hidden="true">
+                  <AppIcon
+                    :name="workspaceFooterViewMenu.open ? 'chevron-down' : 'chevron-right'"
+                    class="workspace-footer-action-chevron"
+                  />
+                </span>
+              </button>
               <p class="workspace-footer-settings-note">
                 当前编辑区宽度 {{ displayWidth }}px
               </p>
@@ -440,26 +491,67 @@
               </div>
 
               <div
+                v-else-if="isImagePreviewTabActive"
+                class="min-h-[520px] flex flex-col"
+              >
+                <div class="mx-auto w-full max-w-5xl" :style="displayStyle">
+                  <div
+                    class="mb-3 flex flex-wrap items-center justify-between gap-3 px-1 py-1"
+                    :class="isDark ? 'text-slate-200' : 'text-gray-700'"
+                  >
+                    <div class="min-w-0">
+                      <div class="truncate text-sm font-medium">{{ activeImagePreviewNode?.name || "Image" }}</div>
+                      <div class="truncate text-xs opacity-70">{{ activeImagePreviewNode?.relPath || "" }}</div>
+                    </div>
+                    <div class="text-xs opacity-70">{{ formatBytes(activeImagePreviewNode?.size || 0) }}</div>
+                  </div>
+                  <div class="flex min-h-[420px] items-center justify-center p-2 md:p-4">
+                    <img
+                      v-if="activeImagePreviewSrc"
+                      :src="activeImagePreviewSrc"
+                      :alt="activeImagePreviewNode?.name || 'image'"
+                      class="max-h-[72vh] w-auto max-w-full object-contain select-none"
+                      draggable="false"
+                    />
+                    <div
+                      v-else
+                      class="text-sm opacity-70"
+                    >
+                      无法预览当前图片
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div
                 v-else
                 class="min-h-[520px] flex flex-col"
               >
                 <div class="relative flex-1 overflow-y-auto py-2">
                   <div class="mx-auto" :style="displayStyle">
-                    <EditorShell
-                      ref="markdownEditorRef"
-                      :model-value="documentMarkdown"
-                      :dark="isDark"
-                      :presentation-blocks="semanticBlocks"
-                      :current-block-id="currentSemanticBlockId"
-                      :current-rel-path="activeMarkdownRelPath"
-                      :wiki-link-files="workspaceMarkdownFiles"
-                      :wiki-link-suggestions="getWikiLinkSuggestions"
-                      :wiki-link-suggestion-select="handleWikiLinkSuggestionSelect"
-                      @selection-change="handleEditorSelectionChange"
-                      @update:model-value="updateMarkdown"
-                      @wiki-link-activate="handleEditorWikiLinkActivate"
-                      @external-link-activate="handleEditorExternalLinkActivate"
-                    />
+                    <div
+                      class="rounded-[28px]"
+                      @dragover.capture="onEditorImageDragOver"
+                      @drop.capture="onEditorImageDrop"
+                      @dragleave.capture="onEditorImageDragLeave"
+                      @paste.capture="onEditorImagePaste"
+                    >
+                      <EditorShell
+                        ref="markdownEditorRef"
+                        :model-value="documentMarkdown"
+                        :dark="isDark"
+                        :presentation-blocks="semanticBlocks"
+                        :current-block-id="currentSemanticBlockId"
+                        :current-rel-path="activeMarkdownRelPath"
+                        :wiki-link-files="workspaceMarkdownFiles"
+                        :wiki-link-suggestions="getWikiLinkSuggestions"
+                        :wiki-link-suggestion-select="handleWikiLinkSuggestionSelect"
+                        @selection-change="handleEditorSelectionChange"
+                        @update:model-value="updateMarkdown"
+                        @wiki-link-activate="handleEditorWikiLinkActivate"
+                        @external-link-activate="handleEditorExternalLinkActivate"
+                      />
+                    </div>
                   </div>
                 </div>
                 <div
@@ -521,7 +613,7 @@
           </transition>
         </div>
         <footer
-          v-if="!(gestureNavigationEnabled && !isEditMode) && !isWorkspaceGraphTabActive"
+          v-if="!isEditMode && !gestureNavigationEnabled && !isWorkspaceGraphTabActive"
           class="px-10 py-6 border-t flex items-center justify-center"
           :class="isDark ? 'border-slate-800 bg-slate-950' : 'border-gray-100 bg-white'"
         >
@@ -953,21 +1045,6 @@
           🗑 删除当前步骤
         </button>
 
-        <div class="space-y-2 rounded-lg border p-3" :class="isDark ? 'border-slate-800 bg-slate-900/40' : 'border-gray-200 bg-white'">
-          <label class="flex items-center gap-2 text-xs" :class="isDark ? 'text-slate-300' : 'text-gray-700'">
-            <input v-model="gestureNavigationEnabled" type="checkbox" :class="isDark ? 'accent-cyan-400' : 'accent-blue-600'" />
-            翻页模式
-          </label>
-          <label class="flex items-center gap-2 text-xs" :class="isDark ? 'text-slate-300' : 'text-gray-700'">
-            <input v-model="collapseHeaderInView" type="checkbox" :class="isDark ? 'accent-cyan-400' : 'accent-blue-600'" />
-            展示模式收起顶栏
-          </label>
-          <label class="flex items-center gap-2 text-xs" :class="isDark ? 'text-slate-300' : 'text-gray-700'">
-            <input v-model="collapseStepsSidebarInView" type="checkbox" :class="isDark ? 'accent-cyan-400' : 'accent-blue-600'" />
-            展示模式收起原始步骤栏
-          </label>
-        </div>
-
         <div class="grid grid-cols-2 gap-2">
           <button
             type="button"
@@ -1006,6 +1083,29 @@
         <AppIcon name="delete" class="storage-context-icon" />
         <span>删除</span>
       </button>
+    </div>
+
+    <div
+      v-if="workspaceFooterViewMenu.open"
+      class="term-context-menu workspace-footer-view-menu"
+      :class="isDark ? 'is-dark' : ''"
+      role="menu"
+      tabindex="-1"
+      :style="{ left: `${workspaceFooterViewMenu.x}px`, top: `${workspaceFooterViewMenu.y}px` }"
+      @mousedown.stop
+    >
+      <label class="term-context-item workspace-footer-view-menu-item" :class="isDark ? 'is-dark' : ''">
+        <input v-model="gestureNavigationEnabled" type="checkbox" :class="isDark ? 'accent-cyan-400' : 'accent-orange-500'" />
+        <span>翻页模式</span>
+      </label>
+      <label class="term-context-item workspace-footer-view-menu-item" :class="isDark ? 'is-dark' : ''">
+        <input v-model="collapseHeaderInView" type="checkbox" :class="isDark ? 'accent-cyan-400' : 'accent-orange-500'" />
+        <span>展示模式收起顶栏</span>
+      </label>
+      <label class="term-context-item workspace-footer-view-menu-item" :class="isDark ? 'is-dark' : ''">
+        <input v-model="collapseStepsSidebarInView" type="checkbox" :class="isDark ? 'accent-cyan-400' : 'accent-orange-500'" />
+        <span>展示模式收起原始步骤栏</span>
+      </label>
     </div>
 
     <div v-if="desktopRenameDialog.open" class="term-rename-mask" @mousedown.self="cancelDesktopRenameDialog">
@@ -1058,6 +1158,8 @@ import ToastMessage from "./components/ToastMessage.vue";
 import WorkspaceLinkGraph from "./components/WorkspaceLinkGraph.vue";
 import EditorShell from "./editor";
 import { setContextMenuRuntimeOptions } from "./editor/extensions/context-menu.js";
+import { serializeImageLine } from "./editor/parser/parse-image.js";
+import { setPresentationRuntimeOptions } from "./editor/extensions/presentation.js";
 import { useSemanticStore } from "./editor/state/semantic-store";
 import { useMarkdownDocument } from "./composables/useMarkdownDocument";
 import { useResizable } from "./composables/useResizable";
@@ -1082,6 +1184,7 @@ import {
   stripMarkdownExtension,
   suggestRelPathForMissing
 } from "./utils/wiki-link";
+import { isImageFileName, relativeRelPathFromFile, resolveWorkspaceAssetSrc } from "./utils/workspace-media.js";
 import { buildWorkspaceLinkGraph } from "./utils/workspace-link-graph.js";
 
 // 渲染数学公式
@@ -1192,6 +1295,7 @@ const terminalTab = ref("terminal");
 const mainRef = ref(null);
 const contentScrollRef = ref(null);
 const markdownEditorRef = ref(null);
+const fileTreeNavRef = ref(null);
 const showEditorDebugPanel = ref(false);
 const editorSelection = ref({ anchor: 0, head: 0 });
 const draggedStepIndex = ref(-1);
@@ -1207,6 +1311,13 @@ const isFileSidebarDragging = ref(false);
 const EDITOR_GRAPH_TAB_ID = "__workspace_graph__";
 const editorTabs = ref([]);
 const activeEditorTabId = ref("");
+const draggedEditorTabId = ref("");
+const draggedEditorTabDropId = ref("");
+const draggedEditorTabDropSide = ref("");
+const draggedStorageNodeId = ref("");
+const storageTreeDropTargetId = ref("");
+const isStorageTreeImportActive = ref(false);
+const editorImageImportActive = ref(false);
 const fileSidebarWidth = ref(280);
 const storageSortMode = ref("name-asc");
 const STORAGE_ROOT_ID = "workspace-root";
@@ -1265,6 +1376,11 @@ const storageRenameDialog = ref({
 });
 const isStorageSortMenuOpen = ref(false);
 const workspaceFooterPanel = ref("");
+const workspaceFooterViewMenu = ref({
+  open: false,
+  x: 0,
+  y: 0
+});
 const storageRenameInputRef = ref(null);
 const storageNodeMenuRef = ref(null);
 const desktopTabMenu = ref({
@@ -1481,6 +1597,15 @@ const isDesktopWindowControls = Boolean(
   && desktopWindowBridge?.toggleMaximize
   && desktopWindowBridge?.close
 );
+const getDesktopDataBridge = () => (
+  typeof window !== "undefined" && window.desktopData
+    ? window.desktopData
+    : desktopDataBridge
+);
+const getDesktopDataMethod = (name) => {
+  const bridge = getDesktopDataBridge();
+  return typeof bridge?.[name] === "function" ? bridge[name].bind(bridge) : null;
+};
 const paneTerminals = { primary: null, secondary: null };
 const paneFits = { primary: null, secondary: null };
 const paneInputs = { primary: null, secondary: null };
@@ -1642,6 +1767,7 @@ const renderedMarkdown = computed(() => {
       markdown: content,
       currentRelPath: activeMarkdownRelPath.value,
       markdownFiles: workspaceMarkdownFiles.value,
+      workspaceRootPath: storageRootPath.value,
       renderMathFormula
     });
   } catch (e) {
@@ -2164,6 +2290,10 @@ const loadDesktopStorageTree = async ({ preferredNodeId = "", preferredMarkdownR
         await loadMarkdownFileInEditor(String(firstMarkdown.relPath), { showSuccessToast: false });
         return;
       }
+      if (selected?.node?.type === "file" && isImageFileName(selected.node.name)) {
+        activeEditorTabId.value = ensureEditorFileTab(String(selected.node.relPath || ""));
+        return;
+      }
       if (selected?.node?.type === "file" && isMarkdownFileName(selected.node.name)) {
         showToast(`已跳过超大 Markdown: ${selected.node.name} (${formatBytes(selected.node.size)})`);
       }
@@ -2450,6 +2580,17 @@ const visibleStorageNodes = computed(() => {
   return list;
 });
 
+const storageNodeIconName = (node) => {
+  if (String(node?.type || "") === "folder") {
+    return isStorageFolderExpanded(String(node?.id || ""))
+      ? "folder-open"
+      : "folder";
+  }
+  return isImageFileName(String(node?.name || node?.relPath || ""))
+    ? "image"
+    : "file";
+};
+
 const findStorageNodeByRelPath = (node, relPathInput, parentIds = []) => {
   const targetRelPath = normalizeRelPath(relPathInput);
   if (!node || !targetRelPath) {
@@ -2539,6 +2680,16 @@ const ensureWorkspaceGraphTab = () => {
   return EDITOR_GRAPH_TAB_ID;
 };
 
+const resolveEditorTabDisplayKind = (tab) => {
+  if (tab?.kind === "graph") {
+    return "graph";
+  }
+  const relPath = normalizeRelPath(tab?.relPath);
+  const matched = findStorageNodeByRelPath(storageTree.value, relPath);
+  const fileName = String(matched?.node?.name || basenameOfRelPath(relPath));
+  return isImageFileName(fileName) ? "image" : "file";
+};
+
 const resolveEditorTabLabel = (tab) => {
   if (tab?.kind === "graph") {
     return "Graph";
@@ -2557,12 +2708,39 @@ const resolveEditorTabLabel = (tab) => {
 const editorTabsWithMeta = computed(() =>
   editorTabs.value.map((tab) => ({
     ...tab,
+    displayKind: resolveEditorTabDisplayKind(tab),
     label: resolveEditorTabLabel(tab),
     title: tab.kind === "graph" ? "Graph" : String(tab.relPath || "")
   }))
 );
 
 const isWorkspaceGraphTabActive = computed(() => activeEditorTabId.value === EDITOR_GRAPH_TAB_ID);
+const activeEditorTab = computed(() =>
+  editorTabs.value.find((tab) => tab.id === activeEditorTabId.value) || null
+);
+const activeEditorFileRelPath = computed(() =>
+  activeEditorTab.value?.kind === "file"
+    ? normalizeRelPath(activeEditorTab.value.relPath)
+    : ""
+);
+const activeImagePreviewMatch = computed(() => {
+  const relPath = activeEditorFileRelPath.value;
+  if (!relPath || !isImageFileName(basenameOfRelPath(relPath))) {
+    return null;
+  }
+  return findStorageNodeByRelPath(storageTree.value, relPath);
+});
+const isImagePreviewTabActive = computed(() => Boolean(activeImagePreviewMatch.value?.node));
+const activeImagePreviewNode = computed(() => activeImagePreviewMatch.value?.node || null);
+const activeImagePreviewSrc = computed(() =>
+  resolveWorkspaceAssetSrc(
+    activeImagePreviewNode.value?.absPath || activeImagePreviewNode.value?.relPath || "",
+    {
+      currentRelPath: activeMarkdownRelPath.value,
+      workspaceRootPath: storageRootPath.value
+    }
+  )
+);
 
 const pickNeighborFileTab = (tabs = [], preferredIndex = 0) => {
   const list = Array.isArray(tabs) ? tabs : [];
@@ -2683,7 +2861,7 @@ const switchEditorTab = async (tabIdInput = "") => {
     scheduleWikiLinkIndexRebuild();
     return;
   }
-  await openMarkdownFileByRelPath(targetTab.relPath, {
+  await openEditorFileTabByRelPath(targetTab.relPath, {
     showMissingToast: false
   });
 };
@@ -2706,7 +2884,15 @@ const closeEditorTab = async (tabIdInput = "") => {
   if (tab.kind === "graph") {
     if (activeEditorTabId.value === tabId) {
       const currentRelPath = normalizeRelPath(activeMarkdownRelPath.value);
-      activeEditorTabId.value = currentRelPath ? ensureEditorFileTab(currentRelPath) : (remainingTabs[0]?.id || "");
+      if (currentRelPath) {
+        activeEditorTabId.value = ensureEditorFileTab(currentRelPath);
+      } else if (remainingTabs[0]?.relPath) {
+        await openEditorFileTabByRelPath(remainingTabs[0].relPath, {
+          showMissingToast: false
+        });
+      } else {
+        activeEditorTabId.value = remainingTabs[0]?.id || "";
+      }
     }
     return;
   }
@@ -2715,7 +2901,7 @@ const closeEditorTab = async (tabIdInput = "") => {
     if (activeEditorTabId.value === tabId) {
       const nextFileTab = pickNeighborFileTab(remainingTabs, index);
       if (nextFileTab?.relPath) {
-        await openMarkdownFileByRelPath(nextFileTab.relPath, {
+        await openEditorFileTabByRelPath(nextFileTab.relPath, {
           showMissingToast: false
         });
       } else {
@@ -2727,7 +2913,7 @@ const closeEditorTab = async (tabIdInput = "") => {
 
   const nextFileTab = pickNeighborFileTab(remainingTabs, index);
   if (nextFileTab?.relPath) {
-    await openMarkdownFileByRelPath(nextFileTab.relPath, {
+    await openEditorFileTabByRelPath(nextFileTab.relPath, {
       showMissingToast: false
     });
     if (graphWasActive && remainingTabs.some((item) => item.kind === "graph")) {
@@ -2884,6 +3070,441 @@ const ensureSelectedStorageNodeValid = () => {
   selectedStorageNodeId.value = STORAGE_ROOT_ID;
 };
 
+const imageAltTextForRelPath = (relPathInput = "") => {
+  const fileName = basenameOfRelPath(relPathInput);
+  return String(fileName || "image").replace(/\.[^.]+$/u, "") || "image";
+};
+
+const isImageTransferFile = (file) =>
+  Boolean(file && (String(file.type || "").startsWith("image/") || isImageFileName(String(file.name || ""))));
+
+const extractImageFilesFromDataTransfer = (dataTransfer) => {
+  const directFiles = Array.from(dataTransfer?.files || []).filter((file) => isImageTransferFile(file));
+  if (directFiles.length) {
+    return directFiles;
+  }
+  return Array.from(dataTransfer?.items || [])
+    .filter((item) => item?.kind === "file" && String(item.type || "").startsWith("image/"))
+    .map((item) => item.getAsFile?.())
+    .filter((file) => isImageTransferFile(file));
+};
+
+const hasImageFilesInDataTransfer = (dataTransfer) => {
+  if (!dataTransfer) {
+    return false;
+  }
+  if (extractImageFilesFromDataTransfer(dataTransfer).length > 0) {
+    return true;
+  }
+  const transferTypes = Array.from(dataTransfer.types || []);
+  if (transferTypes.includes("Files") && !Array.from(dataTransfer.items || []).length) {
+    return true;
+  }
+  return Array.from(dataTransfer.items || []).some((item) =>
+    item?.kind === "file" && String(item.type || "").startsWith("image/")
+  );
+};
+
+const readFileAsDataUrl = (file) =>
+  new Promise((resolve, reject) => {
+    if (!file) {
+      reject(new Error("invalid_file"));
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result || ""));
+    reader.onerror = () => reject(reader.error || new Error("read_file_failed"));
+    reader.readAsDataURL(file);
+  });
+
+const readFileAsBase64 = async (file) => {
+  const dataUrl = await readFileAsDataUrl(file);
+  const [, base64Content = ""] = String(dataUrl || "").split(",", 2);
+  return base64Content;
+};
+
+const getStorageFolderNodeByRelPath = (parentRelPathInput = "") => {
+  const parentRelPath = normalizeRelPath(parentRelPathInput);
+  if (!parentRelPath) {
+    return storageTree.value;
+  }
+  return findStorageNodeByRelPath(storageTree.value, parentRelPath)?.node || null;
+};
+
+const pickUniqueStorageChildName = (parentRelPathInput = "", requestedNameInput = "") => {
+  const requestedName = String(requestedNameInput || "").trim() || "image.png";
+  const parentNode = getStorageFolderNodeByRelPath(parentRelPathInput);
+  if (!parentNode || parentNode.type !== "folder") {
+    return requestedName;
+  }
+  const usedNames = new Set(
+    (Array.isArray(parentNode.children) ? parentNode.children : [])
+      .map((child) => String(child?.name || "").trim().toLowerCase())
+      .filter(Boolean)
+  );
+  if (!usedNames.has(requestedName.toLowerCase())) {
+    return requestedName;
+  }
+  const extensionIndex = requestedName.lastIndexOf(".");
+  const hasExtension = extensionIndex > 0;
+  const baseName = hasExtension ? requestedName.slice(0, extensionIndex) : requestedName;
+  const extension = hasExtension ? requestedName.slice(extensionIndex) : "";
+  let attempt = 1;
+  let candidate = requestedName;
+  while (usedNames.has(candidate.toLowerCase())) {
+    candidate = `${baseName} (${attempt})${extension}`;
+    attempt += 1;
+  }
+  return candidate;
+};
+
+const openImagePreviewByRelPath = async (relPathInput = "", { showMissingToast = true } = {}) => {
+  const relPath = normalizeRelPath(relPathInput);
+  if (!relPath) {
+    return false;
+  }
+  let matched = findStorageNodeByRelPath(storageTree.value, relPath);
+  if (!matched && isDesktopStorage) {
+    await refreshDesktopStorageTreeSnapshot({
+      preferredNodeId: relPath
+    });
+    matched = findStorageNodeByRelPath(storageTree.value, relPath);
+  }
+  if (!matched?.node) {
+    if (showMissingToast) {
+      showToast(`找不到图片: ${relPath}`);
+    }
+    return false;
+  }
+  expandStorageAncestors(matched.parentIds);
+  selectedStorageNodeId.value = String(matched.node.id || selectedStorageNodeId.value);
+  activeEditorTabId.value = ensureEditorFileTab(relPath);
+  persistStorageState();
+  return true;
+};
+
+const openEditorFileTabByRelPath = async (relPathInput = "", { showMissingToast = true } = {}) => {
+  const relPath = normalizeRelPath(relPathInput);
+  if (!relPath) {
+    return false;
+  }
+  if (isImageFileName(basenameOfRelPath(relPath))) {
+    return openImagePreviewByRelPath(relPath, { showMissingToast });
+  }
+  return openMarkdownFileByRelPath(relPath, { showMissingToast });
+};
+
+const importSingleImageToWorkspace = async (file, parentRelPath = "") => {
+  if (!isDesktopStorage) {
+    throw new Error("workspace_import_unavailable");
+  }
+  const importWorkspaceFile = getDesktopDataMethod("importWorkspaceFile");
+  const writeWorkspaceFile = getDesktopDataMethod("writeWorkspaceFile");
+  const sourcePath = String(file?.path || "").trim();
+  const requestedName = String(file?.name || "").trim() || "image.png";
+  const payload = {
+    parentRelPath,
+    name: requestedName
+  };
+
+  if (importWorkspaceFile) {
+    const result = sourcePath
+      ? await importWorkspaceFile({
+          ...payload,
+          sourcePath
+        })
+      : await importWorkspaceFile({
+          ...payload,
+          dataUrl: await readFileAsDataUrl(file)
+        });
+    if (!result?.ok) {
+      throw new Error(String(result?.error || "import_workspace_file_failed"));
+    }
+    return {
+      name: String(result.name || requestedName),
+      relPath: String(result.relPath || ""),
+      absPath: String(result.absPath || ""),
+      fileUrl: String(result.fileUrl || "")
+    };
+  }
+
+  if (!writeWorkspaceFile) {
+    throw new Error("当前桌面会话不支持导入图片，请重启桌面应用");
+  }
+
+  const finalName = pickUniqueStorageChildName(parentRelPath, requestedName);
+  const relPath = joinStorageRelPath(parentRelPath, finalName);
+  const result = await writeWorkspaceFile({
+    relPath,
+    content: await readFileAsBase64(file),
+    encoding: "base64"
+  });
+  if (!result?.ok) {
+    throw new Error(String(result?.error || "import_workspace_file_failed"));
+  }
+  return {
+    name: finalName,
+    relPath,
+    absPath: String(result.absPath || ""),
+    fileUrl: resolveWorkspaceAssetSrc(relPath, {
+      workspaceRootPath: storageRootPath.value
+    })
+  };
+};
+
+const importImageFilesToWorkspace = async (filesInput, {
+  parentRelPath = "",
+  preferredNodeId = ""
+} = {}) => {
+  const files = (Array.isArray(filesInput) ? filesInput : Array.from(filesInput || []))
+    .filter((file) => isImageTransferFile(file));
+  const imported = [];
+  const failed = [];
+  for (const file of files) {
+    try {
+      imported.push(await importSingleImageToWorkspace(file, parentRelPath));
+    } catch (error) {
+      failed.push({
+        name: String(file?.name || ""),
+        error: String(error?.message || error || "import_workspace_file_failed")
+      });
+    }
+  }
+  if (imported.length) {
+    await refreshDesktopStorageTreeSnapshot({
+      preferredNodeId: String(preferredNodeId || selectedStorageNodeId.value || "")
+    });
+  }
+  return { imported, failed };
+};
+
+const moveLocalStorageNodeToFolder = (nodeIdInput = "", targetFolderIdInput = "") => {
+  const nodeId = String(nodeIdInput || "").trim();
+  const targetFolderId = String(targetFolderIdInput || "").trim();
+  if (!nodeId || !targetFolderId || nodeId === STORAGE_ROOT_ID || nodeId === targetFolderId) {
+    return null;
+  }
+  const draft = cloneStorageTree(storageTree.value);
+  const sourceMatch = findStorageNodeInTree(draft, nodeId);
+  const targetMatch = findStorageNodeInTree(draft, targetFolderId);
+  if (!sourceMatch || !sourceMatch.parentId || !targetMatch || targetMatch.node.type !== "folder") {
+    return null;
+  }
+  const sourceNode = sourceMatch.node;
+  if (
+    sourceNode.type === "folder"
+    && isRelPathAffectedByNode(String(targetMatch.node.relPath || ""), String(sourceNode.relPath || ""), "folder")
+  ) {
+    return null;
+  }
+  const sourceParent = findStorageNodeInTree(draft, sourceMatch.parentId);
+  if (!sourceParent?.node || sourceParent.node.type !== "folder") {
+    return null;
+  }
+  const previousRelPath = String(sourceNode.relPath || "");
+  sourceParent.node.children = (Array.isArray(sourceParent.node.children) ? sourceParent.node.children : [])
+    .filter((child) => child.id !== nodeId);
+  targetMatch.node.children = [...(Array.isArray(targetMatch.node.children) ? targetMatch.node.children : []), sourceNode];
+  rebuildLocalStorageRelPaths(sourceNode, String(targetMatch.node.relPath || ""));
+  storageTree.value = draft;
+  return {
+    node: sourceNode,
+    previousRelPath,
+    relPath: String(sourceNode.relPath || ""),
+    targetFolderId
+  };
+};
+
+const moveStorageNodeToFolder = async (nodeIdInput = "", targetFolderIdInput = "") => {
+  const nodeId = String(nodeIdInput || "").trim();
+  const targetFolderId = String(targetFolderIdInput || "").trim();
+  const sourceMatch = findStorageNodeInTree(storageTree.value, nodeId);
+  const targetMatch = findStorageNodeInTree(storageTree.value, targetFolderId);
+  if (!sourceMatch || !targetMatch || targetMatch.node.type !== "folder") {
+    return false;
+  }
+  if (sourceMatch.node.id === STORAGE_ROOT_ID || sourceMatch.node.id === targetMatch.node.id) {
+    return false;
+  }
+  if (
+    sourceMatch.node.type === "folder"
+    && isRelPathAffectedByNode(String(targetMatch.node.relPath || ""), String(sourceMatch.node.relPath || ""), "folder")
+  ) {
+    showToast("不能把文件夹移动到自己的子目录里");
+    return false;
+  }
+
+  const previousRelPath = String(sourceMatch.node.relPath || "");
+  const targetFolderRelPath = String(targetMatch.node.relPath || "");
+  const affectedActiveFile = isRelPathAffectedByNode(
+    activeMarkdownRelPath.value,
+    previousRelPath,
+    sourceMatch.node.type
+  );
+
+  if (isDesktopStorage) {
+    const moveWorkspaceNode = getDesktopDataMethod("moveWorkspaceNode");
+    if (!moveWorkspaceNode) {
+      showToast("当前桌面会话不支持移动文件，请重启桌面应用");
+      return false;
+    }
+    try {
+      if (affectedActiveFile && activeMarkdownRelPath.value) {
+        clearScheduledMarkdownSave();
+        await writeActiveMarkdownNow(activeMarkdownRelPath.value);
+      }
+      const result = await moveWorkspaceNode({
+        relPath: previousRelPath,
+        targetParentRelPath: targetFolderRelPath
+      });
+      if (!result?.ok) {
+        throw new Error(String(result?.error || "move_workspace_node_failed"));
+      }
+      const nextNodeRelPath = String(result.relPath || previousRelPath);
+      const nextActiveRelPath = affectedActiveFile
+        ? mapRelPathThroughNodeChange(activeMarkdownRelPath.value, previousRelPath, nextNodeRelPath, sourceMatch.node.type)
+        : "";
+      remapEditorTabsForNode(previousRelPath, nextNodeRelPath, sourceMatch.node.type);
+      selectedStorageNodeId.value = nextNodeRelPath;
+      let syncErrorMessage = "";
+      try {
+        await refreshDesktopStorageTreeSnapshot({
+          preferredNodeId: nextNodeRelPath
+        });
+        const nextNodeMatch = findStorageNodeByRelPath(storageTree.value, nextNodeRelPath);
+        if (nextNodeMatch?.parentIds?.length) {
+          expandStorageAncestors(nextNodeMatch.parentIds);
+        }
+      } catch (error) {
+        syncErrorMessage = String(error?.message || error || "refresh_tree_failed");
+      }
+      if (affectedActiveFile && nextActiveRelPath) {
+        try {
+          const reloaded = await loadMarkdownFileInEditor(nextActiveRelPath, {
+            showSuccessToast: false
+          });
+          if (!reloaded) {
+            activeMarkdownRelPath.value = nextActiveRelPath;
+            activeEditorTabId.value = ensureEditorFileTab(nextActiveRelPath);
+          }
+        } catch (error) {
+          if (!syncErrorMessage) {
+            syncErrorMessage = String(error?.message || error || "reload_markdown_failed");
+          }
+          activeMarkdownRelPath.value = nextActiveRelPath;
+          activeEditorTabId.value = ensureEditorFileTab(nextActiveRelPath);
+        }
+      }
+      persistStorageState();
+      showToast(
+        syncErrorMessage
+          ? `已移动到 ${targetMatch.node.name}，但界面刷新失败: ${syncErrorMessage}`
+          : `已移动到 ${targetMatch.node.name}`
+      );
+      return true;
+    } catch (error) {
+      showToast(`移动失败: ${String(error?.message || error || "unknown_error")}`);
+      return false;
+    }
+  }
+
+  const moved = moveLocalStorageNodeToFolder(nodeId, targetFolderId);
+  if (!moved) {
+    showToast("移动失败");
+    return false;
+  }
+  remapEditorTabsForNode(previousRelPath, moved.relPath, sourceMatch.node.type);
+  if (affectedActiveFile) {
+    activeMarkdownRelPath.value = mapRelPathThroughNodeChange(
+      activeMarkdownRelPath.value,
+      previousRelPath,
+      moved.relPath,
+      sourceMatch.node.type
+    );
+  }
+  selectedStorageNodeId.value = String(moved.node.id || moved.relPath || targetFolderId);
+  persistStorageState();
+  showToast(`已移动到 ${targetMatch.node.name}`);
+  return true;
+};
+
+const insertImportedImagesIntoEditor = async (filesInput, { clientX = null, clientY = null } = {}) => {
+  const files = (Array.isArray(filesInput) ? filesInput : Array.from(filesInput || []))
+    .filter((file) => isImageTransferFile(file));
+  if (!files.length) {
+    return;
+  }
+  if (!activeMarkdownRelPath.value) {
+    showToast("请先打开一个 Markdown 文件再插入图片");
+    return;
+  }
+  try {
+    const { imported, failed } = await importImageFilesToWorkspace(files, {
+      parentRelPath: dirnameOfRelPath(activeMarkdownRelPath.value),
+      preferredNodeId: String(selectedStorageNodeId.value || "")
+    });
+    if (!imported.length) {
+      showToast(`插入失败: ${failed[0]?.error || "unknown_error"}`);
+      return;
+    }
+    const markdown = imported
+      .map((item) => {
+        const relTarget = relativeRelPathFromFile(activeMarkdownRelPath.value, item.relPath);
+        const src = relTarget || item.fileUrl || item.relPath;
+        return serializeImageLine({
+          alt: imageAltTextForRelPath(item.relPath),
+          src
+        });
+      })
+      .join("\n");
+    insertMarkdownIntoEditorAtPoint(markdown, clientX, clientY);
+    activeEditorTabId.value = ensureEditorFileTab(activeMarkdownRelPath.value);
+    showToast(
+      failed.length
+        ? `已插入 ${imported.length} 张图片，${failed.length} 张失败`
+        : `已插入 ${imported.length} 张图片`
+    );
+  } catch (error) {
+    showToast(`插入失败: ${String(error?.message || error || "unknown_error")}`);
+  }
+};
+
+const finalizeTreeImageImport = async ({ imported = [], failed = [] } = {}) => {
+  if (!imported.length) {
+    if (failed.length) {
+      showToast(`导入失败: ${failed[0]?.error || "unknown_error"}`);
+    }
+    return;
+  }
+  if (imported.length === 1) {
+    await openImagePreviewByRelPath(imported[0].relPath, {
+      showMissingToast: false
+    });
+  } else {
+    const matched = findStorageNodeByRelPath(storageTree.value, imported[0].relPath);
+    if (matched?.parentIds?.length) {
+      expandStorageAncestors(matched.parentIds);
+    }
+    selectedStorageNodeId.value = String(matched?.node?.id || imported[0].relPath || selectedStorageNodeId.value);
+    persistStorageState();
+  }
+  showToast(
+    failed.length
+      ? `已导入 ${imported.length} 张图片，${failed.length} 张失败`
+      : `已导入 ${imported.length} 张图片`
+  );
+};
+
+const clearStorageTreeHoverState = () => {
+  storageTreeDropTargetId.value = "";
+  isStorageTreeImportActive.value = false;
+};
+
+const resetStorageTreeDragState = () => {
+  draggedStorageNodeId.value = "";
+  clearStorageTreeHoverState();
+};
+
 const selectStorageNode = async (id) => {
   const targetId = String(id || "").trim();
   if (!targetId) {
@@ -2896,6 +3517,10 @@ const selectStorageNode = async (id) => {
       ...storageFolderExpandedMap.value,
       [targetId]: true
     };
+  } else if (matched?.node?.type === "file" && isImageFileName(matched.node.name)) {
+    await openImagePreviewByRelPath(String(matched.node.relPath || ""), {
+      showMissingToast: true
+    });
   } else if (matched?.node?.type === "file" && isMarkdownFileName(matched.node.name)) {
     const targetRelPath = String(matched.node.relPath || "");
     if (normalizeRelPath(targetRelPath) === normalizeRelPath(activeMarkdownRelPath.value)) {
@@ -2946,12 +3571,62 @@ const applyStorageSortMode = (mode) => {
 
 const closeWorkspaceFooterPanel = () => {
   workspaceFooterPanel.value = "";
+  workspaceFooterViewMenu.value = {
+    open: false,
+    x: 0,
+    y: 0
+  };
+};
+
+const closeWorkspaceFooterViewMenu = () => {
+  workspaceFooterViewMenu.value = {
+    open: false,
+    x: 0,
+    y: 0
+  };
 };
 
 const toggleWorkspaceFooterPanel = (panel) => {
   const targetPanel = String(panel || "").trim();
   closeStorageSortMenu();
-  workspaceFooterPanel.value = workspaceFooterPanel.value === targetPanel ? "" : targetPanel;
+  if (workspaceFooterPanel.value === targetPanel) {
+    closeWorkspaceFooterPanel();
+    return;
+  }
+  workspaceFooterPanel.value = targetPanel;
+  if (targetPanel !== "settings") {
+    closeWorkspaceFooterViewMenu();
+  }
+};
+
+const toggleWorkspaceFooterViewMenu = (event) => {
+  if (workspaceFooterViewMenu.value.open) {
+    closeWorkspaceFooterViewMenu();
+    workspaceFooterPanel.value = "settings";
+    return;
+  }
+  const trigger = event?.currentTarget;
+  if (!(trigger instanceof Element)) {
+    return;
+  }
+  const rect = trigger.getBoundingClientRect();
+  const menuWidth = 220;
+  const menuHeight = 132;
+  const viewportWidth = typeof window === "undefined" ? 0 : Number(window.innerWidth || 0);
+  const viewportHeight = typeof window === "undefined" ? 0 : Number(window.innerHeight || 0);
+  let x = Math.round(rect.right + 8);
+  let y = Math.round(rect.top - 6);
+  if (viewportWidth > 0 && x + menuWidth > viewportWidth - 12) {
+    x = Math.round(rect.left - menuWidth - 8);
+  }
+  if (viewportHeight > 0 && y + menuHeight > viewportHeight - 12) {
+    y = Math.max(12, Math.round(viewportHeight - menuHeight - 12));
+  }
+  workspaceFooterViewMenu.value = {
+    open: true,
+    x: Math.max(12, x),
+    y: Math.max(12, y)
+  };
 };
 
 const handleWorkspaceFooterPrimaryAction = async () => {
@@ -4437,6 +5112,316 @@ const onDesktopTabDrop = (targetSid) => {
   desktopSessions.value = arr;
 };
 
+const onEditorTabDragStart = (tabId) => {
+  draggedEditorTabId.value = String(tabId || "");
+  draggedEditorTabDropId.value = "";
+  draggedEditorTabDropSide.value = "";
+};
+
+const onEditorTabDragOver = (event, tabId) => {
+  const sourceTabId = String(draggedEditorTabId.value || "");
+  const targetTabId = String(tabId || "");
+  if (!sourceTabId || !targetTabId) {
+    return;
+  }
+  event.preventDefault();
+  const currentTarget = event?.currentTarget;
+  let dropSide = "after";
+  if (currentTarget instanceof Element) {
+    const rect = currentTarget.getBoundingClientRect();
+    dropSide = event.clientX < (rect.left + rect.width / 2) ? "before" : "after";
+  }
+  draggedEditorTabDropId.value = targetTabId;
+  draggedEditorTabDropSide.value = dropSide;
+  if (event?.dataTransfer) {
+    event.dataTransfer.dropEffect = "move";
+  }
+};
+
+const onEditorTabDrop = (event, targetTabId) => {
+  event.preventDefault();
+  const sourceTabId = String(draggedEditorTabId.value || "");
+  const targetId = String(targetTabId || "");
+  const dropSide = draggedEditorTabDropSide.value === "before" ? "before" : "after";
+  draggedEditorTabId.value = "";
+  draggedEditorTabDropId.value = "";
+  draggedEditorTabDropSide.value = "";
+  if (!sourceTabId || !targetId || sourceTabId === targetId) {
+    return;
+  }
+  const arr = [...editorTabs.value];
+  const from = arr.findIndex((item) => item.id === sourceTabId);
+  if (from < 0) {
+    return;
+  }
+  const [moved] = arr.splice(from, 1);
+  const targetIndex = arr.findIndex((item) => item.id === targetId);
+  if (targetIndex < 0) {
+    return;
+  }
+  const insertIndex = dropSide === "before" ? targetIndex : targetIndex + 1;
+  arr.splice(insertIndex, 0, moved);
+  editorTabs.value = arr;
+};
+
+const onEditorTabDragEnd = () => {
+  draggedEditorTabId.value = "";
+  draggedEditorTabDropId.value = "";
+  draggedEditorTabDropSide.value = "";
+};
+
+const onStorageNodeDragStart = (event, nodeId) => {
+  const targetId = String(nodeId || "").trim();
+  if (!targetId || targetId === STORAGE_ROOT_ID) {
+    return;
+  }
+  const matched = findStorageNodeInTree(storageTree.value, targetId);
+  const isImageNode = Boolean(
+    matched?.node?.type === "file"
+    && isImageFileName(String(matched.node.name || matched.node.relPath || ""))
+  );
+  draggedStorageNodeId.value = targetId;
+  clearStorageTreeHoverState();
+  if (event?.dataTransfer) {
+    event.dataTransfer.effectAllowed = isImageNode ? "copyMove" : "move";
+    event.dataTransfer.setData("application/x-yc-storage-node", targetId);
+  }
+};
+
+const onStorageNodeDragEnd = () => {
+  resetStorageTreeDragState();
+  clearEditorDropPointPreview();
+};
+
+const resolveDraggedStorageNode = (dataTransfer = null) => {
+  const transferId = String(dataTransfer?.getData?.("application/x-yc-storage-node") || "").trim();
+  const draggedId = transferId || String(draggedStorageNodeId.value || "").trim();
+  if (!draggedId || draggedId === STORAGE_ROOT_ID) {
+    return null;
+  }
+  return findStorageNodeInTree(storageTree.value, draggedId)?.node || null;
+};
+
+const onStorageNodeDragOver = (event, nodeId) => {
+  const targetId = String(nodeId || "").trim();
+  const matched = findStorageNodeInTree(storageTree.value, targetId);
+  if (!matched?.node || matched.node.type !== "folder") {
+    return;
+  }
+  const acceptsInternalMove = Boolean(draggedStorageNodeId.value);
+  const acceptsImport = hasImageFilesInDataTransfer(event?.dataTransfer);
+  if (!acceptsInternalMove && !acceptsImport) {
+    return;
+  }
+  event.preventDefault();
+  event.stopPropagation();
+  storageTreeDropTargetId.value = targetId;
+  isStorageTreeImportActive.value = acceptsImport && !acceptsInternalMove;
+  if (event?.dataTransfer) {
+    event.dataTransfer.dropEffect = acceptsInternalMove ? "move" : "copy";
+  }
+};
+
+const onStorageNodeDrop = async (event, nodeId) => {
+  const targetId = String(nodeId || "").trim();
+  const matched = findStorageNodeInTree(storageTree.value, targetId);
+  if (!matched?.node || matched.node.type !== "folder") {
+    resetStorageTreeDragState();
+    return;
+  }
+  event.stopPropagation();
+  const sourceId = String(draggedStorageNodeId.value || "");
+  if (sourceId) {
+    event.preventDefault();
+    resetStorageTreeDragState();
+    await moveStorageNodeToFolder(sourceId, targetId);
+    return;
+  }
+  const files = extractImageFilesFromDataTransfer(event?.dataTransfer);
+  resetStorageTreeDragState();
+  if (!files.length) {
+    return;
+  }
+  event.preventDefault();
+  const { imported, failed } = await importImageFilesToWorkspace(files, {
+    parentRelPath: String(matched.node.relPath || ""),
+    preferredNodeId: targetId
+  });
+  await finalizeTreeImageImport({ imported, failed });
+};
+
+const onStorageTreeRootDragOver = (event) => {
+  const acceptsInternalMove = Boolean(draggedStorageNodeId.value);
+  const acceptsImport = hasImageFilesInDataTransfer(event?.dataTransfer);
+  if (!acceptsInternalMove && !acceptsImport) {
+    return;
+  }
+  event.preventDefault();
+  storageTreeDropTargetId.value = STORAGE_ROOT_ID;
+  isStorageTreeImportActive.value = acceptsImport && !acceptsInternalMove;
+  if (event?.dataTransfer) {
+    event.dataTransfer.dropEffect = acceptsInternalMove ? "move" : "copy";
+  }
+};
+
+const onStorageTreeRootDrop = async (event) => {
+  const sourceId = String(draggedStorageNodeId.value || "");
+  if (sourceId) {
+    event.preventDefault();
+    resetStorageTreeDragState();
+    await moveStorageNodeToFolder(sourceId, STORAGE_ROOT_ID);
+    return;
+  }
+  const files = extractImageFilesFromDataTransfer(event?.dataTransfer);
+  resetStorageTreeDragState();
+  if (!files.length) {
+    return;
+  }
+  event.preventDefault();
+  const { imported, failed } = await importImageFilesToWorkspace(files, {
+    parentRelPath: "",
+    preferredNodeId: STORAGE_ROOT_ID
+  });
+  await finalizeTreeImageImport({ imported, failed });
+};
+
+const onStorageTreeRootDragLeave = (event) => {
+  const currentTarget = event?.currentTarget;
+  const relatedTarget = event?.relatedTarget;
+  if (currentTarget instanceof Element && relatedTarget instanceof Node && currentTarget.contains(relatedTarget)) {
+    return;
+  }
+  clearStorageTreeHoverState();
+};
+
+const onStorageTreePaste = async (event) => {
+  const files = extractImageFilesFromDataTransfer(event?.clipboardData);
+  if (!files.length) {
+    return;
+  }
+  event.preventDefault();
+  const preferredFolderId = resolveStorageTargetFolderId();
+  const { imported, failed } = await importImageFilesToWorkspace(files, {
+    parentRelPath: resolveStorageTargetFolderRelPath(),
+    preferredNodeId: preferredFolderId
+  });
+  await finalizeTreeImageImport({ imported, failed });
+};
+
+const resolveDraggedStorageImageNode = (dataTransfer = null) => {
+  const node = resolveDraggedStorageNode(dataTransfer);
+  if (!node || node.type !== "file" || !isImageFileName(node.name)) {
+    return null;
+  }
+  return node;
+};
+
+const insertMarkdownIntoEditorAtPoint = (markdown, xInput = null, yInput = null) => {
+  const x = Number(xInput);
+  const y = Number(yInput);
+  if (Number.isFinite(x) && Number.isFinite(y) && typeof markdownEditorRef.value?.insertMarkdownAtPoint === "function") {
+    markdownEditorRef.value.insertMarkdownAtPoint(markdown, x, y);
+    return true;
+  }
+  markdownEditorRef.value?.insertMarkdown?.(markdown);
+  return true;
+};
+
+const moveEditorCursorToPoint = (xInput = null, yInput = null) => {
+  const x = Number(xInput);
+  const y = Number(yInput);
+  if (!Number.isFinite(x) || !Number.isFinite(y)) {
+    return false;
+  }
+  return Boolean(markdownEditorRef.value?.moveCursorToPoint?.(x, y));
+};
+
+const clearEditorDropPointPreview = () => {
+  markdownEditorRef.value?.clearPointPreview?.();
+};
+
+const insertWorkspaceImageLinkIntoEditor = async (imageRelPathInput = "", { clientX = null, clientY = null } = {}) => {
+  const imageRelPath = normalizeRelPath(imageRelPathInput);
+  if (!imageRelPath) {
+    return false;
+  }
+  if (!activeMarkdownRelPath.value) {
+    showToast("请先打开一个 Markdown 文件再插入图片");
+    return false;
+  }
+  const src = relativeRelPathFromFile(activeMarkdownRelPath.value, imageRelPath) || imageRelPath;
+  insertMarkdownIntoEditorAtPoint(serializeImageLine({
+    alt: imageAltTextForRelPath(imageRelPath),
+    src
+  }), clientX, clientY);
+  activeEditorTabId.value = ensureEditorFileTab(activeMarkdownRelPath.value);
+  return true;
+};
+
+const onEditorImageDragOver = (event) => {
+  const draggedImageNode = resolveDraggedStorageImageNode(event?.dataTransfer);
+  if (!draggedImageNode && !hasImageFilesInDataTransfer(event?.dataTransfer)) {
+    return;
+  }
+  event.preventDefault();
+  event.stopPropagation();
+  clearStorageTreeHoverState();
+  if (!moveEditorCursorToPoint(event?.clientX, event?.clientY)) {
+    clearEditorDropPointPreview();
+  }
+  editorImageImportActive.value = true;
+  if (event?.dataTransfer) {
+    event.dataTransfer.dropEffect = "copy";
+  }
+};
+
+const onEditorImageDragLeave = (event) => {
+  const currentTarget = event?.currentTarget;
+  const relatedTarget = event?.relatedTarget;
+  if (currentTarget instanceof Element && relatedTarget instanceof Node && currentTarget.contains(relatedTarget)) {
+    return;
+  }
+  event.stopPropagation();
+  editorImageImportActive.value = false;
+  clearEditorDropPointPreview();
+};
+
+const onEditorImageDrop = async (event) => {
+  const draggedImageNode = resolveDraggedStorageImageNode(event?.dataTransfer);
+  editorImageImportActive.value = false;
+  clearEditorDropPointPreview();
+  if (draggedImageNode?.relPath) {
+    event.preventDefault();
+    event.stopPropagation();
+    resetStorageTreeDragState();
+    await insertWorkspaceImageLinkIntoEditor(String(draggedImageNode.relPath || ""), {
+      clientX: event?.clientX,
+      clientY: event?.clientY
+    });
+    return;
+  }
+  const files = extractImageFilesFromDataTransfer(event?.dataTransfer);
+  if (!files.length) {
+    clearEditorDropPointPreview();
+    return;
+  }
+  event.preventDefault();
+  event.stopPropagation();
+  await insertImportedImagesIntoEditor(files, {
+    clientX: event?.clientX,
+    clientY: event?.clientY
+  });
+};
+
+const onEditorImagePaste = async (event) => {
+  const files = extractImageFilesFromDataTransfer(event?.clipboardData);
+  if (!files.length) {
+    return;
+  }
+  event.preventDefault();
+  await insertImportedImagesIntoEditor(files);
+};
+
 const closeDesktopTabContextMenu = () => {
   if (!desktopTabMenu.value.open) {
     return;
@@ -5408,7 +6393,10 @@ const requestEditorContextImageMarkdown = async () => {
     }
     if (picked.ok && picked.markdownUrl) {
       showToast("已插入图片");
-      return `![image](${picked.markdownUrl})`;
+      return serializeImageLine({
+        alt: "image",
+        src: picked.markdownUrl
+      });
     }
     showToast(`插入失败: ${picked?.error || "unknown_error"}`);
   } catch (error) {
@@ -5444,6 +6432,11 @@ const handleWorkspaceFooterEditorSetting = async (commandIdInput = "") => {
 
 setContextMenuRuntimeOptions({
   requestImageMarkdown: requestEditorContextImageMarkdown
+});
+
+setPresentationRuntimeOptions({
+  getCurrentRelPath: () => activeMarkdownRelPath.value,
+  getWorkspaceRootPath: () => storageRootPath.value
 });
 
 const openTerminalPanel = (tab = terminalTab.value) => {
@@ -5677,6 +6670,7 @@ onMounted(() => {
 
 onBeforeUnmount(() => {
   setContextMenuRuntimeOptions({});
+  setPresentationRuntimeOptions({});
   releaseTransientPointerState({ syncTerminal: false });
   cancelDesktopRenameDialog();
   cancelStorageRenameDialog();

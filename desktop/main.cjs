@@ -343,6 +343,103 @@ const resolveWorkspaceNodeTarget = (rootPath, rawRelPath = "") => {
 
 const toFileUrl = (targetPath) => pathToFileURL(String(targetPath || "")).href;
 
+const imageExtensionFromMime = (mimeInput = "") => {
+  const mime = String(mimeInput || "").toLowerCase();
+  if (mime === "image/jpeg") {
+    return ".jpg";
+  }
+  if (mime === "image/png") {
+    return ".png";
+  }
+  if (mime === "image/gif") {
+    return ".gif";
+  }
+  if (mime === "image/webp") {
+    return ".webp";
+  }
+  if (mime === "image/svg+xml") {
+    return ".svg";
+  }
+  if (mime === "image/bmp") {
+    return ".bmp";
+  }
+  if (mime === "image/x-icon" || mime === "image/vnd.microsoft.icon") {
+    return ".ico";
+  }
+  if (mime === "image/avif") {
+    return ".avif";
+  }
+  return ".png";
+};
+
+const decodeDataUrlPayload = (dataUrlInput = "") => {
+  const dataUrl = String(dataUrlInput || "").trim();
+  const matched = dataUrl.match(/^data:([^;,]+)?(?:;charset=[^;,]+)?;base64,([\s\S]+)$/i);
+  if (!matched) {
+    throw new Error("invalid_data_url");
+  }
+  const mimeType = String(matched[1] || "").toLowerCase();
+  const base64 = String(matched[2] || "").replace(/\s+/g, "");
+  if (!base64) {
+    throw new Error("invalid_data_url");
+  }
+  return {
+    mimeType,
+    buffer: Buffer.from(base64, "base64")
+  };
+};
+
+const importWorkspaceFilePayload = ({ rootPath, parentRelPath = "", sourcePath = "", dataUrl = "", name = "" } = {}) => {
+  const { absRoot, absTarget: parentAbs, relPath: safeParentRelPath } = resolveWorkspacePath(rootPath, parentRelPath);
+  fs.mkdirSync(parentAbs, { recursive: true });
+  if (!fs.statSync(parentAbs).isDirectory()) {
+    throw new Error("parent_not_directory");
+  }
+
+  const source = String(sourcePath || "").trim();
+  const requestedName = String(name || "").trim();
+  let defaultName = requestedName || (source ? path.basename(source) : "");
+  let sourceBuffer = null;
+
+  if (source) {
+    if (!fs.existsSync(source)) {
+      throw new Error("source_not_found");
+    }
+    if (!fs.statSync(source).isFile()) {
+      throw new Error("source_not_file");
+    }
+    if (!defaultName) {
+      defaultName = path.basename(source);
+    }
+  } else if (String(dataUrl || "").trim()) {
+    const decoded = decodeDataUrlPayload(dataUrl);
+    sourceBuffer = decoded.buffer;
+    if (!defaultName) {
+      defaultName = `image-${Date.now()}${imageExtensionFromMime(decoded.mimeType)}`;
+    }
+  } else {
+    throw new Error("missing_import_source");
+  }
+
+  const safeRequestedName = sanitizeWorkspaceName(defaultName, `image-${Date.now()}.png`);
+  const finalName = pickUniqueName(parentAbs, safeRequestedName, false);
+  const targetAbs = path.join(parentAbs, finalName);
+  if (source) {
+    fs.copyFileSync(source, targetAbs);
+  } else {
+    fs.writeFileSync(targetAbs, sourceBuffer, { flag: "wx" });
+  }
+  const relPath = toWorkspaceRel(absRoot, targetAbs);
+  return {
+    absRoot,
+    parentRelPath: safeParentRelPath,
+    name: finalName,
+    relPath,
+    absPath: targetAbs,
+    fileUrl: toFileUrl(targetAbs)
+  };
+};
+
 const normalizeSavedSteps = (input) =>
   (Array.isArray(input) ? input : [])
     .filter((item) => item && typeof item === "object")
@@ -882,7 +979,8 @@ ipcMain.handle("desktop:data:write-workspace-file", async (_event, payload = {})
       throw new Error("target_not_file");
     }
     const content = String(payload?.content ?? "");
-    fs.writeFileSync(absTarget, content, "utf8");
+    const encoding = payload?.encoding === "base64" ? "base64" : "utf8";
+    fs.writeFileSync(absTarget, content, encoding);
     return {
       ok: true,
       rootPath: absRoot,
@@ -1131,7 +1229,8 @@ ipcMain.handle("desktop:data:write-workspace-file", async (_event, payload = {})
       throw new Error("target_not_file");
     }
     const content = String(payload?.content ?? "");
-    fs.writeFileSync(absTarget, content, "utf8");
+    const encoding = payload?.encoding === "base64" ? "base64" : "utf8";
+    fs.writeFileSync(absTarget, content, encoding);
     return {
       ok: true,
       rootPath: absRoot,
@@ -1142,6 +1241,102 @@ ipcMain.handle("desktop:data:write-workspace-file", async (_event, payload = {})
     return {
       ok: false,
       error: String(error?.message || error || "write_workspace_file_failed"),
+      rootPath
+    };
+  }
+});
+
+ipcMain.handle("desktop:data:move-workspace-node", async (_event, payload = {}) => {
+  const rootPath = ensureWorkspaceDir();
+  try {
+    const {
+      absRoot,
+      absTarget,
+      relPath,
+      parentAbs,
+      parentRelPath,
+      currentName
+    } = resolveWorkspaceNodeTarget(rootPath, payload?.relPath || "");
+    const stat = fs.statSync(absTarget);
+    const {
+      absTarget: nextParentAbs,
+      relPath: nextParentRelPath
+    } = resolveWorkspacePath(rootPath, payload?.targetParentRelPath || "");
+    fs.mkdirSync(nextParentAbs, { recursive: true });
+    if (!fs.statSync(nextParentAbs).isDirectory()) {
+      throw new Error("target_parent_not_directory");
+    }
+    if (
+      relPath === nextParentRelPath
+      || (stat.isDirectory() && nextParentRelPath.startsWith(`${relPath}/`))
+    ) {
+      throw new Error("cannot_move_into_descendant");
+    }
+
+    const requestedName = sanitizeWorkspaceName(payload?.name, currentName);
+    let finalName = requestedName || currentName;
+    let nextAbs = path.join(nextParentAbs, finalName);
+    const sameTarget = nextAbs === absTarget;
+    if (sameTarget) {
+      return {
+        ok: true,
+        rootPath: absRoot,
+        relPath,
+        previousRelPath: relPath,
+        parentRelPath,
+        absPath: absTarget,
+        type: stat.isDirectory() ? "folder" : "file",
+        name: currentName
+      };
+    }
+    if (fs.existsSync(nextAbs)) {
+      finalName = pickUniqueName(nextParentAbs, finalName, stat.isDirectory());
+      nextAbs = path.join(nextParentAbs, finalName);
+    }
+    fs.renameSync(absTarget, nextAbs);
+    const nextRelPath = nextParentRelPath ? `${nextParentRelPath}/${finalName}` : finalName;
+    return {
+      ok: true,
+      rootPath: absRoot,
+      relPath: nextRelPath,
+      previousRelPath: relPath,
+      parentRelPath: nextParentRelPath,
+      absPath: nextAbs,
+      type: stat.isDirectory() ? "folder" : "file",
+      name: finalName
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      error: String(error?.message || error || "move_workspace_node_failed"),
+      rootPath
+    };
+  }
+});
+
+ipcMain.handle("desktop:data:import-workspace-file", async (_event, payload = {}) => {
+  const rootPath = ensureWorkspaceDir();
+  try {
+    const result = importWorkspaceFilePayload({
+      rootPath,
+      parentRelPath: payload?.parentRelPath || "",
+      sourcePath: payload?.sourcePath || "",
+      dataUrl: payload?.dataUrl || "",
+      name: payload?.name || ""
+    });
+    return {
+      ok: true,
+      rootPath: result.absRoot,
+      parentRelPath: result.parentRelPath,
+      name: result.name,
+      relPath: result.relPath,
+      absPath: result.absPath,
+      fileUrl: result.fileUrl
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      error: String(error?.message || error || "import_workspace_file_failed"),
       rootPath
     };
   }

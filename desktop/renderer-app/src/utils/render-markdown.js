@@ -5,6 +5,7 @@ import {
   replaceWikiLinksInMarkdown,
   resolveWikiLink
 } from "./wiki-link.js";
+import { resolveWorkspaceAssetSrc } from "./workspace-media.js";
 
 const escapeHtml = (value) =>
   String(value || "")
@@ -50,24 +51,20 @@ const createWikiLinkHtml = (parsed, resolution) => {
   ].join("");
 };
 
-const normalizeImageSourcesInHtml = (htmlInput = "") => {
+const normalizeImageSourcesInHtml = (htmlInput = "", {
+  currentRelPath = "",
+  workspaceRootPath = ""
+} = {}) => {
   const html = String(htmlInput || "");
   return html.replace(/src="([^"]+)"/g, (match, src) => {
-    if (src.startsWith("http://") || src.startsWith("https://")) {
+    const normalized = resolveWorkspaceAssetSrc(src, {
+      currentRelPath,
+      workspaceRootPath
+    });
+    if (!normalized || normalized === src) {
       return match;
     }
-    if (src.startsWith("file:///") || src.startsWith("file://localhost/")) {
-      return match;
-    }
-    if (src.startsWith("file://")) {
-      return `src="file:///${src.slice(7)}"`;
-    }
-    if (/^\/?[A-Za-z]:[/\\]/.test(src)) {
-      let filePath = src.replace(/^\/+/, "");
-      filePath = filePath.replace(/\\/g, "/");
-      return `src="file:///${filePath}"`;
-    }
-    return match;
+    return `src="${encodeAttr(normalized)}"`;
   });
 };
 
@@ -102,6 +99,7 @@ export const renderMarkdownToHtml = ({
   markdown = "",
   currentRelPath = "",
   markdownFiles = [],
+  workspaceRootPath = "",
   renderMathFormula = null
 } = {}) => {
   const rawMarkdown = String(markdown || "");
@@ -118,5 +116,8 @@ export const renderMarkdownToHtml = ({
   }) || "");
 
   const withHeadingIds = applyHeadingIdsToHtml(parsed, rawMarkdown);
-  return ensureImageClass(normalizeImageSourcesInHtml(withHeadingIds));
+  return ensureImageClass(normalizeImageSourcesInHtml(withHeadingIds, {
+    currentRelPath,
+    workspaceRootPath
+  }));
 };

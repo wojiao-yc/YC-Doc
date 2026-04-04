@@ -113,7 +113,7 @@ export const createMarkdownEditor = ({
     });
   };
 
-  const setCursor = (posInput = 0) => {
+  const setCursor = (posInput = 0, { focus = true, scrollIntoView = true } = {}) => {
     const docLength = Number(view.state.doc.length || 0);
     const pos = Math.max(0, Math.min(docLength, Number(posInput) || 0));
     view.dispatch({
@@ -121,9 +121,64 @@ export const createMarkdownEditor = ({
         anchor: pos,
         head: pos
       },
-      scrollIntoView: true
+      scrollIntoView: Boolean(scrollIntoView)
     });
-    view.focus();
+    if (focus) {
+      view.focus();
+    }
+  };
+
+  const posFromCoords = (xInput, yInput) => {
+    const x = Number(xInput);
+    const y = Number(yInput);
+    if (!Number.isFinite(x) || !Number.isFinite(y)) {
+      return null;
+    }
+    const resolved = view.posAtCoords({ x, y });
+    return Number.isFinite(resolved) ? resolved : null;
+  };
+
+  const describeTextInsertAtCoords = (xInput, yInput) => {
+    const pos = posFromCoords(xInput, yInput);
+    if (!Number.isFinite(pos)) {
+      return null;
+    }
+    let coords = view.coordsAtPos(pos);
+    if (!coords && pos > 0) {
+      coords = view.coordsAtPos(pos - 1, 1);
+    }
+    if (!coords) {
+      const x = Number(xInput);
+      const y = Number(yInput);
+      const fallbackHeight = Math.max(18, Number(view.defaultLineHeight || 0));
+      return {
+        pos,
+        left: Number.isFinite(x) ? x : 0,
+        right: Number.isFinite(x) ? x : 0,
+        top: Number.isFinite(y) ? y - fallbackHeight / 2 : 0,
+        bottom: Number.isFinite(y) ? y + fallbackHeight / 2 : fallbackHeight,
+        height: fallbackHeight
+      };
+    }
+    const top = Number(coords.top || 0);
+    const bottom = Number(coords.bottom || coords.top || 0);
+    return {
+      pos,
+      left: Number(coords.left || 0),
+      right: Number(coords.right || coords.left || 0),
+      top,
+      bottom,
+      height: Math.max(1, bottom - top)
+    };
+  };
+
+  const setCursorAtCoords = (xInput, yInput, options = {}) => {
+    const placement = describeTextInsertAtCoords(xInput, yInput);
+    if (!placement) {
+      return false;
+    }
+    setCursor(placement.pos, options);
+    return true;
   };
 
   const refreshWikiLinks = () => {
@@ -137,6 +192,51 @@ export const createMarkdownEditor = ({
     });
   };
 
+  const insertText = (textInput = "") => {
+    const text = String(textInput ?? "");
+    const range = view.state.selection.main;
+    const from = Math.min(range.anchor, range.head);
+    const to = Math.max(range.anchor, range.head);
+    const cursor = from + text.length;
+    view.dispatch({
+      changes: {
+        from,
+        to,
+        insert: text
+      },
+      selection: {
+        anchor: cursor,
+        head: cursor
+      },
+      scrollIntoView: true
+    });
+    view.focus();
+    return true;
+  };
+
+  const insertTextAtCoords = (textInput = "", xInput, yInput) => {
+    const text = String(textInput ?? "");
+    const pos = posFromCoords(xInput, yInput);
+    if (!Number.isFinite(pos)) {
+      return insertText(text);
+    }
+    const cursor = pos + text.length;
+    view.dispatch({
+      changes: {
+        from: pos,
+        to: pos,
+        insert: text
+      },
+      selection: {
+        anchor: cursor,
+        head: cursor
+      },
+      scrollIntoView: true
+    });
+    view.focus();
+    return true;
+  };
+
   return {
     view,
     getDoc,
@@ -144,6 +244,10 @@ export const createMarkdownEditor = ({
     setDark,
     setPresentationData,
     setCursor,
+    describeTextInsertAtCoords,
+    setCursorAtCoords,
+    insertText,
+    insertTextAtCoords,
     refreshWikiLinks,
     focus: () => view.focus(),
     openSearch: () => openSearchPanel(view),

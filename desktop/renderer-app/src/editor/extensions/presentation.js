@@ -3,6 +3,7 @@ import { Prec, StateEffect, StateField } from "@codemirror/state";
 import katex from "katex";
 import { marked } from "marked";
 import { parseImageLine, serializeImageLine } from "../parser/parse-image.js";
+import { resolveWorkspaceAssetSrc } from "../../utils/workspace-media.js";
 
 const HEADING_PREFIX_PATTERN = /^\s{0,3}#{1,6}[ \t]+/;
 const BLOCKQUOTE_PREFIX_PATTERN = /^\s{0,3}>\s?/;
@@ -39,6 +40,22 @@ const KEYBOARD_NAVIGABLE_SPECIAL_BLOCK_TYPES = new Set([
   "math_block",
   "table"
 ]);
+
+let presentationRuntimeOptions = {
+  getCurrentRelPath: null,
+  getWorkspaceRootPath: null
+};
+
+export const setPresentationRuntimeOptions = (nextOptions = {}) => {
+  presentationRuntimeOptions = {
+    getCurrentRelPath: typeof nextOptions?.getCurrentRelPath === "function"
+      ? nextOptions.getCurrentRelPath
+      : null,
+    getWorkspaceRootPath: typeof nextOptions?.getWorkspaceRootPath === "function"
+      ? nextOptions.getWorkspaceRootPath
+      : null
+  };
+};
 
 const safePosForLineLookup = (doc, pos) => {
   const length = Number(doc.length || 0);
@@ -1077,30 +1094,14 @@ const normalizeImageSrc = (src) => {
   if (!srcStr) {
     return "";
   }
-  // Keep remote URLs unchanged.
-  if (srcStr.startsWith("http://") || srcStr.startsWith("https://")) {
-    return srcStr;
-  }
-  // Keep normalized file protocol paths unchanged.
-  if (srcStr.startsWith("file:///") || srcStr.startsWith("file://localhost/")) {
-    return srcStr;
-  }
-  // Convert legacy file://C:/... to file:///C:/...
-  if (srcStr.startsWith("file://")) {
-    return `file:///${srcStr.slice(7)}`;
-  }
-  // Convert absolute Windows paths to file protocol.
-  if (/^\/?[A-Za-z]:[/\\]/.test(srcStr)) {
-    let filePath = srcStr.replace(/^\/+/, "");
-    filePath = filePath.replace(/\\/g, "/");
-    return `file:///${filePath}`;
-  }
-  // Convert absolute Unix paths to file protocol.
-  if (srcStr.startsWith("/")) {
-    return `file://${srcStr}`;
-  }
-  // Keep relative paths unchanged.
-  return srcStr;
+  return resolveWorkspaceAssetSrc(srcStr, {
+    currentRelPath: typeof presentationRuntimeOptions.getCurrentRelPath === "function"
+      ? presentationRuntimeOptions.getCurrentRelPath()
+      : "",
+    workspaceRootPath: typeof presentationRuntimeOptions.getWorkspaceRootPath === "function"
+      ? presentationRuntimeOptions.getWorkspaceRootPath()
+      : ""
+  });
 };
 
 class ImageWidget extends WidgetType {

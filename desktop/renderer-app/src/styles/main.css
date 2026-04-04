@@ -67,6 +67,7 @@ body {
   display: flex;
   align-items: flex-end;
   gap: 4px;
+  padding: 0 4px;
   overflow-x: auto;
   overflow-y: hidden;
   scrollbar-width: none;
@@ -83,6 +84,7 @@ body {
 }
 
 .editor-tab {
+  position: relative;
   height: 34px;
   max-width: 220px;
   min-width: 0;
@@ -107,6 +109,27 @@ body {
   background: rgba(255, 255, 255, 0.98);
   color: #0f172a;
   border-color: #e2e8f0;
+}
+
+.editor-tab.is-drop-before::before,
+.editor-tab.is-drop-after::after {
+  content: "";
+  position: absolute;
+  top: 5px;
+  bottom: 5px;
+  width: 3px;
+  border-radius: 999px;
+  background: #f97316;
+  box-shadow: 0 0 0 2px rgba(255, 237, 213, 0.96);
+  pointer-events: none;
+}
+
+.editor-tab.is-drop-before::before {
+  left: -3px;
+}
+
+.editor-tab.is-drop-after::after {
+  right: -3px;
 }
 
 .editor-tab-icon {
@@ -368,11 +391,19 @@ body {
   background: #f8fafc;
 }
 
+.workspace-footer-action.is-open {
+  background: #f8fafc;
+}
+
 .workspace-footer-action.is-dark {
   color: #f8fafc;
 }
 
 .workspace-footer-action.is-dark:hover {
+  background: #111827;
+}
+
+.workspace-footer-action.is-dark.is-open {
   background: #111827;
 }
 
@@ -384,6 +415,32 @@ body {
   width: 14px;
   height: 14px;
   flex-shrink: 0;
+}
+
+.workspace-footer-action-trailing {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #94a3b8;
+}
+
+.workspace-footer-action-chevron {
+  width: 14px;
+  height: 14px;
+}
+
+.workspace-footer-toggle-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  line-height: 1.35;
+  color: #334155;
+}
+
+.workspace-footer-toggle-row.is-dark {
+  color: #cbd5e1;
 }
 
 .workspace-footer-tool-btn {
@@ -416,6 +473,21 @@ body {
 
 .workspace-footer-popover.is-dark .workspace-footer-settings-note {
   color: #64748b;
+}
+
+.workspace-footer-view-menu {
+  min-width: 216px;
+}
+
+.workspace-footer-view-menu-item {
+  cursor: pointer;
+  user-select: none;
+}
+
+.workspace-footer-view-menu-item input {
+  margin: 0 2px 0 0;
+  accent-color: #f97316;
+  pointer-events: none;
 }
 
 .storage-sort-menu {
@@ -507,6 +579,16 @@ body {
   padding: 4px 8px;
   display: flex;
   align-items: center;
+}
+
+.file-tree-row.is-drop-target {
+  background: rgba(249, 115, 22, 0.12);
+  box-shadow: inset 0 0 0 1px rgba(249, 115, 22, 0.32);
+}
+
+.file-tree-nav.is-import-active {
+  box-shadow: inset 0 0 0 1px rgba(249, 115, 22, 0.24);
+  border-radius: 14px;
 }
 
 .file-tree-collapsed-icon {
@@ -795,6 +877,74 @@ body {
   padding-left: 1.5em;
 }
 
+.markdown-render ul:has(> li > input[type="checkbox"]) {
+  padding-left: 0;
+}
+
+.markdown-render li:has(> input[type="checkbox"]) {
+  list-style: none;
+  display: flex;
+  align-items: center;
+  gap: 0.58rem;
+  margin: 0.42em 0;
+}
+
+.markdown-render li:has(> input[type="checkbox"]) > input[type="checkbox"] {
+  appearance: none;
+  -webkit-appearance: none;
+  display: inline-grid;
+  place-items: center;
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  flex: 0 0 auto;
+  border-radius: 4px;
+  border: 1.5px solid #cbd5e1;
+  background: #ffffff;
+  position: relative;
+  transform: translateY(-3px);
+}
+
+.markdown-render li:has(> input[type="checkbox"]) > input[type="checkbox"]::after {
+  content: "\2713";
+  position: absolute;
+  inset: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: transparent;
+  font-size: 10px;
+  line-height: 1;
+  font-weight: 700;
+  font-family: "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+}
+
+.markdown-render li:has(> input[type="checkbox"]) > input[type="checkbox"]:checked {
+  background: #f97316;
+  border-color: #ea580c;
+}
+
+.markdown-render li:has(> input[type="checkbox"]) > input[type="checkbox"]:checked::after {
+  color: #ffffff;
+}
+
+.markdown-render-dark li:has(> input[type="checkbox"]) > input[type="checkbox"] {
+  border-color: #475569;
+  background: #0f172a;
+}
+
+.markdown-render-dark li:has(> input[type="checkbox"]) > input[type="checkbox"]:checked {
+  background: #f97316;
+  border-color: #fb923c;
+}
+
+.markdown-render li:has(> input[type="checkbox"]:checked) {
+  color: #64748b;
+  text-decoration: line-through;
+  text-decoration-thickness: 1.2px;
+  text-decoration-color: rgba(100, 116, 139, 0.45);
+}
+
 .markdown-render pre {
   overflow-x: auto;
   border-radius: 10px;
@@ -828,6 +978,21 @@ body {
 .markdown-render-dark pre,
 .markdown-render-dark code {
   background: #0f172a;
+}
+
+.dark-ui .markdown-render li:has(> input[type="checkbox"]) > input[type="checkbox"] {
+  border-color: #475569;
+  background: #0f172a;
+}
+
+.dark-ui .markdown-render li:has(> input[type="checkbox"]) > input[type="checkbox"]:checked {
+  background: #f97316;
+  border-color: #fb923c;
+}
+
+.dark-ui .markdown-render li:has(> input[type="checkbox"]:checked) {
+  color: #94a3b8;
+  text-decoration-color: rgba(148, 163, 184, 0.45);
 }
 
 .markdown-render .wiki-link {
@@ -1750,6 +1915,21 @@ body {
   background: rgba(15, 23, 42, 0.98);
   color: #f8fafc;
   border-color: #334155;
+}
+
+.dark-ui .editor-tab.is-drop-before::before,
+.dark-ui .editor-tab.is-drop-after::after {
+  background: #fb923c;
+  box-shadow: 0 0 0 2px rgba(124, 45, 18, 0.92);
+}
+
+.dark-ui .file-tree-row.is-drop-target {
+  background: rgba(249, 115, 22, 0.16);
+  box-shadow: inset 0 0 0 1px rgba(251, 146, 60, 0.34);
+}
+
+.dark-ui .file-tree-nav.is-import-active {
+  box-shadow: inset 0 0 0 1px rgba(251, 146, 60, 0.26);
 }
 
 .dark-ui .term-tip-btn::after {

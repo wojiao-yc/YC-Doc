@@ -1,6 +1,7 @@
 <template>
-  <div class="yc-editor-shell" :class="dark ? 'is-dark' : 'is-light'">
+  <div ref="shellRef" class="yc-editor-shell" :class="dark ? 'is-dark' : 'is-light'">
     <div ref="editorHostRef" class="yc-editor-host"></div>
+    <div v-if="dropCaretStyle" class="yc-editor-drop-caret" :style="dropCaretStyle"></div>
   </div>
 </template>
 
@@ -45,7 +46,9 @@ const props = defineProps({
 });
 
 const emit = defineEmits(["update:modelValue", "selection-change", "wiki-link-activate", "external-link-activate"]);
+const shellRef = ref(null);
 const editorHostRef = ref(null);
+const dropCaretStyle = ref(null);
 let editorApi = null;
 let latestPresentationBlocks = Array.isArray(props.presentationBlocks) ? props.presentationBlocks : [];
 
@@ -65,7 +68,49 @@ const refreshWikiLinks = () => {
   editorApi?.refreshWikiLinks?.();
 };
 
-defineExpose({ focus, focusPosition, openSearch, refreshWikiLinks });
+const insertMarkdown = (markdown) => {
+  dropCaretStyle.value = null;
+  editorApi?.insertText?.(markdown);
+};
+
+const clearPointPreview = () => {
+  dropCaretStyle.value = null;
+};
+
+const moveCursorToPoint = (x, y) => {
+  const caret = editorApi?.describeTextInsertAtCoords?.(x, y);
+  const shell = shellRef.value;
+  if (!caret || !(shell instanceof HTMLElement)) {
+    dropCaretStyle.value = null;
+    return false;
+  }
+  const shellRect = shell.getBoundingClientRect();
+  const left = Math.max(0, Math.round(Number(caret.left || 0) - shellRect.left));
+  const top = Math.max(0, Math.round(Number(caret.top || 0) - shellRect.top));
+  const height = Math.max(16, Math.round(Number(caret.height || 0) || 22));
+  dropCaretStyle.value = {
+    left: `${left}px`,
+    top: `${top}px`,
+    height: `${height}px`
+  };
+  return true;
+};
+
+const insertMarkdownAtPoint = (markdown, x, y) => {
+  dropCaretStyle.value = null;
+  return editorApi?.insertTextAtCoords?.(markdown, x, y);
+};
+
+defineExpose({
+  focus,
+  focusPosition,
+  openSearch,
+  refreshWikiLinks,
+  insertMarkdown,
+  moveCursorToPoint,
+  insertMarkdownAtPoint,
+  clearPointPreview
+});
 
 const syncPresentationData = () => {
   editorApi?.setPresentationData({
@@ -162,6 +207,7 @@ watch(
 );
 
 onBeforeUnmount(() => {
+  dropCaretStyle.value = null;
   editorApi?.destroy();
   editorApi = null;
 });

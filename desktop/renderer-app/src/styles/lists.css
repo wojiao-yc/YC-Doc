@@ -33,10 +33,10 @@
 }
 
 .yc-editor-host .cm-line.cm-block-task-list-item.cm-task-checked {
-  color: #111827;
+  color: #64748b;
   text-decoration-line: line-through;
   text-decoration-thickness: 1.35px;
-  text-decoration-color: #111827;
+  text-decoration-color: rgba(100, 116, 139, 0.55);
 }
 
 .yc-editor-shell.is-dark .yc-editor-host .cm-line.cm-block-task-list-item.cm-task-unchecked {
@@ -44,8 +44,8 @@
 }
 
 .yc-editor-shell.is-dark .yc-editor-host .cm-line.cm-block-task-list-item.cm-task-checked {
-  color: #e2e8f0;
-  text-decoration-color: #e2e8f0;
+  color: #94a3b8;
+  text-decoration-color: rgba(148, 163, 184, 0.55);
 }
 
 .yc-editor-host .cm-list-prefix-widget {
@@ -72,29 +72,35 @@
 }
 
 .yc-editor-host .cm-task-checkbox-widget {
-  width: 18px;
-  height: 18px;
-  border-radius: 5px;
-  border: 1.5px solid #94a3b8;
+  width: 16px;
+  height: 16px;
+  border-radius: 4px;
+  border: 1.5px solid #cbd5e1;
   background: #ffffff;
   color: #ffffff;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  font-size: 12px;
+  font-size: 10px;
   font-weight: 700;
   line-height: 1;
-  margin-right: 0.34rem;
+  margin-right: 0.4rem;
+  vertical-align: middle;
+  position: relative;
   padding: 0;
   cursor: pointer;
   user-select: none;
   text-decoration: none;
-  transition: background-color 120ms ease, border-color 120ms ease;
+  box-sizing: border-box;
+  transform: translateY(-3px);
+  font-family: "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+  transition: background-color 120ms ease, border-color 120ms ease, color 120ms ease;
 }
 
 .yc-editor-host .cm-task-checkbox-widget.is-checked {
-  background: #8b5cf6;
-  border-color: #8b5cf6;
+  background: #f97316;
+  border-color: #ea580c;
+  color: #ffffff;
 }
 
 .yc-editor-shell.is-dark .yc-editor-host .cm-list-prefix-widget {
@@ -103,10 +109,10 @@
 
 .yc-editor-shell.is-dark .yc-editor-host .cm-task-checkbox-widget {
   background: #0f172a;
-  border-color: #64748b;
+  border-color: #475569;
 }
 
 .yc-editor-shell.is-dark .yc-editor-host .cm-task-checkbox-widget.is-checked {
-  background: #8b5cf6;
-  border-color: #8b5cf6;
+  background: #f97316;
+  border-color: #fb923c;
 }

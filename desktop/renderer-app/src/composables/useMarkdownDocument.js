@@ -1,4 +1,5 @@
 import { ref, watch, nextTick, onBeforeUnmount } from "vue";
+import { serializeImageLine } from "../editor/parser/parse-image.js";
 
 const MARKDOWN_SAVE_DELAY_MS = 500;
 const MAX_MARKDOWN_FILE_BYTES = 20 * 1024 * 1024;
@@ -585,7 +586,10 @@ export const useMarkdownDocument = ({
     }
     const current = String(documentMarkdown.value || "");
     const suffix = current.endsWith("\n") ? "\n" : "\n\n";
-    documentMarkdown.value = `${current}${suffix}![image](${safeUrl})\n`;
+    documentMarkdown.value = `${current}${suffix}${serializeImageLine({
+      alt: "image",
+      src: safeUrl
+    })}\n`;
   };
 
   documentMarkdown.value = serializeStepsToMarkdown(steps.value);
