@@ -47,6 +47,7 @@ Built-in theme CSS and metadata are auto-discovered. You no longer need to edit 
 Themes can control:
 
 - App shell
+- Sidebar and file tree typography
 - Scrollbars and drag handles
 - Menus and popovers
 - Settings window chrome

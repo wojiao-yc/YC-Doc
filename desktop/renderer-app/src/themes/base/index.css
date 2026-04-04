@@ -11,6 +11,8 @@
   --yc-doc-line-height: 1.88;
   --yc-preview-font-size: 15px;
   --yc-preview-line-height: 1.8;
+  --yc-file-tree-font-size: 0.875rem;
+  --yc-file-tree-line-height: 1.25rem;
   --yc-preview-code-inline-radius: 6px;
   --yc-preview-code-inline-padding: 0.1em 0.35em;
   --yc-preview-code-inline-bg: var(--yc-bg-panel-alt);

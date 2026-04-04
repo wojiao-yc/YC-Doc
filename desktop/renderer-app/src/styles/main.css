@@ -1190,6 +1190,8 @@ body {
 .file-tree-label {
   min-width: 0;
   flex: 1 1 auto;
+  font-size: var(--yc-file-tree-font-size);
+  line-height: var(--yc-file-tree-line-height);
 }
 
 .storage-context-icon {

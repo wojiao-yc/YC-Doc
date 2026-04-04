@@ -241,7 +241,7 @@
                 </span>
               </template>
             </span>
-            <span class="file-tree-label truncate text-xs">{{ item.name }}</span>
+            <span class="file-tree-label truncate">{{ item.name }}</span>
           </template>
         </button>
       </nav>
