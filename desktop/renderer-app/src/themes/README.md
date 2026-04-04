@@ -23,7 +23,7 @@ Each theme folder should define CSS custom properties on a theme scope:
   Built-in warm paper theme overrides.
 - `theme-template/`
   Copy this folder to start a new built-in theme.
-- `registry.js`
+- `*/meta.js`
   Theme metadata used by settings and runtime selection.
 
 ## Rules
@@ -37,9 +37,10 @@ Each theme folder should define CSS custom properties on a theme scope:
 
 1. Copy `theme-template/` to `your-theme-id/`.
 2. Rename the selector in `index.css` to `#app[data-theme="your-theme-id"]`.
-3. Override the tokens you care about.
-4. Import the new CSS file in `src/main.js` if it is a built-in theme.
-5. Add metadata to `src/themes/registry.js`.
+3. Add a `meta.js` file in the same folder.
+4. Override the tokens you care about.
+
+Built-in theme CSS and metadata are auto-discovered. You no longer need to edit `src/main.js` or `src/themes/registry.js` when adding a theme.
 
 ## Scope
 

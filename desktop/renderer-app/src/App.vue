@@ -2,7 +2,7 @@
   <div
     id="app"
     v-cloak
-    class="flex h-screen min-h-0 overflow-hidden bg-[#fcfcfc] text-slate-900 flex-col"
+    class="app-root-shell flex h-screen min-h-0 overflow-hidden flex-col"
     :data-theme="activeThemeId"
     :data-theme-mode="currentThemeMode"
     :class="{
@@ -99,20 +99,17 @@
     <div class="flex flex-1 min-h-0 min-w-0">
     <aside
       v-if="isEditMode"
-      class="sidebar-panel file-sidebar-panel flex flex-col flex-shrink-0 border-r min-h-0"
+      class="sidebar-panel file-sidebar-panel themed-sidebar-shell flex flex-col flex-shrink-0 border-r min-h-0"
       :style="{ width: `${fileSidebarPanelWidth}px` }"
       :class="[
         isFileSidebarCollapsed ? 'is-collapsed' : '',
         isFileSidebarDragging ? 'is-dragging' : '',
-        isFileSidebarHidden
-          ? 'is-hidden border-transparent bg-transparent'
-          : (isDark ? 'border-slate-800 bg-slate-950' : 'border-gray-200 bg-[#fafafa]')
+        isFileSidebarHidden ? 'is-hidden border-transparent bg-transparent' : ''
       ]"
     >
       <div
-        class="border-b"
+        class="border-b themed-divider"
         :class="isFileSidebarCollapsed ? 'px-2 py-3' : 'px-3 py-3'"
-        :style="{ borderColor: isDark ? '#1e293b' : '#e5e7eb' }"
       >
         <div :class="isFileSidebarCollapsed ? 'flex flex-col items-center gap-1.5' : 'flex items-center gap-1.5'">
           <!-- File sidebar actions and tree icons are also centralized in `AppIcon.vue`. -->
@@ -200,11 +197,10 @@
           :key="item.id"
           type="button"
           class="file-tree-row w-full rounded-lg mb-1 transition-all text-left"
-          :title="isFileSidebarCollapsed ? item.name : ''"
+          :data-tip="isFileSidebarCollapsed ? item.name : ''"
           :class="[
-            selectedStorageNodeId === item.id
-              ? (isDark ? 'bg-orange-500/15 text-orange-200' : 'bg-orange-50 text-orange-700')
-              : (isDark ? 'text-slate-300 hover:bg-slate-900/70' : 'text-gray-700 hover:bg-gray-100'),
+            selectedStorageNodeId === item.id ? 'is-selected' : '',
+            isFileSidebarCollapsed ? 'sidebar-tip-btn' : '',
             storageTreeDropTargetId === item.id ? 'is-drop-target' : ''
           ]"
           :draggable="item.id !== STORAGE_ROOT_ID"
@@ -252,15 +248,15 @@
 
       <div
         v-if="!isFileSidebarCollapsed"
-        class="file-sidebar-footer border-t"
-        :style="{ borderColor: isDark ? '#1e293b' : '#e5e7eb' }"
+        class="file-sidebar-footer border-t themed-divider"
       >
         <div class="file-sidebar-workspace-bar" :class="isDark ? 'is-dark' : ''">
           <button
             type="button"
             class="file-sidebar-workspace-main"
-            :class="isDark ? 'is-dark' : ''"
-            :title="storageLocationText"
+            :class="[isDark ? 'is-dark' : '', isFileSidebarCollapsed ? 'sidebar-tip-btn' : '']"
+            :title="isFileSidebarCollapsed ? '' : storageLocationText"
+            :data-tip="isFileSidebarCollapsed ? storageLocationText : ''"
             @click="handleWorkspaceFooterPrimaryAction"
             @dragover="onStorageTreeRootDragOver"
             @drop="onStorageTreeRootDrop"
@@ -319,6 +315,7 @@
       v-if="isEditMode"
       class="sidebar-resize-handle file-sidebar-resize-handle flex-shrink-0"
       :class="[
+        isFileSidebarDragging ? 'is-dragging' : '',
         isFileSidebarHidden ? 'is-hidden' : '',
         isDark ? 'is-dark' : ''
       ]"
@@ -327,11 +324,10 @@
       <div class="sidebar-resize-line"></div>
     </div>
 
-    <main ref="mainRef" class="relative flex-1 min-w-0 min-h-0 flex flex-col" :class="isDark ? 'bg-slate-950' : 'bg-white'">
+    <main ref="mainRef" class="workspace-main-shell relative flex-1 min-w-0 min-h-0 flex flex-col">
       <header
         v-if="!isEditMode"
-        class="sticky top-0 z-30 px-10 py-5 border-b flex justify-between items-center backdrop-blur"
-        :class="isDark ? 'border-slate-800 bg-slate-950/80' : 'border-gray-100 bg-white/80'"
+        class="viewer-header-shell sticky top-0 z-30 px-10 py-5 border-b flex justify-between items-center backdrop-blur"
         :style="viewHeaderStyle"
       >
         <div class="header-meta header-meta-inline min-w-0 flex-1">
@@ -347,9 +343,8 @@
       <section
         v-show="!terminalMaximized"
         ref="contentScrollRef"
-        class="flex-1 min-h-0"
+        class="workspace-content-shell flex-1 min-h-0"
         :class="[
-          isDark ? 'bg-slate-950' : 'bg-white',
           isEditMode && isWorkspaceGraphTabActive ? 'overflow-hidden' : 'overflow-y-auto'
         ]"
         @scroll.passive="onContentScroll"
@@ -522,22 +517,20 @@
         </div>
         <footer
           v-if="!isEditMode && !gestureNavigationEnabled && !isWorkspaceGraphTabActive"
-          class="px-10 py-6 border-t flex items-center justify-center"
-          :class="isDark ? 'border-slate-800 bg-slate-950' : 'border-gray-100 bg-white'"
+          class="viewer-footer-shell px-10 py-6 border-t flex items-center justify-center"
         >
           <div class="flex items-center gap-6">
             <button
               @click="prev"
               :disabled="isFirstStep"
-              class="px-8 py-2 border rounded-full text-sm disabled:opacity-30 transition-all"
-              :class="isDark ? 'border-slate-800 hover:bg-slate-900 text-slate-100' : 'border-gray-200 hover:bg-gray-50 text-gray-800'"
+              class="themed-secondary-btn px-8 py-2 rounded-full text-sm disabled:opacity-30"
             >
               ← 上一步
             </button>
             <button
               @click="next"
               :disabled="isLastStep"
-              class="px-8 py-2 bg-orange-500 text-white rounded-full text-sm font-medium shadow-lg shadow-orange-200 hover:bg-orange-600 disabled:opacity-30 transition-all"
+              class="themed-accent-btn px-8 py-2 rounded-full text-sm font-medium disabled:opacity-30"
             >
               {{ isLastStep ? '已完成' : '下一步 →' }}
             </button>
@@ -762,6 +755,7 @@
       v-if="isEditMode"
       class="sidebar-resize-handle inspector-resize-handle flex-shrink-0"
       :class="[
+        isSidebarDragging ? 'is-dragging' : '',
         isInspectorSidebarHidden ? 'is-hidden' : '',
         isDark ? 'is-dark' : ''
       ]"
@@ -772,27 +766,25 @@
 
     <aside
       v-if="showInspectorSidebar"
-      class="sidebar-panel inspector-sidebar-panel flex flex-col flex-shrink-0 border-l min-h-0"
+      class="sidebar-panel inspector-sidebar-panel themed-sidebar-shell flex flex-col flex-shrink-0 border-l min-h-0"
       :style="{ width: `${inspectorSidebarPanelWidth}px` }"
       :class="[
         isInspectorSidebarCollapsed ? 'is-collapsed' : '',
         isEditMode && isSidebarDragging ? 'is-dragging' : '',
-        isInspectorSidebarHidden
-          ? 'is-hidden border-transparent bg-transparent'
-          : (isDark ? 'border-slate-800 bg-slate-950' : 'border-gray-200 bg-[#fafafa]')
+        isInspectorSidebarHidden ? 'is-hidden border-transparent bg-transparent' : ''
       ]"
     >
-      <div :class="isInspectorSidebarCollapsed ? 'px-2 py-3' : 'p-4 pb-3'" class="border-b" :style="{ borderColor: isDark ? '#1e293b' : '#e5e7eb' }">
+      <div :class="isInspectorSidebarCollapsed ? 'px-2 py-3' : 'p-4 pb-3'" class="border-b themed-divider">
         <div :class="isInspectorSidebarCollapsed ? 'flex flex-col items-center gap-2' : 'flex items-start justify-between gap-2'">
           <div :class="isInspectorSidebarCollapsed ? 'flex items-center justify-center w-full' : 'flex items-center gap-2 min-w-0'">
-            <div class="w-7 h-7 bg-orange-500 rounded-lg flex items-center justify-center text-white text-xs font-bold">
+            <div class="inspector-header-badge w-7 h-7 rounded-lg flex items-center justify-center text-xs font-bold">
               {{ isEditMode ? "ED" : "ST" }}
             </div>
             <div v-if="!isInspectorSidebarCollapsed" class="min-w-0">
-              <h2 class="text-sm font-semibold tracking-tight truncate" :class="isDark ? 'text-slate-100' : 'text-gray-800'">
+              <h2 class="inspector-header-title text-sm font-semibold tracking-tight truncate">
                 {{ isEditMode ? "编辑控制栏" : "步骤栏" }}
               </h2>
-              <p class="text-xs mt-0.5" :class="isDark ? 'text-slate-500' : 'text-gray-400'">
+              <p class="inspector-header-subtitle text-xs mt-0.5">
                 {{ isEditMode ? "原顶栏 + 原步骤栏" : `第 ${currentStepIndex + 1} / ${steps.length} 步` }}
               </p>
             </div>
@@ -804,8 +796,7 @@
             :value="activeStep?.title || ''"
             type="text"
             @input="handleActiveStepTitleInput"
-            class="w-full h-9 rounded-lg border px-3 text-sm font-medium focus:outline-none"
-            :class="isDark ? 'border-slate-700 bg-slate-900 text-slate-100 focus:border-orange-400' : 'border-gray-200 bg-white text-gray-800 focus:border-orange-500'"
+            class="inspector-sidebar-input w-full h-9 rounded-lg border px-3 text-sm font-medium"
             placeholder="步骤标题"
           />
         </div>
@@ -827,15 +818,13 @@
           @drop="onStepDrop($event, index)"
           class="nav-step-item px-4 py-3.5 flex items-start gap-3 cursor-pointer transition-all border-l-4"
           :class="[
-            currentId === step.id
-              ? (isDark ? 'bg-orange-500/10 border-orange-400' : 'bg-orange-50/60 border-orange-500')
-              : (isDark ? 'border-transparent hover:bg-slate-900/60' : 'border-transparent hover:bg-gray-100')
+            currentId === step.id ? 'is-active' : ''
           ]"
         >
           <div class="nav-step-side">
             <div
-              class="mt-1 w-6 h-6 rounded flex items-center justify-center text-xs font-bold transition-all"
-              :class="isDark ? 'bg-slate-800 text-slate-300' : 'bg-gray-200 text-gray-500'"
+              class="nav-step-index-badge mt-1 w-6 h-6 rounded flex items-center justify-center text-xs font-bold transition-all"
+              :class="currentId === step.id ? 'is-active' : ''"
             >
               {{ index + 1 }}
             </div>
@@ -851,19 +840,18 @@
                 type="text"
                 @click.stop
                 @input="handleStepTitleInput(index, $event)"
-                class="w-full text-sm font-medium bg-transparent border-b border-transparent hover:border-gray-300 focus:border-orange-500 focus:outline-none px-1 py-0.5"
-                :class="isDark ? 'text-slate-100 hover:border-slate-700' : 'text-gray-800'"
+                class="inspector-step-title-input w-full text-sm font-medium bg-transparent border-b px-1 py-0.5"
                 placeholder="标题"
               />
-              <div class="truncate text-[11px] px-1" :class="isDark ? 'text-slate-500' : 'text-gray-500'">
+              <div class="inspector-step-meta truncate text-[11px] px-1">
                 {{ stepPreviewText(step) }}
               </div>
             </div>
             <div v-else class="min-w-0 space-y-1 px-1">
-              <div class="truncate text-sm font-medium" :class="isDark ? 'text-slate-100' : 'text-gray-800'">
+              <div class="inspector-step-title truncate text-sm font-medium">
                 {{ stepDisplayTitle(step, index) }}
               </div>
-              <div class="truncate text-[11px]" :class="isDark ? 'text-slate-400' : 'text-gray-500'">
+              <div class="inspector-step-meta truncate text-[11px]">
                 {{ step.subtitle || stepPreviewText(step) }}
               </div>
             </div>
@@ -873,22 +861,18 @@
 
       <section
         v-if="!isInspectorSidebarCollapsed && !isInspectorSidebarHidden && activeMarkdownRelPath"
-        class="border-t px-4 py-3 space-y-3"
-        :class="isDark ? 'border-slate-800' : 'border-gray-200'"
+        class="border-t themed-divider px-4 py-3 space-y-3"
       >
         <div class="flex items-center justify-between gap-2">
           <div class="min-w-0">
-            <div class="text-sm font-semibold truncate" :class="isDark ? 'text-slate-100' : 'text-gray-800'">
+            <div class="inspector-section-title text-sm font-semibold truncate">
               Backlinks
             </div>
-            <p class="text-[11px]" :class="isDark ? 'text-slate-500' : 'text-gray-500'">
+            <p class="inspector-section-meta text-[11px]">
               {{ wikiLinkIndexLoading ? "索引更新中..." : `当前文档 ${currentBacklinks.length} 条反向链接` }}
             </p>
           </div>
-          <span
-            class="text-[11px] px-2 py-1 rounded-full border"
-            :class="isDark ? 'border-slate-700 bg-slate-900 text-slate-300' : 'border-gray-200 bg-white text-gray-600'"
-          >
+          <span class="inspector-badge text-[11px] px-2 py-1 rounded-full border">
             {{ currentBacklinks.length }}
           </span>
         </div>
@@ -899,31 +883,27 @@
             :key="`${link.sourceRelPath}:${link.rawFrom}:${index}`"
             type="button"
             class="wiki-backlink-card w-full rounded-xl border px-3 py-2 text-left transition-all"
-            :class="isDark
-              ? 'border-slate-800 bg-slate-900/50 hover:border-orange-400/40 hover:bg-slate-900'
-              : 'border-gray-200 bg-white hover:border-orange-300 hover:bg-orange-50/40'"
             @click="openBacklinkEntry(link)"
           >
             <div class="flex items-center justify-between gap-2">
-              <span class="truncate text-sm font-medium" :class="isDark ? 'text-slate-100' : 'text-gray-800'">
+              <span class="backlink-card-title truncate text-sm font-medium">
                 {{ link.sourceTitle || link.sourceFileName }}
               </span>
-              <span class="text-[11px] shrink-0" :class="isDark ? 'text-slate-500' : 'text-gray-500'">
+              <span class="backlink-card-meta text-[11px] shrink-0">
                 L{{ link.lineNumber }}
               </span>
             </div>
-            <div class="mt-1 truncate text-[11px]" :class="isDark ? 'text-slate-400' : 'text-gray-500'">
+            <div class="backlink-card-meta mt-1 truncate text-[11px]">
               {{ link.sourceRelPath }}
             </div>
-            <div class="mt-2 text-xs leading-5" :class="isDark ? 'text-slate-300' : 'text-slate-600'">
+            <div class="backlink-card-body mt-2 text-xs leading-5">
               {{ link.contextText || link.raw }}
             </div>
           </button>
         </div>
         <div
           v-else
-          class="rounded-xl border px-3 py-4 text-xs leading-5"
-          :class="isDark ? 'border-slate-800 bg-slate-900/40 text-slate-400' : 'border-gray-200 bg-white text-gray-500'"
+          class="inspector-empty-card rounded-xl border px-3 py-4 text-xs leading-5"
         >
           当前还没有其它文档链接到这篇笔记。
         </div>
@@ -931,24 +911,17 @@
 
       <div
         v-if="isEditMode && !isInspectorSidebarCollapsed && !isInspectorSidebarHidden"
-        class="border-t p-4 space-y-3"
-        :class="isDark ? 'border-slate-800' : 'border-gray-200'"
+        class="border-t themed-divider p-4 space-y-3"
       >
         <button
           @click="addStep"
-          class="w-full flex items-center justify-center gap-2 px-4 py-2 text-sm rounded-lg border transition-all"
-          :class="isDark
-            ? 'border-orange-300/30 bg-orange-500/15 text-orange-100 hover:bg-orange-500/25'
-            : 'border-orange-200 bg-orange-50 text-orange-700 hover:bg-orange-100'"
+          class="sidebar-action-btn is-accent w-full flex items-center justify-center gap-2 px-4 py-2 text-sm rounded-lg border"
         >
           ＋ 添加新步骤
         </button>
         <button
           @click="removeStep"
-          class="w-full flex items-center justify-center gap-2 px-4 py-2 text-sm rounded-lg border transition-all"
-          :class="isDark
-            ? 'border-rose-300/30 bg-rose-500/15 text-rose-100 hover:bg-rose-500/25'
-            : 'border-rose-200 bg-rose-50 text-rose-700 hover:bg-rose-100'"
+          class="sidebar-action-btn is-danger w-full flex items-center justify-center gap-2 px-4 py-2 text-sm rounded-lg border"
         >
           🗑 删除当前步骤
         </button>
@@ -956,7 +929,7 @@
         <div class="grid grid-cols-1 gap-2">
           <button
             type="button"
-            class="px-3 py-2 text-sm rounded-lg transition-all bg-orange-500 text-white hover:bg-orange-600"
+            class="sidebar-action-btn is-solid-accent px-3 py-2 text-sm rounded-lg"
             @click="toggleMode"
           >
             👁 展示
@@ -1078,7 +1051,7 @@
                   <input
                     :checked="showEditorDebugPanel"
                     type="checkbox"
-                    :class="isDark ? 'accent-cyan-400' : 'accent-orange-500'"
+                    class="settings-window-checkbox"
                     @change="handleWorkspaceFooterEditorSetting('editor-debug-toggle')"
                   />
                 </label>
@@ -1091,15 +1064,15 @@
                 <div class="settings-window-card-text">控制阅读态的翻页和界面折叠。</div>
                 <label class="settings-window-toggle-row" :class="isDark ? 'is-dark' : ''">
                   <span>翻页模式</span>
-                  <input v-model="gestureNavigationEnabled" type="checkbox" :class="isDark ? 'accent-cyan-400' : 'accent-orange-500'" />
+                  <input v-model="gestureNavigationEnabled" type="checkbox" class="settings-window-checkbox" />
                 </label>
                 <label class="settings-window-toggle-row" :class="isDark ? 'is-dark' : ''">
                   <span>展示模式收起顶栏</span>
-                  <input v-model="collapseHeaderInView" type="checkbox" :class="isDark ? 'accent-cyan-400' : 'accent-orange-500'" />
+                  <input v-model="collapseHeaderInView" type="checkbox" class="settings-window-checkbox" />
                 </label>
                 <label class="settings-window-toggle-row" :class="isDark ? 'is-dark' : ''">
                   <span>展示模式收起原始步骤栏</span>
-                  <input v-model="collapseStepsSidebarInView" type="checkbox" :class="isDark ? 'accent-cyan-400' : 'accent-orange-500'" />
+                  <input v-model="collapseStepsSidebarInView" type="checkbox" class="settings-window-checkbox" />
                 </label>
               </div>
             </template>
@@ -1107,7 +1080,7 @@
             <template v-else-if="settingsWindow.section === 'appearance'">
               <div class="settings-window-card" :class="isDark ? 'is-dark' : ''">
                 <div class="settings-window-card-title">主题</div>
-                <div class="settings-window-card-text">主题已改成注册式管理。内置主题和导入主题都从同一入口切换，拖拽条、滚动条、菜单等会跟随主题 token。</div>
+                <div class="settings-window-card-text">内置主题会自动从 `src/themes/*/meta.js` 发现，样式文件也会自动加载。新增主题只需要新建目录、写 `index.css` 和 `meta.js`。</div>
                 <div class="settings-theme-grid">
                   <button
                     v-for="theme in availableThemes"

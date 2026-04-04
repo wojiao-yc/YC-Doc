@@ -1,9 +1,6 @@
 import { createApp } from "vue";
 import App from "./App.vue";
 import "./themes/base/index.css";
-import "./themes/default-light/index.css";
-import "./themes/default-dark/index.css";
-import "./themes/paper-amber/index.css";
 import "./styles/main.css";
 import "./styles/editor.css";
 import "./styles/document-layout.css";
@@ -20,9 +17,17 @@ import "katex/dist/katex.min.css";
 import "xterm/css/xterm.css";
 import { registerSW } from "virtual:pwa-register";
 
+const themeCssModules = import.meta.glob([
+  "./themes/*/index.css",
+  "!./themes/base/index.css",
+  "!./themes/theme-template/index.css"
+], { eager: true });
+
 const isDesktopRuntime = typeof window !== "undefined" && Boolean(window.desktopPty?.isDesktop);
 if (!isDesktopRuntime) {
   registerSW({ immediate: true });
 }
+
+void themeCssModules;
 
 createApp(App).mount("#app");

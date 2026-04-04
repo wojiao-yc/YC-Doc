@@ -2,6 +2,7 @@ import { h, render } from "vue";
 import { EditorView, ViewPlugin } from "@codemirror/view";
 import AppIcon from "../../components/AppIcon.vue";
 import { parseMarkdownToBlocks } from "../parser/parse-blocks.js";
+import { resolveInlineFormattingPlaceholder } from "../utils/inline-formatting.js";
 
 const MENU_GAP = 8;
 const SUBMENU_GAP = 2;
@@ -863,7 +864,9 @@ const replaceSelection = (view, insert, selection = null) => {
 const surroundSelection = (view, { prefix = "", suffix = "", placeholder = "" } = {}) => {
   const range = selectionRangeOf(view);
   const selectedText = view.state.sliceDoc(range.from, range.to);
-  const inner = range.empty ? String(placeholder || "") : selectedText;
+  const inner = range.empty
+    ? resolveInlineFormattingPlaceholder({ prefix, suffix, placeholder })
+    : selectedText;
   const insert = `${prefix}${inner}${suffix}`;
   const innerFrom = range.from + String(prefix).length;
   const innerTo = innerFrom + inner.length;

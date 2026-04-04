@@ -7,6 +7,18 @@ const cloneXtermTheme = (theme = {}) => ({
 export const DEFAULT_THEME_ID = "default-light";
 export const IMPORTED_THEME_ID_PREFIX = "imported-theme-";
 
+const DEFAULT_LIGHT_XTERM_THEME = Object.freeze({
+  background: "#ffffff",
+  foreground: "#0f172a",
+  cursor: "#f97316"
+});
+
+const DEFAULT_DARK_XTERM_THEME = Object.freeze({
+  background: "#0f172a",
+  foreground: "#e2e8f0",
+  cursor: "#fb923c"
+});
+
 export const normalizeThemeMode = (modeInput = "") => (
   String(modeInput || "").trim().toLowerCase() === "dark" ? "dark" : "light"
 );
@@ -15,50 +27,56 @@ export const fallbackThemeIdForMode = (modeInput = "light") => (
   normalizeThemeMode(modeInput) === "dark" ? "default-dark" : DEFAULT_THEME_ID
 );
 
-export const BUILT_IN_THEMES = Object.freeze([
-  {
-    id: "default-light",
-    kind: "built-in",
-    label: "Default Light",
-    metaLabel: "Light",
-    description: "Clean light workspace with neutral contrast.",
-    mode: "light",
-    swatch: "linear-gradient(135deg, #ffffff 0%, #f6f7fb 100%)",
-    xtermTheme: {
-      background: "#ffffff",
-      foreground: "#0f172a",
-      cursor: "#f97316"
-    }
-  },
-  {
-    id: "default-dark",
-    kind: "built-in",
-    label: "Default Dark",
-    metaLabel: "Dark",
-    description: "Cool dark workspace with stronger contrast.",
-    mode: "dark",
-    swatch: "linear-gradient(135deg, #111827 0%, #020617 100%)",
-    xtermTheme: {
-      background: "#0f172a",
-      foreground: "#e2e8f0",
-      cursor: "#fb923c"
-    }
-  },
-  {
-    id: "paper-amber",
-    kind: "built-in",
-    label: "Paper Amber",
-    metaLabel: "Warm",
-    description: "Warm paper-like theme with softer edges.",
-    mode: "light",
-    swatch: "linear-gradient(135deg, #fff8ec 0%, #f5dfb4 100%)",
-    xtermTheme: {
-      background: "#fff8ec",
-      foreground: "#43302b",
-      cursor: "#c2410c"
-    }
+const themeMetaModules = import.meta.glob("./*/meta.js", { eager: true, import: "default" });
+
+const inferThemeIdFromPath = (path = "") => {
+  const match = String(path || "").match(/^\.\/([^/]+)\/meta\.js$/);
+  return String(match?.[1] || "").trim();
+};
+
+const normalizeBuiltInThemeDefinition = (value, path = "") => {
+  if (!value || typeof value !== "object") {
+    return null;
   }
-]);
+
+  const inferredId = inferThemeIdFromPath(path);
+  const id = String(value.id || inferredId).trim() || inferredId;
+  if (!id) {
+    return null;
+  }
+
+  const mode = normalizeThemeMode(value.mode || (id.includes("dark") ? "dark" : "light"));
+  const fallbackXtermTheme = mode === "dark" ? DEFAULT_DARK_XTERM_THEME : DEFAULT_LIGHT_XTERM_THEME;
+  const order = Number(value.order);
+
+  return {
+    id,
+    kind: "built-in",
+    label: String(value.label || id).trim() || id,
+    metaLabel: String(value.metaLabel || (mode === "dark" ? "Dark" : "Light")).trim() || "Theme",
+    description: String(value.description || "Built-in theme.").trim() || "Built-in theme.",
+    mode,
+    swatch: String(value.swatch || (
+      mode === "dark"
+        ? "linear-gradient(135deg, #111827 0%, #020617 100%)"
+        : "linear-gradient(135deg, #ffffff 0%, #f6f7fb 100%)"
+    )).trim(),
+    xtermTheme: cloneXtermTheme(value.xtermTheme || fallbackXtermTheme),
+    order: Number.isFinite(order) ? order : Number.MAX_SAFE_INTEGER
+  };
+};
+
+export const BUILT_IN_THEMES = Object.freeze(
+  Object.entries(themeMetaModules)
+    .map(([path, value]) => normalizeBuiltInThemeDefinition(value, path))
+    .filter(Boolean)
+    .sort((left, right) => (
+      left.order - right.order
+      || left.label.localeCompare(right.label, "en")
+      || left.id.localeCompare(right.id, "en")
+    ))
+    .map(({ order, ...theme }) => Object.freeze(theme))
+);
 
 const BUILT_IN_THEME_MAP = new Map(BUILT_IN_THEMES.map((theme) => [theme.id, theme]));
 
@@ -103,8 +121,8 @@ export const normalizeImportedThemeDefinition = (value, fallbackMode = "light") 
     importedAt,
     xtermTheme: cloneXtermTheme(value.xtermTheme || value.xterm || (
       mode === "dark"
-        ? BUILT_IN_THEME_MAP.get("default-dark")?.xtermTheme
-        : BUILT_IN_THEME_MAP.get(DEFAULT_THEME_ID)?.xtermTheme
+        ? BUILT_IN_THEME_MAP.get("default-dark")?.xtermTheme || DEFAULT_DARK_XTERM_THEME
+        : BUILT_IN_THEME_MAP.get(DEFAULT_THEME_ID)?.xtermTheme || DEFAULT_LIGHT_XTERM_THEME
     ))
   };
 };
@@ -125,7 +143,7 @@ export const resolveThemeDefinition = (themeIdInput = DEFAULT_THEME_ID, imported
   const importedTheme = importedThemes
     .map((theme) => normalizeImportedThemeDefinition(theme))
     .find((theme) => theme?.id === themeId);
-  return importedTheme || BUILT_IN_THEME_MAP.get(DEFAULT_THEME_ID);
+  return importedTheme || BUILT_IN_THEME_MAP.get(DEFAULT_THEME_ID) || BUILT_IN_THEMES[0] || null;
 };
 
 export const resolveThemeMode = (themeIdInput = DEFAULT_THEME_ID, importedThemesInput = []) =>

@@ -269,8 +269,8 @@ These are runtime-calculated and should stay in JS:
 
 1. Add a folder under `src/themes/<theme-id>/index.css`
 2. Scope variables with `#app[data-theme="<theme-id>"]`
-3. Add theme metadata in [registry.js](/d:/python/project/Homepage/YC-Doc/desktop/renderer-app/src/themes/registry.js)
-4. Import the theme stylesheet in [main.js](/d:/python/project/Homepage/YC-Doc/desktop/renderer-app/src/main.js)
+3. Add theme metadata in `src/themes/<theme-id>/meta.js`
+4. Theme stylesheets are auto-loaded from `src/themes/*/index.css`
 
 Minimal example:
 

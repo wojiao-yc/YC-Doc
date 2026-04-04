@@ -1,3 +1,4 @@
+:root[data-yc-theme="theme-template"],
 #app[data-theme="theme-template"] {
   --yc-font-ui: "Inter", "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
   --yc-font-body: "Source Serif 4", "Source Han Serif SC", "Noto Serif CJK SC", Georgia, serif;
@@ -42,14 +43,31 @@
   --yc-shadow-panel: 0 18px 34px rgba(15, 23, 42, 0.12);
   --yc-shadow-elevated: 0 18px 50px rgba(15, 23, 42, 0.18);
 
+  --yc-shell-main-bg: var(--yc-bg-panel);
+  --yc-shell-top-bg: #fbfcfe;
+  --yc-shell-footer-bg: #fbfcfe;
+  --yc-shell-sidebar-bg: #f6f8fb;
+
   --yc-menu-bg: rgba(255, 255, 255, 0.98);
   --yc-menu-border: #dbe4ef;
   --yc-menu-shadow: 0 18px 34px rgba(15, 23, 42, 0.12);
   --yc-menu-hover: #eef4fb;
+  --yc-menu-hover-border: #d4deea;
   --yc-menu-text: #0f172a;
   --yc-menu-muted: #64748b;
   --yc-menu-danger: #be123c;
   --yc-menu-separator: #e5e7eb;
+
+  --yc-syntax-keyword: #5d6e88;
+  --yc-syntax-type: #3f6682;
+  --yc-syntax-string: #6f7f4b;
+  --yc-syntax-number: #8b5b4f;
+  --yc-syntax-attribute: #516981;
+  --yc-syntax-operator: #5e6d7f;
+  --yc-syntax-comment: #718096;
+  --yc-syntax-meta: #7c6b5d;
+  --yc-syntax-delimiter: #8a97a8;
+  --yc-syntax-link: var(--yc-link);
 
   --yc-tooltip-bg: #ffffff;
   --yc-tooltip-border: #dbe4ef;
