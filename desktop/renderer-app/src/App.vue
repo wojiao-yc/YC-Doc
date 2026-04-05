@@ -1227,17 +1227,6 @@ const renderMathFormula = (formula, displayMode) => {
         errorColor: "#cc0000"
       });
     }
-    // 如果 katex 不可用，尝试动态 require
-    if (typeof require === "function") {
-      const katexRequired = require("katex");
-      if (katexRequired?.renderToString) {
-        return katexRequired.renderToString(formula, {
-          displayMode: displayMode,
-          throwOnError: false,
-          errorColor: "#cc0000"
-        });
-      }
-    }
     // 回退：返回原始公式
     return displayMode
       ? `<div class="math-block">${formula}</div>`
@@ -1347,6 +1336,9 @@ const isFileSidebarDragging = ref(false);
 const EDITOR_GRAPH_TAB_ID = "__workspace_graph__";
 const editorTabs = ref([]);
 const activeEditorTabId = ref("");
+let restoringEditorTabs = false;
+let pendingEditorTabsRestoreSnapshot = "";
+let bootstrappingEditorTabs = false;
 const draggedEditorTabId = ref("");
 const draggedEditorTabDropId = ref("");
 const draggedEditorTabDropSide = ref("");
@@ -1690,6 +1682,8 @@ const STORAGE_TREE_STORAGE_KEY = "yc-doc.storage-tree.v1";
 const STORAGE_EXPANDED_STORAGE_KEY = "yc-doc.storage-expanded.v1";
 const STORAGE_SELECTED_STORAGE_KEY = "yc-doc.storage-selected.v1";
 const STORAGE_SORT_MODE_STORAGE_KEY = "yc-doc.storage-sort-mode.v1";
+const EDITOR_TABS_STORAGE_KEY = "yc-doc.editor-tabs.v2";
+const LEGACY_EDITOR_TABS_STORAGE_KEY = "yc-doc.editor-tabs.v1";
 const THEME_PREFS_STORAGE_KEY = "yc-doc.theme-prefs.v2";
 const LEGACY_THEME_PREFS_STORAGE_KEY = "yc-doc.theme-prefs.v1";
 const WIKI_LINK_INDEX_DEBOUNCE_MS = 220;
@@ -2237,6 +2231,10 @@ if (typeof window !== "undefined") {
     }
     const rawStorageSortMode = String(localStorage.getItem(STORAGE_SORT_MODE_STORAGE_KEY) || "").trim();
     storageSortMode.value = normalizeStorageSortMode(rawStorageSortMode);
+    pendingEditorTabsRestoreSnapshot = String(
+      localStorage.getItem(EDITOR_TABS_STORAGE_KEY) || localStorage.getItem(LEGACY_EDITOR_TABS_STORAGE_KEY) || ""
+    );
+    bootstrappingEditorTabs = Boolean(pendingEditorTabsRestoreSnapshot);
   } catch {
     gestureNavigationEnabled.value = false;
     collapseHeaderInView.value = false;
@@ -2247,6 +2245,8 @@ if (typeof window !== "undefined") {
     storageSortMode.value = STORAGE_SORT_DEFAULT_MODE;
     activeThemeId.value = DEFAULT_THEME_ID;
     importedThemes.value = [];
+    pendingEditorTabsRestoreSnapshot = "";
+    bootstrappingEditorTabs = false;
   }
 }
 
@@ -2363,6 +2363,128 @@ const normalizeDesktopStorageNode = (source, isRoot = false) => {
   };
 };
 
+// 恢复之前保存的标签页
+const restoreEditorTabs = async (savedTabsJsonInput = "") => {
+  const savedTabsJson = String(
+    savedTabsJsonInput
+    || pendingEditorTabsRestoreSnapshot
+    || localStorage.getItem(EDITOR_TABS_STORAGE_KEY)
+    || localStorage.getItem(LEGACY_EDITOR_TABS_STORAGE_KEY)
+    || ""
+  );
+
+  try {
+    if (!isDesktopStorage || !savedTabsJson) {
+      return;
+    }
+    let loadedPayload = null;
+    try {
+      loadedPayload = JSON.parse(savedTabsJson);
+    } catch {
+      // ignore
+    }
+    const loadedTabs = Array.isArray(loadedPayload)
+      ? loadedPayload
+      : (Array.isArray(loadedPayload?.tabs) ? loadedPayload.tabs : []);
+    const preferredActiveTabId = String(
+      Array.isArray(loadedPayload)
+        ? ""
+        : (loadedPayload?.activeTabId || "")
+    ).trim();
+    const preferredActiveRelPath = normalizeRelPath(
+      Array.isArray(loadedPayload)
+        ? ""
+        : String(loadedPayload?.activeTabRelPath || "")
+    );
+    if (!Array.isArray(loadedTabs) || !loadedTabs.length) {
+      return;
+    }
+    const tabsToRestore = ensureEditorTabs(
+      loadedTabs.filter((tabItem) => {
+        if (tabItem?.kind === "graph" || tabItem?.id === EDITOR_GRAPH_TAB_ID) {
+          return true;
+        }
+        const relPath = normalizeRelPath(tabItem?.relPath);
+        return relPath && findStorageNodeByRelPath(storageTree.value, relPath)?.node;
+      })
+    );
+    if (!tabsToRestore.length) {
+      return;
+    }
+
+    const isPreferredTab = (tabItem) =>
+      (preferredActiveTabId && tabItem?.id === preferredActiveTabId)
+      || (
+        preferredActiveRelPath
+        && tabItem?.kind === "file"
+        && normalizeRelPath(tabItem?.relPath) === preferredActiveRelPath
+      );
+
+    const prioritizedTabs = (preferredActiveTabId || preferredActiveRelPath)
+      ? [
+          ...tabsToRestore.filter((tabItem) => !isPreferredTab(tabItem)),
+          ...tabsToRestore.filter((tabItem) => isPreferredTab(tabItem))
+        ]
+      : tabsToRestore;
+
+    restoringEditorTabs = true;
+    editorTabs.value = [];
+    activeEditorTabId.value = "";
+    try {
+      for (let i = 0; i < prioritizedTabs.length; i++) {
+        const tabItem = prioritizedTabs[i];
+        if (tabItem?.kind === "graph") {
+          ensureWorkspaceGraphTab();
+          continue;
+        }
+        const relPath = normalizeRelPath(tabItem?.relPath);
+        if (!relPath) {
+          continue;
+        }
+        if (!findStorageNodeByRelPath(storageTree.value, relPath)?.node) {
+          continue;
+        }
+        await openEditorFileTabByRelPath(relPath, {
+          showMissingToast: false
+        });
+      }
+
+      if (preferredActiveTabId === EDITOR_GRAPH_TAB_ID && editorTabs.value.some((tab) => tab.id === EDITOR_GRAPH_TAB_ID)) {
+        activeEditorTabId.value = EDITOR_GRAPH_TAB_ID;
+      } else if (preferredActiveRelPath && findStorageNodeByRelPath(storageTree.value, preferredActiveRelPath)?.node) {
+        const desiredTabId = createEditorFileTabId(preferredActiveRelPath);
+        if (editorTabs.value.some((tab) => tab.id === desiredTabId)) {
+          activeEditorTabId.value = desiredTabId;
+        }
+      } else if (preferredActiveTabId && editorTabs.value.some((tab) => tab.id === preferredActiveTabId)) {
+        activeEditorTabId.value = preferredActiveTabId;
+      } else if (!activeEditorTabId.value) {
+        activeEditorTabId.value = editorTabs.value[editorTabs.value.length - 1]?.id || "";
+      }
+    } finally {
+      restoringEditorTabs = false;
+    }
+  } finally {
+    pendingEditorTabsRestoreSnapshot = "";
+    bootstrappingEditorTabs = false;
+    persistStorageState();
+  }
+};
+
+const buildEditorTabsStoragePayload = () => {
+  const tabs = editorTabs.value.map((tab) => (
+    tab.kind === "graph"
+      ? { kind: "graph", id: tab.id }
+      : { kind: "file", relPath: tab.relPath, id: tab.id }
+  ));
+  const activeTab = editorTabs.value.find((tab) => tab.id === activeEditorTabId.value) || null;
+  return {
+    tabs,
+    activeTabId: String(activeEditorTabId.value || ""),
+    activeTabRelPath: String(activeTab?.kind === "file" ? activeTab?.relPath || "" : "")
+  };
+};
+
 const loadDesktopStorageTree = async ({ preferredNodeId = "", preferredMarkdownRelPath = "" } = {}) => {
   if (!isDesktopStorage) {
     return;
@@ -2391,6 +2513,7 @@ const loadDesktopStorageTree = async ({ preferredNodeId = "", preferredMarkdownR
       ensureSelectedStorageNodeValid();
     }
     const preferredMarkdownPath = String(preferredMarkdownRelPath || "").trim();
+
     const preferredMarkdownMatch = preferredMarkdownPath
       ? findStorageNodeByRelPath(storageTree.value, preferredMarkdownPath)
       : null;
@@ -2984,11 +3107,13 @@ const switchEditorTab = async (tabIdInput = "") => {
   if (targetTab.kind === "graph") {
     activeEditorTabId.value = ensureWorkspaceGraphTab();
     scheduleWikiLinkIndexRebuild();
+    persistStorageState();
     return;
   }
   await openEditorFileTabByRelPath(targetTab.relPath, {
     showMissingToast: false
   });
+  persistStorageState();
 };
 
 const closeEditorTab = async (tabIdInput = "") => {
@@ -3182,9 +3307,17 @@ const persistStorageState = () => {
     }
     localStorage.setItem(STORAGE_EXPANDED_STORAGE_KEY, JSON.stringify(storageFolderExpandedMap.value));
     localStorage.setItem(STORAGE_SELECTED_STORAGE_KEY, selectedStorageNodeId.value);
+    if (!bootstrappingEditorTabs) {
+      // 保存标签页状态
+      localStorage.setItem(EDITOR_TABS_STORAGE_KEY, JSON.stringify(buildEditorTabsStoragePayload()));
+    }
   } catch {
     // ignore storage failure
   }
+};
+
+const handleWindowBeforeUnload = () => {
+  persistStorageState();
 };
 
 const ensureSelectedStorageNodeValid = () => {
@@ -5373,6 +5506,7 @@ const onEditorTabDrop = (event, targetTabId) => {
   const insertIndex = dropSide === "before" ? targetIndex : targetIndex + 1;
   arr.splice(insertIndex, 0, moved);
   editorTabs.value = arr;
+  persistStorageState();
 };
 
 const onEditorTabDragEnd = () => {
@@ -6504,6 +6638,20 @@ watch(selectedStorageNodeId, () => {
   persistStorageState();
 });
 
+watch(editorTabs, () => {
+  if (restoringEditorTabs) {
+    return;
+  }
+  persistStorageState();
+}, { deep: true });
+
+watch(activeEditorTabId, () => {
+  if (restoringEditorTabs) {
+    return;
+  }
+  persistStorageState();
+});
+
 watch(storageSortMode, (mode) => {
   if (typeof window === "undefined") {
     return;
@@ -6842,6 +6990,7 @@ const onGlobalKeyup = (event) => {
 };
 
 onMounted(() => {
+  window.addEventListener("beforeunload", handleWindowBeforeUnload);
   window.addEventListener("keydown", onGlobalTermContextMenuKeydown, true);
   window.addEventListener("keydown", onKeydown);
   window.addEventListener("keyup", onGlobalKeyup, true);
@@ -6855,7 +7004,10 @@ onMounted(() => {
   window.addEventListener("blur", releasePasteShortcutLocks);
   window.addEventListener("resize", refreshContentProgress);
   if (isDesktopStorage) {
-    void loadDesktopStorageTree();
+    const initialEditorTabsSnapshot = pendingEditorTabsRestoreSnapshot;
+    void loadDesktopStorageTree().then(() => {
+      void restoreEditorTabs(initialEditorTabsSnapshot);
+    });
   }
   if (isDesktopPty.value) {
     terminalTab.value = "terminal";
@@ -6879,6 +7031,7 @@ onMounted(() => {
 });
 
 onBeforeUnmount(() => {
+  persistStorageState();
   setContextMenuRuntimeOptions({});
   setPresentationRuntimeOptions({});
   if (typeof document !== "undefined") {
@@ -6900,6 +7053,7 @@ onBeforeUnmount(() => {
     clearTimeout(terminalResizeSyncTimer);
     terminalResizeSyncTimer = null;
   }
+  window.removeEventListener("beforeunload", handleWindowBeforeUnload);
   window.removeEventListener("keydown", onGlobalTermContextMenuKeydown, true);
   window.removeEventListener("keydown", onKeydown);
   window.removeEventListener("keyup", onGlobalKeyup, true);

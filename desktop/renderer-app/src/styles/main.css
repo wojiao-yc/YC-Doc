@@ -1083,7 +1083,7 @@ body {
 
 .file-tree-row {
   min-height: 30px;
-  padding: 4px 8px;
+  padding: 3px 8px 5px 8px;
   display: flex;
   align-items: center;
   color: var(--yc-text-secondary);
@@ -1174,6 +1174,7 @@ body {
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  transform: translateY(1px);
 }
 
 .file-tree-file-icon {

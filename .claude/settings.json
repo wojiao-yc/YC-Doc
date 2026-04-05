@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(xxd \"D:/python/project/Homepage/YC-Doc/desktop/renderer-app/src/App.vue\")",
+      "Bash(awk 'NR>=2389 && NR<=2395' \"D:/python/project/Homepage/YC-Doc/desktop/renderer-app/src/App.vue\")"
+    ]
+  }
+}

@@ -1,41 +1,24 @@
 <template>
   <div class="workspace-graph-root" :class="{ 'is-dark': isDark }">
     <section class="workspace-graph-shell" :class="{ 'is-dark': isDark }">
-      <header class="workspace-graph-header">
-        <div class="workspace-graph-heading">
-          <p class="workspace-graph-eyebrow">Workspace Link Graph</p>
-          <h2 class="workspace-graph-title">Relation Graph</h2>
-          <p class="workspace-graph-subtitle">
-            {{ graphStats.nodeCount }} notes
-            <span class="workspace-graph-dot">·</span>
-            {{ graphStats.edgeCount }} links
-            <span class="workspace-graph-dot">·</span>
-            {{ graphStats.isolatedCount }} isolated
-          </p>
-        </div>
-
-        <div class="workspace-graph-controls">
-          <label class="workspace-graph-control">
-            <span>Color</span>
-            <select v-model="colorMode" class="workspace-graph-select">
-              <option value="folder">Folder</option>
-              <option value="tag">Tag</option>
-            </select>
-          </label>
-
-          <label class="workspace-graph-toggle">
+      <div class="workspace-graph-settings">
+        <button class="workspace-graph-settings-btn" @click="showSettings = !showSettings">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="3"/>
+            <path d="M12 1v4M12 19v4M4.22 4.22l2.83 2.83M16.95 16.95l2.83 2.83M1 12h4M19 12h4M4.22 19.78l2.83-2.83M16.95 7.05l2.83-2.83"/>
+          </svg>
+        </button>
+        <div v-if="showSettings" class="workspace-graph-settings-panel">
+          <label class="workspace-graph-setting-item">
             <input v-model="showArrows" type="checkbox" />
-            <span>Arrows</span>
+            <span>显示箭头</span>
           </label>
-
-          <button type="button" class="workspace-graph-btn" @click="resetLayout">
-            Reset Layout
-          </button>
-          <button type="button" class="workspace-graph-btn is-primary" @click="$emit('close')">
-            Close
-          </button>
+          <label class="workspace-graph-setting-item">
+            <input v-model="showLabels" type="checkbox" />
+            <span>显示文件名</span>
+          </label>
         </div>
-      </header>
+      </div>
 
       <div class="workspace-graph-body">
         <div
@@ -44,7 +27,6 @@
           :class="{ 'is-panning': dragState.type === 'pan' }"
           @wheel.prevent="handleWheel"
           @pointerdown="handleViewportPointerDown"
-          @mouseleave="hoveredNodeId = ''"
         >
           <svg
             ref="svgRef"
@@ -55,14 +37,14 @@
             <defs>
               <marker
                 id="workspace-graph-arrow"
-                markerWidth="10"
-                markerHeight="10"
-                refX="8"
-                refY="3"
+                markerWidth="5"
+                markerHeight="5"
+                refX="2.5"
+                refY="1.25"
                 orient="auto"
                 markerUnits="strokeWidth"
               >
-                <path d="M0,0 L0,6 L9,3 z" fill="var(--yc-graph-arrow)" />
+                <path d="M0,0 L0,2.5 L5,1.25 z" fill="var(--yc-graph-arrow)" />
               </marker>
             </defs>
 
@@ -75,11 +57,11 @@
                   'is-dimmed': isEdgeDimmed(edge),
                   'is-highlighted': isEdgeHighlighted(edge)
                 }"
-                :x1="edge.source.x"
-                :y1="edge.source.y"
-                :x2="edge.target.x"
-                :y2="edge.target.y"
-                :stroke-width="edgeStrokeWidth(edge)"
+                :x1="edge.edgeX1"
+                :y1="edge.edgeY1"
+                :x2="edge.edgeX2"
+                :y2="edge.edgeY2"
+                :stroke-width="hoveredNodeId ? edgeStrokeWidth(edge) * 0.6 : edgeStrokeWidth(edge)"
                 :marker-end="showArrows ? 'url(#workspace-graph-arrow)' : null"
               />
 
@@ -88,67 +70,30 @@
                 :key="node.id"
                 class="workspace-graph-node"
                 :class="{
-                  'is-dimmed': isNodeDimmed(node),
-                  'is-active': node.id === activeRelPath,
-                  'is-hovered': hoveredNodeId === node.id
+                  'is-hovered': hoveredNodeId === node.id,
+                  'is-dimmed': hoveredNodeId && hoveredNodeId !== node.id
                 }"
                 :transform="`translate(${node.x} ${node.y})`"
-                @pointerenter="hoveredNodeId = node.id"
+                @pointerenter="hoveredNodeId = node.id; $emit('hover', node.id)"
+                @pointerleave="hoveredNodeId = ''; $emit('hover', '')"
                 @pointerdown="handleNodePointerDown($event, node)"
               >
                 <circle
-                  v-if="node.id === activeRelPath || hoveredNodeId === node.id"
-                  class="workspace-graph-node-halo"
-                  :r="node.radius + 7"
-                />
-                <circle
-                  class="workspace-graph-node-dot"
+                  class="workspace-graph-node-circle"
                   :r="node.radius"
-                  :fill="nodeColor(node)"
-                />
-                <circle
-                  class="workspace-graph-node-ring"
-                  :r="node.radius + 1.5"
+                  :fill="hoveredNodeId === node.id ? '#f97316' : '#94a3b8'"
                 />
                 <text
-                  v-if="shouldShowLabel(node)"
+                  v-if="showLabels && labelsVisible"
                   class="workspace-graph-node-label"
-                  :x="node.radius + 10"
-                  :y="4"
+                  :x="0"
+                  :y="node.radius + 14"
                 >
-                  {{ node.title }}
+                  {{ getFileName(node.relPath) }}
                 </text>
               </g>
             </g>
           </svg>
-
-          <div v-if="legendItems.length" class="workspace-graph-overlay-card workspace-graph-legend-card">
-            <div class="workspace-graph-card-title">
-              {{ colorMode === "tag" ? "Top tags" : "Top folders" }}
-            </div>
-            <div class="workspace-graph-legend-list">
-              <div
-                v-for="item in legendItems"
-                :key="item.key"
-                class="workspace-graph-legend-item"
-              >
-                <span class="workspace-graph-legend-swatch" :style="{ backgroundColor: item.color }"></span>
-                <span class="workspace-graph-legend-label">{{ item.label }}</span>
-                <span class="workspace-graph-legend-count">{{ item.count }}</span>
-              </div>
-            </div>
-          </div>
-
-          <div v-if="inspectorNode" class="workspace-graph-overlay-card workspace-graph-inspector-card">
-            <div class="workspace-graph-card-title">Selection</div>
-            <div class="workspace-graph-inspector-title">{{ inspectorNode.title }}</div>
-            <div class="workspace-graph-inspector-path">{{ inspectorNode.relPath }}</div>
-            <div class="workspace-graph-inspector-stats">
-              <span>Backlinks {{ inspectorNode.backlinksCount }}</span>
-              <span>Outgoing {{ inspectorNode.outgoingCount }}</span>
-              <span>{{ colorMode === "tag" ? inspectorNode.primaryTag : inspectorNode.folderKey }}</span>
-            </div>
-          </div>
         </div>
       </div>
     </section>
@@ -185,7 +130,7 @@ const props = defineProps({
   }
 });
 
-const emit = defineEmits(["close", "open-note"]);
+const emit = defineEmits(["close", "open-note", "hover"]);
 
 const FORCE_LINK_DISTANCE = 104;
 const FORCE_CENTERING = 0.0012;
@@ -194,26 +139,15 @@ const FORCE_REPULSION = 4800;
 const FORCE_BOUNDARY_PADDING = 72;
 const MIN_ZOOM = 0.55;
 const MAX_ZOOM = 1.85;
-const PALETTE = [
-  "#f97316",
-  "#2563eb",
-  "#059669",
-  "#dc2626",
-  "#0ea5e9",
-  "#ca8a04",
-  "#14b8a6",
-  "#7c3aed",
-  "#db2777",
-  "#84cc16"
-];
 
 const viewportRef = ref(null);
 const svgRef = ref(null);
 const simNodes = ref([]);
 const simEdges = ref([]);
 const hoveredNodeId = ref("");
-const colorMode = ref("folder");
 const showArrows = ref(true);
+const showLabels = ref(true);
+const showSettings = ref(false);
 const zoom = ref(1);
 const pan = ref({ x: 0, y: 0 });
 const viewportSize = ref({ width: 1200, height: 760 });
@@ -231,23 +165,38 @@ const dragState = ref({
 let animationFrame = 0;
 let resizeObserver = null;
 
-const graphStats = computed(() => props.graphData?.stats || {
-  nodeCount: 0,
-  edgeCount: 0,
-  isolatedCount: 0
-});
-
 const nodeMap = computed(() => new Map(simNodes.value.map((node) => [node.id, node])));
 
-const visualEdges = computed(() =>
-  simEdges.value
-    .map((edge) => ({
-      ...edge,
-      source: nodeMap.value.get(edge.sourceId),
-      target: nodeMap.value.get(edge.targetId)
-    }))
-    .filter((edge) => edge.source && edge.target)
-);
+const labelsVisible = computed(() => zoom.value >= 0.8);
+
+const visualEdges = computed(() => {
+  const nodePosMap = new Map();
+  for (const node of simNodes.value) {
+    nodePosMap.set(node.id, { x: node.x, y: node.y, r: node.radius });
+  }
+
+  return simEdges.value
+    .map((edge) => {
+      const source = nodePosMap.get(edge.sourceId);
+      const target = nodePosMap.get(edge.targetId);
+      if (!source || !target) return null;
+
+      const dx = target.x - source.x;
+      const dy = target.y - source.y;
+      const dist = Math.hypot(dx, dy);
+      if (dist === 0) return { ...edge, edgeX1: source.x, edgeY1: source.y, edgeX2: target.x, edgeY2: target.y };
+
+      const r1 = source.r || 6;
+      const r2 = target.r || 6;
+      const edgeX1 = source.x + (dx / dist) * r1;
+      const edgeY1 = source.y + (dy / dist) * r1;
+      const edgeX2 = target.x - (dx / dist) * r2;
+      const edgeY2 = target.y - (dy / dist) * r2;
+
+      return { ...edge, edgeX1, edgeY1, edgeX2, edgeY2 };
+    })
+    .filter(Boolean);
+});
 
 const highlightedNodeIds = computed(() => {
   if (!hoveredNodeId.value) {
@@ -264,66 +213,17 @@ const highlightedNodeIds = computed(() => {
   return output;
 });
 
-const legendItems = computed(() => {
-  const groups = colorMode.value === "tag"
-    ? props.graphData?.groups?.tags
-    : props.graphData?.groups?.folders;
-
-  return (Array.isArray(groups) ? groups : [])
-    .slice(0, 6)
-    .map((item) => ({
-      ...item,
-      color: colorForKey(item?.key || "")
-    }));
-});
-
-const inspectorNode = computed(() =>
-  nodeMap.value.get(hoveredNodeId.value)
-  || nodeMap.value.get(String(props.activeRelPath || ""))
-  || simNodes.value[0]
-  || null
-);
-
 const svgViewBox = computed(() =>
   `0 0 ${Math.max(1, Number(viewportSize.value.width || 0))} ${Math.max(1, Number(viewportSize.value.height || 0))}`
 );
 
 const graphTransform = computed(() => `translate(${pan.value.x} ${pan.value.y}) scale(${zoom.value})`);
 
-const hashIndexOf = (valueInput = "") => {
-  const value = String(valueInput || "");
-  if (!value) {
-    return 0;
-  }
-  let hash = 0;
-  for (let index = 0; index < value.length; index += 1) {
-    hash = ((hash << 5) - hash) + value.charCodeAt(index);
-    hash |= 0;
-  }
-  return Math.abs(hash);
+const getFileName = (relPath) => {
+  if (!relPath) return "";
+  const parts = relPath.split("/");
+  return parts[parts.length - 1] || relPath;
 };
-
-const colorForKey = (keyInput = "") => {
-  const key = String(keyInput || "").trim();
-  if (!key || key === "Root" || key === "No tag") {
-    return "var(--yc-graph-root-node)";
-  }
-  return PALETTE[hashIndexOf(key) % PALETTE.length];
-};
-
-const nodeColor = (node) => colorForKey(
-  colorMode.value === "tag"
-    ? node?.primaryTag
-    : node?.folderKey
-);
-
-const shouldShowLabel = (node) =>
-  hoveredNodeId.value === node.id
-  || String(props.activeRelPath || "") === node.id
-  || Number(node?.radius || 0) >= 14;
-
-const isNodeDimmed = (node) =>
-  Boolean(highlightedNodeIds.value && !highlightedNodeIds.value.has(node.id));
 
 const isEdgeHighlighted = (edge) =>
   hoveredNodeId.value
@@ -516,7 +416,7 @@ const runSimulationStep = () => {
       node.y = height - padding;
       node.vy *= -0.38;
     }
-  }
+  };
 };
 
 const toGraphPoint = (clientX, clientY) => {
@@ -707,15 +607,7 @@ onBeforeUnmount(() => {
   min-height: 0;
   display: flex;
   flex-direction: column;
-  background:
-    radial-gradient(circle at top right, color-mix(in srgb, var(--yc-accent) 10%, transparent), transparent 28%),
-    linear-gradient(180deg, color-mix(in srgb, var(--yc-bg-panel) 98%, transparent), color-mix(in srgb, var(--yc-bg-panel-alt) 98%, transparent));
-}
-
-.workspace-graph-root.is-dark {
-  background:
-    radial-gradient(circle at top right, color-mix(in srgb, var(--yc-accent) 16%, transparent), transparent 28%),
-    linear-gradient(180deg, color-mix(in srgb, var(--yc-bg-panel-muted) 98%, transparent), color-mix(in srgb, var(--yc-bg-panel) 98%, transparent));
+  background: var(--yc-bg-panel);
 }
 
 .workspace-graph-shell {
@@ -729,125 +621,65 @@ onBeforeUnmount(() => {
   border: 0;
   background: transparent;
   box-shadow: none;
+  position: relative;
 }
 
-.workspace-graph-shell.is-dark {
-  border-color: transparent;
-  background: transparent;
-  box-shadow: none;
+.workspace-graph-settings {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  z-index: 10;
 }
 
-.workspace-graph-header {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 18px;
-  padding: 18px 22px 16px;
-  border-bottom: 1px solid color-mix(in srgb, var(--yc-border-strong) 42%, transparent);
-  background: color-mix(in srgb, var(--yc-bg-overlay) 84%, transparent);
-  backdrop-filter: blur(12px);
-}
-
-.workspace-graph-shell.is-dark .workspace-graph-header {
-  background: color-mix(in srgb, var(--yc-bg-overlay) 78%, transparent);
-}
-
-.workspace-graph-heading {
-  min-width: 0;
-}
-
-.workspace-graph-eyebrow {
-  margin: 0;
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  color: var(--yc-accent);
-}
-
-.workspace-graph-title {
-  margin: 6px 0 0;
-  font-size: 24px;
-  line-height: 1.1;
-  font-weight: 700;
-  color: var(--yc-text-primary);
-}
-
-.workspace-graph-shell.is-dark .workspace-graph-title {
-  color: var(--yc-text-primary);
-}
-
-.workspace-graph-subtitle {
-  margin: 10px 0 0;
-  font-size: 13px;
-  line-height: 1.5;
-  color: var(--yc-text-muted);
-}
-
-.workspace-graph-shell.is-dark .workspace-graph-subtitle {
-  color: var(--yc-text-muted);
-}
-
-.workspace-graph-dot {
-  margin: 0 6px;
-}
-
-.workspace-graph-controls {
+.workspace-graph-settings-btn {
+  width: 32px;
+  height: 32px;
   display: flex;
   align-items: center;
-  flex-wrap: wrap;
-  justify-content: flex-end;
-  gap: 10px;
+  justify-content: center;
+  border: none;
+  background: var(--yc-bg-overlay);
+  border-radius: 8px;
+  color: var(--yc-text-secondary);
+  cursor: pointer;
+  transition: all 0.15s ease;
 }
 
-.workspace-graph-control,
-.workspace-graph-toggle {
-  display: inline-flex;
+.workspace-graph-settings-btn:hover {
+  background: var(--yc-bg-subtle-hover);
+  color: var(--yc-text-primary);
+}
+
+.workspace-graph-settings-panel {
+  position: absolute;
+  top: 40px;
+  right: 0;
+  background: var(--yc-bg-overlay);
+  border: 1px solid var(--yc-border-strong);
+  border-radius: 10px;
+  padding: 8px;
+  min-width: 140px;
+  box-shadow: var(--yc-shadow-panel);
+}
+
+.workspace-graph-setting-item {
+  display: flex;
   align-items: center;
   gap: 8px;
-  font-size: 12px;
+  padding: 8px;
+  font-size: 13px;
   color: var(--yc-text-secondary);
+  cursor: pointer;
+  border-radius: 6px;
 }
 
-.workspace-graph-shell.is-dark .workspace-graph-control,
-.workspace-graph-shell.is-dark .workspace-graph-toggle {
-  color: var(--yc-text-secondary);
+.workspace-graph-setting-item:hover {
+  background: var(--yc-bg-subtle-hover);
 }
 
-.workspace-graph-select,
-.workspace-graph-btn {
-  border: 1px solid color-mix(in srgb, var(--yc-border-strong) 62%, transparent);
-  background: color-mix(in srgb, var(--yc-bg-panel) 88%, transparent);
-  color: var(--yc-text-primary);
-  border-radius: 12px;
-  padding: 9px 12px;
-  font-size: 12px;
-  line-height: 1;
-  transition: background-color 0.12s ease, border-color 0.12s ease, transform 0.12s ease;
-}
-
-.workspace-graph-shell.is-dark .workspace-graph-select,
-.workspace-graph-shell.is-dark .workspace-graph-btn {
-  border-color: color-mix(in srgb, var(--yc-border-strong) 80%, transparent);
-  background: color-mix(in srgb, var(--yc-bg-panel) 84%, transparent);
-  color: var(--yc-text-primary);
-}
-
-.workspace-graph-btn:hover,
-.workspace-graph-select:hover {
-  border-color: color-mix(in srgb, var(--yc-accent) 56%, transparent);
-  transform: translateY(-1px);
-}
-
-.workspace-graph-btn.is-primary {
-  border-color: color-mix(in srgb, var(--yc-accent) 42%, transparent);
-  background: var(--yc-accent-soft);
-  color: var(--yc-text-on-accent);
-}
-
-.workspace-graph-shell.is-dark .workspace-graph-btn.is-primary {
-  color: var(--yc-text-on-accent);
-  background: var(--yc-accent-soft);
+.workspace-graph-setting-item input {
+  width: 14px;
+  height: 14px;
 }
 
 .workspace-graph-body {
@@ -863,15 +695,6 @@ onBeforeUnmount(() => {
   min-height: 0;
   overflow: hidden;
   cursor: grab;
-  background:
-    radial-gradient(circle at center, color-mix(in srgb, var(--yc-bg-panel) 50%, transparent), transparent 62%),
-    linear-gradient(180deg, color-mix(in srgb, var(--yc-bg-panel-alt) 90%, transparent), color-mix(in srgb, var(--yc-bg-panel-muted) 92%, transparent));
-}
-
-.workspace-graph-shell.is-dark .workspace-graph-viewport {
-  background:
-    radial-gradient(circle at center, color-mix(in srgb, var(--yc-bg-panel-alt) 55%, transparent), transparent 62%),
-    linear-gradient(180deg, color-mix(in srgb, var(--yc-bg-panel-muted) 88%, transparent), color-mix(in srgb, var(--yc-bg-panel) 92%, transparent));
 }
 
 .workspace-graph-viewport.is-panning {
@@ -886,212 +709,33 @@ onBeforeUnmount(() => {
 
 .workspace-graph-edge {
   stroke: var(--yc-graph-edge);
-  transition: stroke-opacity 0.12s ease, stroke 0.12s ease;
-}
-
-.workspace-graph-shell.is-dark .workspace-graph-edge {
-  stroke: var(--yc-graph-edge);
+  transition: stroke-opacity 0.15s ease;
 }
 
 .workspace-graph-edge.is-highlighted {
-  stroke: var(--yc-graph-edge-active);
+  stroke: #f97316;
 }
 
 .workspace-graph-edge.is-dimmed {
-  stroke-opacity: 0.12;
+  stroke-opacity: 0.15;
 }
 
 .workspace-graph-node {
   cursor: pointer;
-  transition: opacity 0.12s ease;
+  transition: opacity 0.15s ease;
 }
 
 .workspace-graph-node.is-dimmed {
-  opacity: 0.18;
+  opacity: 0.25;
 }
 
-.workspace-graph-node-halo {
-  fill: color-mix(in srgb, var(--yc-accent) 16%, transparent);
-}
-
-.workspace-graph-node-dot {
-  stroke: color-mix(in srgb, var(--yc-bg-panel) 88%, transparent);
-  stroke-width: 1.5;
-}
-
-.workspace-graph-shell.is-dark .workspace-graph-node-dot {
-  stroke: color-mix(in srgb, var(--yc-bg-panel) 95%, transparent);
-}
-
-.workspace-graph-node-ring {
-  fill: none;
-  stroke: color-mix(in srgb, var(--yc-text-primary) 8%, transparent);
-  stroke-width: 1.1;
-}
-
-.workspace-graph-shell.is-dark .workspace-graph-node-ring {
-  stroke: color-mix(in srgb, var(--yc-text-primary) 15%, transparent);
-}
-
-.workspace-graph-node.is-active .workspace-graph-node-ring,
-.workspace-graph-node.is-hovered .workspace-graph-node-ring {
-  stroke: color-mix(in srgb, var(--yc-accent) 68%, transparent);
-  stroke-width: 1.8;
+.workspace-graph-node-circle {
+  stroke: none;
 }
 
 .workspace-graph-node-label {
-  font-size: 13px;
-  font-weight: 600;
-  fill: var(--yc-graph-label-fill);
-  paint-order: stroke;
-  stroke: var(--yc-graph-label-stroke);
-  stroke-width: 4px;
-  stroke-linejoin: round;
-  pointer-events: none;
-}
-
-.workspace-graph-shell.is-dark .workspace-graph-node-label {
-  fill: var(--yc-graph-label-fill);
-  stroke: var(--yc-graph-label-stroke);
-}
-
-.workspace-graph-overlay-card {
-  position: absolute;
-  border-radius: 18px;
-  border: 1px solid var(--yc-graph-overlay-border);
-  background: var(--yc-graph-overlay-bg);
-  box-shadow: var(--yc-shadow-panel);
-  backdrop-filter: blur(12px);
-}
-
-.workspace-graph-shell.is-dark .workspace-graph-overlay-card {
-  border-color: var(--yc-graph-overlay-border);
-  background: var(--yc-graph-overlay-bg);
-  box-shadow: var(--yc-shadow-panel);
-}
-
-.workspace-graph-legend-card {
-  top: 18px;
-  right: 18px;
-  width: 220px;
-  padding: 14px;
-}
-
-.workspace-graph-inspector-card {
-  left: 18px;
-  bottom: 18px;
-  min-width: 280px;
-  max-width: 360px;
-  padding: 14px;
-}
-
-.workspace-graph-card-title {
   font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--yc-accent);
-}
-
-.workspace-graph-legend-list {
-  margin-top: 10px;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.workspace-graph-legend-item {
-  display: grid;
-  grid-template-columns: auto 1fr auto;
-  align-items: center;
-  gap: 10px;
-  font-size: 12px;
-  color: var(--yc-text-secondary);
-}
-
-.workspace-graph-shell.is-dark .workspace-graph-legend-item {
-  color: var(--yc-text-secondary);
-}
-
-.workspace-graph-legend-swatch {
-  width: 10px;
-  height: 10px;
-  border-radius: 999px;
-}
-
-.workspace-graph-legend-label {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.workspace-graph-legend-count {
-  color: var(--yc-text-muted);
-}
-
-.workspace-graph-shell.is-dark .workspace-graph-legend-count {
-  color: var(--yc-text-muted);
-}
-
-.workspace-graph-inspector-title {
-  margin-top: 8px;
-  font-size: 16px;
-  line-height: 1.35;
-  font-weight: 700;
-  color: var(--yc-text-primary);
-}
-
-.workspace-graph-shell.is-dark .workspace-graph-inspector-title {
-  color: var(--yc-text-primary);
-}
-
-.workspace-graph-inspector-path {
-  margin-top: 6px;
-  font-size: 12px;
-  line-height: 1.45;
-  color: var(--yc-text-muted);
-  word-break: break-word;
-}
-
-.workspace-graph-shell.is-dark .workspace-graph-inspector-path {
-  color: var(--yc-text-muted);
-}
-
-.workspace-graph-inspector-stats {
-  margin-top: 10px;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-
-.workspace-graph-inspector-stats span {
-  display: inline-flex;
-  align-items: center;
-  border-radius: 999px;
-  padding: 5px 9px;
-  font-size: 11px;
-  color: var(--yc-text-secondary);
-  background: var(--yc-bg-subtle-hover);
-}
-
-.workspace-graph-shell.is-dark .workspace-graph-inspector-stats span {
-  color: var(--yc-text-secondary);
-  background: var(--yc-bg-subtle-hover);
-}
-
-@media (max-width: 1080px) {
-  .workspace-graph-header {
-    flex-direction: column;
-    align-items: stretch;
-  }
-
-  .workspace-graph-controls {
-    justify-content: flex-start;
-  }
-
-  .workspace-graph-legend-card {
-    display: none;
-  }
+  fill: var(--yc-text-secondary);
+  text-anchor: middle;
 }
 </style>
