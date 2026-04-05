@@ -1,4 +1,19 @@
 import { marked } from "marked";
+import Prism from "prismjs";
+import "prismjs/components/prism-markup.js";
+import "prismjs/components/prism-css.js";
+import "prismjs/components/prism-clike.js";
+import "prismjs/components/prism-javascript.js";
+import "prismjs/components/prism-typescript.js";
+import "prismjs/components/prism-jsx.js";
+import "prismjs/components/prism-tsx.js";
+import "prismjs/components/prism-json.js";
+import "prismjs/components/prism-bash.js";
+import "prismjs/components/prism-powershell.js";
+import "prismjs/components/prism-python.js";
+import "prismjs/components/prism-markdown.js";
+import "prismjs/components/prism-sql.js";
+import "prismjs/components/prism-yaml.js";
 import { applyHeadingIdsToHtml } from "./heading-slug.js";
 import {
   describeWikiLinkResolution,
@@ -16,6 +31,74 @@ const escapeHtml = (value) =>
     .replace(/'/g, "&#39;");
 
 const encodeAttr = (value) => escapeHtml(String(value || ""));
+
+const normalizeCodeLanguage = (value = "") => {
+  const raw = String(value || "").trim().toLowerCase();
+  if (!raw) {
+    return "";
+  }
+  const normalized = raw.split(/\s+/)[0];
+  if (["js", "mjs", "cjs"].includes(normalized)) {
+    return "javascript";
+  }
+  if (["ts", "mts", "cts"].includes(normalized)) {
+    return "typescript";
+  }
+  if (["tsx"].includes(normalized)) {
+    return "tsx";
+  }
+  if (["jsx"].includes(normalized)) {
+    return "jsx";
+  }
+  if (["html", "xml", "svg"].includes(normalized)) {
+    return "markup";
+  }
+  if (["yml"].includes(normalized)) {
+    return "yaml";
+  }
+  if (["sh", "shell", "zsh", "console"].includes(normalized)) {
+    return "bash";
+  }
+  if (["ps1", "pwsh", "powershell"].includes(normalized)) {
+    return "powershell";
+  }
+  if (["py"].includes(normalized)) {
+    return "python";
+  }
+  if (["md"].includes(normalized)) {
+    return "markdown";
+  }
+  return normalized;
+};
+
+const highlightCodeBlock = (codeInput = "", languageInput = "") => {
+  const code = String(codeInput || "");
+  const language = normalizeCodeLanguage(languageInput);
+  const grammar = language ? Prism.languages[language] : null;
+  if (!grammar) {
+    return {
+      language,
+      html: escapeHtml(code)
+    };
+  }
+  return {
+    language,
+    html: Prism.highlight(code, grammar, language)
+  };
+};
+
+const resolveMarkedCodeArgs = (codeOrToken, maybeInfoString) => {
+  if (codeOrToken && typeof codeOrToken === "object" && !Array.isArray(codeOrToken)) {
+    return {
+      text: String(codeOrToken.text || ""),
+      lang: String(codeOrToken.lang || codeOrToken.language || "")
+    };
+  }
+  return {
+    text: String(codeOrToken || ""),
+    lang: String(maybeInfoString || "")
+  };
+};
 
 const createWikiLinkHtml = (parsed, resolution) => {
   const classNames = ["wiki-link"];
@@ -109,10 +192,19 @@ export const renderMarkdownToHtml = ({
   });
 
   const withMath = preprocessMathFormulas(withWikiLinks, renderMathFormula);
+  const renderer = new marked.Renderer();
+  renderer.code = (codeOrToken, maybeInfoString) => {
+    const { text, lang } = resolveMarkedCodeArgs(codeOrToken, maybeInfoString);
+    const { language, html } = highlightCodeBlock(text, lang);
+    const languageClass = language ? `language-${encodeAttr(language)}` : "";
+    const preClass = languageClass ? ` class="${languageClass}"` : "";
+    const codeClass = languageClass ? ` class="${languageClass}"` : "";
+    return `<pre${preClass}><code${codeClass}>${html}</code></pre>`;
+  };
   const parsed = String(marked.parse(withMath, {
     breaks: true,
     gfm: true,
-    renderer: new marked.Renderer()
+    renderer
   }) || "");
 
   const withHeadingIds = applyHeadingIdsToHtml(parsed, rawMarkdown);

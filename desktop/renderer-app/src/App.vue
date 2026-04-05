@@ -16,7 +16,10 @@
       :class="isDark ? 'is-dark' : ''"
     >
       <!-- App chrome icons are centralized in `AppIcon.vue` to keep shell layout readable. -->
-      <div class="app-chrome-no-drag">
+      <div
+        class="app-chrome-no-drag app-chrome-leading"
+        :style="chromeLeadingStyle"
+      >
         <button
           type="button"
           class="term-window-btn term-tip-btn chrome-sidebar-toggle-btn"
@@ -26,6 +29,30 @@
         >
           <AppIcon name="panel-left" :collapsed="isFileSidebarHidden" class="chrome-icon" />
         </button>
+        <div v-if="showChromeStatsChip" class="chrome-stats-shell">
+          <button
+            type="button"
+            class="chrome-stats-chip"
+            :aria-label="chromeStatsAriaLabel"
+            @click="cycleChromeStatsMetric"
+          >
+            <span class="chrome-stats-chip-label">{{ chromeStatsDisplayLabel }} {{ formatCount(chromeStatsDisplayValue) }}</span>
+          </button>
+          <div class="chrome-stats-popover" role="tooltip">
+            <div class="chrome-stats-row">
+              <span>Words:</span>
+              <strong>{{ formatCount(editorDocumentStats.words) }}</strong>
+            </div>
+            <div class="chrome-stats-row">
+              <span>Characters:</span>
+              <strong>{{ formatCount(editorDocumentStats.characters) }}</strong>
+            </div>
+            <div class="chrome-stats-row">
+              <span>Paragraphs:</span>
+              <strong>{{ formatCount(editorDocumentStats.paragraphs) }}</strong>
+            </div>
+          </div>
+        </div>
       </div>
       <div class="editor-chrome-tabs-wrap">
         <div class="editor-chrome-tabs app-chrome-no-drag" :class="isDark ? 'is-dark' : ''">
@@ -56,7 +83,7 @@
         </div>
         <div class="editor-chrome-drag-fill" @mousedown="handleChromeDragMouseDown"></div>
       </div>
-      <div class="app-chrome-no-drag">
+      <div class="app-chrome-no-drag app-chrome-trailing">
         <button
           type="button"
           class="term-window-btn term-tip-btn chrome-sidebar-toggle-btn"
@@ -324,6 +351,57 @@
       <div class="sidebar-resize-line"></div>
     </div>
 
+    <aside
+      v-if="showInspectorSidebar && !isEditMode"
+      class="sidebar-panel inspector-sidebar-panel themed-sidebar-shell flex flex-col flex-shrink-0 border-r min-h-0"
+      :style="{ width: `${inspectorSidebarPanelWidth}px` }"
+    >
+      <div class="px-4 py-3 border-b themed-divider">
+        <div class="flex items-center justify-between gap-3">
+          <h2 class="inspector-header-title text-sm font-semibold tracking-tight truncate">
+            目录表
+          </h2>
+          <span class="inspector-header-subtitle shrink-0 text-xs">
+            第 {{ currentStepIndex + 1 }} / {{ steps.length }} 页
+          </span>
+        </div>
+
+        <div class="sidebar-overall-progress mt-2.5" :class="isDark ? 'is-dark' : ''">
+          <span class="sidebar-overall-progress-fill" :style="{ width: `${Math.round(sidebarChapterProgress * 100)}%` }"></span>
+        </div>
+      </div>
+
+      <nav class="flex-1 min-h-0 overflow-y-auto">
+        <div
+          v-for="(step, index) in steps"
+          :key="step.id"
+          @click="handleStepSelection(step.id, index)"
+          class="nav-step-item nav-display-item px-4 py-2.5 flex items-center gap-2.5 cursor-pointer transition-all border-l-4"
+          :class="currentId === step.id ? 'is-active' : ''"
+        >
+          <div class="nav-step-side">
+            <div
+              class="nav-step-index-badge w-6 h-6 rounded flex items-center justify-center text-xs font-bold transition-all"
+              :class="currentId === step.id ? 'is-active' : ''"
+            >
+              {{ index + 1 }}
+            </div>
+            <span class="nav-step-track" :class="isDark ? 'is-dark' : ''">
+              <span class="nav-step-track-fill" :style="{ transform: `scaleY(${stepProgressForIndex(index)})` }"></span>
+            </span>
+          </div>
+
+          <div class="flex-1 min-w-0">
+            <div class="min-w-0 px-1 flex min-h-[28px] items-center">
+              <div class="inspector-step-title truncate text-sm font-medium">
+                {{ stepDisplayTitle(step, index) }}
+              </div>
+            </div>
+          </div>
+        </div>
+      </nav>
+    </aside>
+
     <main ref="mainRef" class="workspace-main-shell relative flex-1 min-w-0 min-h-0 flex flex-col">
       <header
         v-if="!isEditMode"
@@ -331,9 +409,9 @@
         :style="viewHeaderStyle"
       >
         <div class="header-meta header-meta-inline min-w-0 flex-1">
-          <span class="header-meta-title">{{ stepDisplayTitle(activeStep, currentStepIndex) }}</span>
-          <span class="header-meta-dot">·</span>
-          <span class="header-meta-sub header-meta-sub-inline">{{ activeStep.subtitle || stepPreviewText(activeStep) }}</span>
+          <span class="header-meta-title is-single-line">
+            {{ stepDisplayTitle(activeStep, currentStepIndex) }}
+          </span>
         </div>
         <div class="flex items-center gap-2 sm:gap-3 flex-nowrap shrink-0">
           <span class="header-meta-page">第 {{ currentStepIndex + 1 }} / {{ steps.length }} 页</span>
@@ -345,22 +423,33 @@
         ref="contentScrollRef"
         class="workspace-content-shell flex-1 min-h-0"
         :class="[
+          !isEditMode ? 'flex flex-col overflow-y-auto' : '',
           isEditMode && isWorkspaceGraphTabActive ? 'overflow-hidden' : 'overflow-y-auto'
         ]"
+        :style="(!isEditMode && !gestureNavigationEnabled && !isWorkspaceGraphTabActive && !terminalMaximized)
+          ? { paddingBottom: '88px' }
+          : null"
         @scroll.passive="onContentScroll"
       >
         <div
           class="relative w-full"
           :class="[
             !isEditMode
-              ? 'mx-auto max-w-none px-10 py-10'
+              ? 'mx-auto max-w-none px-10 py-10 flex flex-1 flex-col'
               : (isWorkspaceGraphTabActive
                 ? 'h-full px-0 py-0'
                 : 'mx-auto max-w-6xl px-10 py-10')
           ]"
         >
           <transition name="fade" mode="out-in">
-            <div :key="contentPaneKey" class="flex flex-col" :class="isEditMode && isWorkspaceGraphTabActive ? 'h-full' : ''">
+            <div
+              :key="contentPaneKey"
+              class="flex flex-col"
+              :class="[
+                !isEditMode ? 'min-h-full flex-1' : '',
+                isEditMode && isWorkspaceGraphTabActive ? 'h-full' : ''
+              ]"
+            >
               <div
                 v-if="!isEditMode"
                 class="mb-10 w-full relative mx-auto"
@@ -515,40 +604,37 @@
             </div>
           </transition>
         </div>
-        <footer
-          v-if="!isEditMode && !gestureNavigationEnabled && !isWorkspaceGraphTabActive"
-          class="viewer-footer-shell px-10 py-6 border-t flex items-center justify-center"
-        >
-          <div class="flex items-center gap-6">
-            <button
-              @click="prev"
-              :disabled="isFirstStep"
-              class="themed-secondary-btn px-8 py-2 rounded-full text-sm disabled:opacity-30"
-            >
-              ← 上一步
-            </button>
-            <button
-              @click="next"
-              :disabled="isLastStep"
-              class="themed-accent-btn px-8 py-2 rounded-full text-sm font-medium disabled:opacity-30"
-            >
-              {{ isLastStep ? '已完成' : '下一步 →' }}
-            </button>
-          </div>
-        </footer>
       </section>
+
+      <footer
+        v-if="!isEditMode && !gestureNavigationEnabled && !isWorkspaceGraphTabActive && !terminalMaximized"
+        class="viewer-footer-shell viewer-footer-floating px-10 py-6 border-t flex items-center justify-center"
+      >
+        <div class="flex items-center gap-6">
+          <button
+            @click="prev"
+            :disabled="isFirstStep"
+            class="themed-secondary-btn px-8 py-2 rounded-full text-sm disabled:opacity-30"
+          >
+            ← 上一章
+          </button>
+          <button
+            @click="next"
+            :disabled="isLastStep"
+            class="themed-accent-btn px-8 py-2 rounded-full text-sm font-medium disabled:opacity-30"
+          >
+            {{ isLastStep ? '已完成' : '下一章 →' }}
+          </button>
+        </div>
+      </footer>
 
       <section
         v-if="terminalOpen"
         class="term-shell border-t min-h-0 flex flex-col"
-        :class="[
-          terminalMaximized ? 'term-shell-max' : 'flex-shrink-0',
-          isDark ? 'border-slate-800 bg-slate-950' : 'border-gray-200 bg-white'
-        ]"
+        :class="terminalMaximized ? 'term-shell-max' : 'flex-shrink-0'"
       >
         <div
           class="term-tabs-bar border-b"
-          :class="isDark ? 'border-slate-800 bg-slate-950' : 'border-gray-200 bg-white'"
           @mousedown="startTerminalPullResize"
         >
           <!-- Terminal toolbar icons also come from `AppIcon.vue` to keep this section focused on behavior. -->
@@ -616,17 +702,19 @@
             >
               <AppIcon name="split" class="term-icon" />
             </button>
-            <select
-              v-if="isDesktopPty && desktopSessions.length"
-              class="term-session-select"
-              :value="activeDesktopSessionId"
-              @mousedown.stop
-              @change="switchDesktopTerminal($event.target.value)"
-            >
-              <option v-for="session in desktopSessions" :key="session.id" :value="session.id">
-                {{ session.label }} · {{ session.shell }}
-              </option>
-            </select>
+            <div v-if="isDesktopPty && desktopSessions.length" class="term-session-select-shell">
+              <select
+                class="term-session-select"
+                :value="activeDesktopSessionId"
+                @mousedown.stop
+                @change="switchDesktopTerminal($event.target.value)"
+              >
+                <option v-for="session in desktopSessions" :key="session.id" :value="session.id">
+                  {{ session.label }} · {{ session.shell }}
+                </option>
+              </select>
+              <AppIcon name="chevron-down" class="term-session-select-icon" />
+            </div>
             <button
               type="button"
               class="term-icon-btn term-tip-btn"
@@ -765,7 +853,7 @@
     </div>
 
     <aside
-      v-if="showInspectorSidebar"
+      v-if="showInspectorSidebar && isEditMode"
       class="sidebar-panel inspector-sidebar-panel themed-sidebar-shell flex flex-col flex-shrink-0 border-l min-h-0"
       :style="{ width: `${inspectorSidebarPanelWidth}px` }"
       :class="[
@@ -774,93 +862,94 @@
         isInspectorSidebarHidden ? 'is-hidden border-transparent bg-transparent' : ''
       ]"
     >
-      <div :class="isInspectorSidebarCollapsed ? 'px-2 py-3' : 'p-4 pb-3'" class="border-b themed-divider">
-        <div :class="isInspectorSidebarCollapsed ? 'flex flex-col items-center gap-2' : 'flex items-start justify-between gap-2'">
-          <div :class="isInspectorSidebarCollapsed ? 'flex items-center justify-center w-full' : 'flex items-center gap-2 min-w-0'">
-            <div class="inspector-header-badge w-7 h-7 rounded-lg flex items-center justify-center text-xs font-bold">
-              {{ isEditMode ? "ED" : "ST" }}
-            </div>
-            <div v-if="!isInspectorSidebarCollapsed" class="min-w-0">
-              <h2 class="inspector-header-title text-sm font-semibold tracking-tight truncate">
-                {{ isEditMode ? "编辑控制栏" : "步骤栏" }}
-              </h2>
-              <p class="inspector-header-subtitle text-xs mt-0.5">
-                {{ isEditMode ? "原顶栏 + 原步骤栏" : `第 ${currentStepIndex + 1} / ${steps.length} 步` }}
-              </p>
+      <div :class="isInspectorSidebarCollapsed ? 'px-2 py-3' : (isEditMode ? 'px-4 py-3' : 'p-4 pb-3')" class="border-b themed-divider">
+        <template v-if="isEditMode">
+          <div :class="isInspectorSidebarCollapsed ? 'flex items-center justify-center w-full' : 'flex items-center min-w-0'">
+            <h2 class="inspector-header-title text-sm font-semibold tracking-tight truncate">
+              {{ isInspectorSidebarCollapsed ? "目录" : "目录表" }}
+            </h2>
+          </div>
+        </template>
+        <template v-else>
+          <div :class="isInspectorSidebarCollapsed ? 'flex flex-col items-center gap-2' : 'flex items-start justify-between gap-2'">
+            <div :class="isInspectorSidebarCollapsed ? 'flex items-center justify-center w-full' : 'flex items-center gap-2 min-w-0'">
+              <div class="inspector-header-badge w-7 h-7 rounded-lg flex items-center justify-center text-xs font-bold">
+                ST
+              </div>
+              <div v-if="!isInspectorSidebarCollapsed" class="min-w-0">
+                <h2 class="inspector-header-title text-sm font-semibold tracking-tight truncate">
+                  步骤栏
+                </h2>
+                <p class="inspector-header-subtitle text-xs mt-0.5">
+                  {{ `第 ${currentStepIndex + 1} / ${steps.length} 步` }}
+                </p>
+              </div>
             </div>
           </div>
-        </div>
 
-        <div v-if="isEditMode && !isInspectorSidebarCollapsed" class="mt-3 space-y-2">
-          <input
-            :value="activeStep?.title || ''"
-            type="text"
-            @input="handleActiveStepTitleInput"
-            class="inspector-sidebar-input w-full h-9 rounded-lg border px-3 text-sm font-medium"
-            placeholder="步骤标题"
-          />
-        </div>
-        <div v-if="!isInspectorSidebarCollapsed" class="sidebar-overall-progress" :class="isDark ? 'is-dark' : ''">
-          <span class="sidebar-overall-progress-fill" :style="{ width: `${Math.round(sidebarChapterProgress * 100)}%` }"></span>
-        </div>
+          <div v-if="!isInspectorSidebarCollapsed" class="sidebar-overall-progress" :class="isDark ? 'is-dark' : ''">
+            <span class="sidebar-overall-progress-fill" :style="{ width: `${Math.round(sidebarChapterProgress * 100)}%` }"></span>
+          </div>
+        </template>
       </div>
 
       <nav class="flex-1 min-h-0 overflow-y-auto">
-        <div
-          v-for="(step, index) in steps"
-          :key="step.id"
-          @click="handleStepSelection(step.id, index)"
-          :title="isInspectorSidebarCollapsed ? stepDisplayTitle(step, index) : ''"
-          :draggable="isEditMode"
-          @dragstart="onStepDragStart($event, index)"
-          @dragend="onStepDragEnd"
-          @dragover="onStepDragOver($event)"
-          @drop="onStepDrop($event, index)"
-          class="nav-step-item px-4 py-3.5 flex items-start gap-3 cursor-pointer transition-all border-l-4"
-          :class="[
-            currentId === step.id ? 'is-active' : ''
-          ]"
-        >
-          <div class="nav-step-side">
-            <div
-              class="nav-step-index-badge mt-1 w-6 h-6 rounded flex items-center justify-center text-xs font-bold transition-all"
-              :class="currentId === step.id ? 'is-active' : ''"
-            >
-              {{ index + 1 }}
+        <template v-if="isEditMode">
+          <div
+            v-for="heading in visibleEditorHeadingOutline"
+            :key="heading.id"
+            @click="handleOutlineSelection(heading)"
+            :title="isInspectorSidebarCollapsed ? (heading.title || '') : ''"
+            class="nav-step-item nav-outline-item flex cursor-pointer transition-all border-l-4"
+            :class="[
+              activeEditorOutlineIndex === heading.outlineIndex ? 'is-active' : '',
+              'items-center'
+            ]"
+          >
+            <div class="nav-step-side nav-outline-side">
+              <button
+                v-if="heading.hasChildren"
+                type="button"
+                class="nav-outline-toggle"
+                @click.stop="toggleOutlineCollapse(heading.id)"
+              >
+                <AppIcon :name="heading.isCollapsed ? 'chevron-right' : 'chevron-down'" class="nav-outline-chevron" />
+              </button>
+              <span
+                v-else
+                class="nav-outline-toggle-spacer"
+                aria-hidden="true"
+              ></span>
             </div>
-            <span class="nav-step-track" :class="isDark ? 'is-dark' : ''">
-              <span class="nav-step-track-fill" :style="{ transform: `scaleY(${stepProgressForIndex(index)})` }"></span>
-            </span>
-          </div>
 
-          <div v-if="!isInspectorSidebarCollapsed" class="flex-1 min-w-0">
-            <div v-if="isEditMode" class="space-y-1">
+            <div
+              v-if="!isInspectorSidebarCollapsed"
+              class="flex-1 min-w-0 nav-outline-body"
+              :class="'flex min-h-[30px] items-center is-single-line'"
+              :style="outlineIndentStyle(heading)"
+            >
               <input
-                :value="step.title"
+                :value="heading.title"
                 type="text"
                 @click.stop
-                @input="handleStepTitleInput(index, $event)"
+                @input="handleOutlineHeadingTitleInput(heading.outlineIndex, $event)"
                 class="inspector-step-title-input w-full text-sm font-medium bg-transparent border-b px-1 py-0.5"
+                :class="'is-single-line'"
                 placeholder="标题"
               />
-              <div class="inspector-step-meta truncate text-[11px] px-1">
-                {{ stepPreviewText(step) }}
-              </div>
-            </div>
-            <div v-else class="min-w-0 space-y-1 px-1">
-              <div class="inspector-step-title truncate text-sm font-medium">
-                {{ stepDisplayTitle(step, index) }}
-              </div>
-              <div class="inspector-step-meta truncate text-[11px]">
-                {{ step.subtitle || stepPreviewText(step) }}
-              </div>
             </div>
           </div>
-        </div>
+          <div
+            v-if="!visibleEditorHeadingOutline.length && !isInspectorSidebarCollapsed"
+            class="inspector-empty-card rounded-xl border mx-4 mt-4 px-3 py-4 text-xs leading-5"
+          >
+            当前文档还没有可用标题，写入 `#` 到 `######` 标题后会显示在这里。
+          </div>
+        </template>
       </nav>
 
       <section
-        v-if="!isInspectorSidebarCollapsed && !isInspectorSidebarHidden && activeMarkdownRelPath"
+        v-if="isEditMode && !isInspectorSidebarCollapsed && !isInspectorSidebarHidden && activeMarkdownRelPath"
         class="border-t themed-divider px-4 py-3 space-y-3"
       >
         <div class="flex items-center justify-between gap-2">
@@ -1798,6 +1887,84 @@ const contentPaneKey = computed(() => (
     : `${mode.value}:${currentId.value}`
 ));
 
+const normalizeMarkdownForStats = (value = "") => String(value || "")
+  .replace(/\r\n/g, "\n")
+  .replace(/<!--[\s\S]*?-->/g, " ")
+  .replace(/!\[([^\]]*)\]\(([^)]+)\)/g, " $1 ")
+  .replace(/\[([^\]]+)\]\(([^)]+)\)/g, " $1 ")
+  .replace(/\[\[([^\]|]+)\|?([^\]]*)\]\]/g, (_match, target, alias) => ` ${alias || target} `)
+  .replace(/^#{1,6}\s+/gm, "")
+  .replace(/^\s{0,3}[-*+]\s+/gm, "")
+  .replace(/^\s{0,3}\d+\.\s+/gm, "")
+  .replace(/[`*_~>#|]/g, " ");
+
+const countMarkdownWords = (value = "") => {
+  const plain = normalizeMarkdownForStats(value);
+  const cjkMatches = plain.match(/[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Hangul}]/gu) || [];
+  const nonCjk = plain.replace(/[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Hangul}]/gu, " ");
+  const wordMatches = nonCjk.match(/[\p{Letter}\p{Number}]+(?:['’-][\p{Letter}\p{Number}]+)*/gu) || [];
+  return wordMatches.length + cjkMatches.length;
+};
+
+const countMarkdownCharacters = (value = "") =>
+  normalizeMarkdownForStats(value)
+    .replace(/\s+/g, "")
+    .length;
+
+const countMarkdownParagraphs = (value = "") =>
+  normalizeMarkdownForStats(value)
+    .split(/\n\s*\n/g)
+    .map((item) => item.trim())
+    .filter(Boolean)
+    .length;
+
+const editorDocumentStats = computed(() => {
+  const markdown = String(documentMarkdown.value || "");
+  return {
+    words: countMarkdownWords(markdown),
+    characters: countMarkdownCharacters(markdown),
+    paragraphs: countMarkdownParagraphs(markdown)
+  };
+});
+
+const CHROME_STATS_METRICS = Object.freeze(["words", "characters", "paragraphs"]);
+const CHROME_STATS_LABELS = Object.freeze({
+  words: "W",
+  characters: "C",
+  paragraphs: "P"
+});
+const CHROME_STATS_TITLES = Object.freeze({
+  words: "字数",
+  characters: "字符数",
+  paragraphs: "段落数"
+});
+
+const chromeStatsMetric = ref("words");
+const formatCount = (valueInput = 0) => new Intl.NumberFormat("en-US").format(
+  Math.max(0, Number(valueInput || 0))
+);
+
+const chromeStatsDisplayLabel = computed(() => (
+  CHROME_STATS_LABELS[chromeStatsMetric.value] || "W"
+));
+
+const chromeStatsDisplayValue = computed(() => (
+  editorDocumentStats.value?.[chromeStatsMetric.value] ?? 0
+));
+
+const chromeStatsAriaLabel = computed(() => {
+  const currentTitle = CHROME_STATS_TITLES[chromeStatsMetric.value] || "字数";
+  return `${currentTitle} ${formatCount(chromeStatsDisplayValue.value)}，点击切换统计维度`;
+});
+
+const cycleChromeStatsMetric = () => {
+  const currentIndex = CHROME_STATS_METRICS.indexOf(chromeStatsMetric.value);
+  const nextIndex = currentIndex >= 0
+    ? (currentIndex + 1) % CHROME_STATS_METRICS.length
+    : 0;
+  chromeStatsMetric.value = CHROME_STATS_METRICS[nextIndex];
+};
+
 const renderedMarkdown = computed(() => {
   if (isEditMode.value) {
     return "";
@@ -1848,6 +2015,7 @@ const {
   activeMarkdownRelPath,
   clearScheduledMarkdownSave,
   documentMarkdown,
+  extractHeadingOutline,
   extractMarkdownSections,
   flushPendingMarkdownSave,
   formatBytes,
@@ -1862,7 +2030,7 @@ const {
   moveStep,
   parseMarkdownToSteps,
   persistActiveMarkdownBeforeSwitch,
-  renameStepTitle,
+  renameOutlineHeadingTitle,
   removeStep,
   resetBlankEditorState,
   saveMarkdown,
@@ -1870,7 +2038,6 @@ const {
   updateMarkdown,
   serializeStepsToMarkdown,
   stepDisplayTitle,
-  stepPreviewText,
   writeActiveMarkdownNow,
   addStep
 } = useMarkdownDocument({
@@ -1907,6 +2074,126 @@ const activeSemanticBlock = computed(() => {
   const current = currentSemanticBlock.value;
   return current?.block || current?.prevBlock || current?.nextBlock || null;
 });
+
+const editorHeadingOutline = computed(() => (
+  typeof extractHeadingOutline === "function"
+    ? extractHeadingOutline(documentMarkdown.value)
+    : []
+));
+
+const collapsedOutlineHeadingIds = ref([]);
+
+const buildOutlineTree = (outlineInput = [], collapsedIds = new Set()) => {
+  const roots = [];
+  const stack = [];
+  for (let index = 0; index < (Array.isArray(outlineInput) ? outlineInput.length : 0); index += 1) {
+    const heading = outlineInput[index];
+    const node = {
+      ...heading,
+      outlineIndex: index,
+      depth: Math.max(0, Number(heading?.level || 1) - 1),
+      children: [],
+      hasChildren: false,
+      isCollapsed: collapsedIds.has(String(heading?.id || ""))
+    };
+
+    while (stack.length && Number(stack[stack.length - 1]?.level || 1) >= Number(node.level || 1)) {
+      stack.pop();
+    }
+
+    const parent = stack[stack.length - 1] || null;
+    if (parent) {
+      parent.children.push(node);
+      parent.hasChildren = true;
+    } else {
+      roots.push(node);
+    }
+    stack.push(node);
+  }
+  return roots;
+};
+
+const flattenOutlineTree = (nodes = [], collapsedIds = new Set(), output = []) => {
+  for (const node of Array.isArray(nodes) ? nodes : []) {
+    const nodeId = String(node?.id || "");
+    output.push({
+      ...node,
+      hasChildren: Array.isArray(node?.children) && node.children.length > 0,
+      isCollapsed: collapsedIds.has(nodeId)
+    });
+    if (Array.isArray(node?.children) && node.children.length && !collapsedIds.has(nodeId)) {
+      flattenOutlineTree(node.children, collapsedIds, output);
+    }
+  }
+  return output;
+};
+
+const collapsedOutlineHeadingIdSet = computed(() => new Set(
+  (Array.isArray(collapsedOutlineHeadingIds.value) ? collapsedOutlineHeadingIds.value : [])
+    .map((id) => String(id || ""))
+    .filter(Boolean)
+));
+
+const editorHeadingOutlineTree = computed(() => buildOutlineTree(
+  editorHeadingOutline.value,
+  collapsedOutlineHeadingIdSet.value
+));
+
+const visibleEditorHeadingOutline = computed(() => flattenOutlineTree(
+  editorHeadingOutlineTree.value,
+  collapsedOutlineHeadingIdSet.value
+));
+
+const activeEditorOutlineIndex = computed(() => {
+  const outline = editorHeadingOutline.value;
+  if (!outline.length) {
+    return -1;
+  }
+  const rawPos = clamp(
+    Number(editorSelection.value?.head ?? editorSelection.value?.anchor ?? 0),
+    0,
+    String(documentMarkdown.value || "").length
+  );
+  let activeIndex = -1;
+  for (let index = 0; index < outline.length; index += 1) {
+    if (rawPos < Number(outline[index]?.from || 0)) {
+      break;
+    }
+    activeIndex = index;
+  }
+  return activeIndex < 0 ? 0 : activeIndex;
+});
+
+const outlineIndentStyle = (heading) => ({
+  paddingLeft: `${Math.max(0, Number(heading?.depth ?? Number(heading?.level || 1) - 1)) * 14}px`
+});
+
+const handleOutlineSelection = async (heading) => {
+  const markdown = String(documentMarkdown.value || "");
+  const rawPos = clamp(Number(heading?.from || 0), 0, markdown.length);
+  const stepIndex = findStepIndexForRawPos(markdown, rawPos);
+  currentId.value = steps.value?.[stepIndex]?.id ?? currentId.value;
+  await nextTick();
+  if (typeof markdownEditorRef.value?.focusPosition === "function") {
+    markdownEditorRef.value.focusPosition(rawPos);
+    return;
+  }
+  markdownEditorRef.value?.focus?.();
+};
+
+const toggleOutlineCollapse = (headingIdInput = "") => {
+  const headingId = String(headingIdInput || "").trim();
+  if (!headingId) {
+    return;
+  }
+  const collapsed = new Set(collapsedOutlineHeadingIdSet.value);
+  if (collapsed.has(headingId)) {
+    collapsed.delete(headingId);
+  } else {
+    collapsed.add(headingId);
+  }
+  collapsedOutlineHeadingIds.value = [...collapsed];
+};
 
 const currentSemanticBlockId = computed(() => String(activeSemanticBlock.value?.id || ""));
 
@@ -2048,14 +2335,9 @@ const handleManualSaveCurrentMarkdown = async () => {
   }
 };
 
-const handleActiveStepTitleInput = (event) => {
+const handleOutlineHeadingTitleInput = (index, event) => {
   const nextTitle = String(event?.target?.value || "");
-  void renameStepTitle(currentStepIndex.value, nextTitle);
-};
-
-const handleStepTitleInput = (index, event) => {
-  const nextTitle = String(event?.target?.value || "");
-  void renameStepTitle(index, nextTitle);
+  void renameOutlineHeadingTitle(index, nextTitle);
 };
 
 const onStepDragStart = (event, index) => {
@@ -2705,6 +2987,22 @@ const fileSidebarPanelWidth = computed(() => {
   }
   return fileSidebarWidth.value;
 });
+
+const chromeLeadingWidth = computed(() => (
+  isFileSidebarHidden.value
+    ? 46
+    : Math.max(0, Number(fileSidebarPanelWidth.value || 0))
+));
+
+const showChromeStatsChip = computed(() => (
+  !isFileSidebarHidden.value
+  && !isFileSidebarCollapsed.value
+  && chromeLeadingWidth.value >= 136
+));
+
+const chromeLeadingStyle = computed(() => ({
+  width: `${chromeLeadingWidth.value}px`
+}));
 
 const showInspectorSidebar = computed(() => isEditMode.value || !collapseStepsSidebarInView.value);
 const isInspectorSidebarCollapsed = computed(() => isEditMode.value && isSidebarCollapsed.value);
@@ -6060,15 +6358,18 @@ const closeDesktopTerminal = async (sid) => {
 };
 
 const terminateCurrentTerminal = async () => {
-  if (isDesktopPty.value) {
-    const sid = paneSessionIdOf(activeDesktopPane.value) || activeDesktopSessionId.value;
-    if (!sid) {
+  try {
+    if (isDesktopPty.value) {
+      const sid = paneSessionIdOf(activeDesktopPane.value) || activeDesktopSessionId.value;
+      if (sid) {
+        await closeDesktopTerminal(sid);
+      }
       return;
     }
-    await closeDesktopTerminal(sid);
-    return;
+    await stopExecution();
+  } finally {
+    closeTerminal();
   }
-  await stopExecution();
 };
 
 const syncDesktopFullscreenState = async () => {
@@ -6652,6 +6953,15 @@ watch(activeEditorTabId, () => {
   persistStorageState();
 });
 
+watch(editorHeadingOutline, (outline) => {
+  const validIds = new Set(
+    (Array.isArray(outline) ? outline : [])
+      .map((heading) => String(heading?.id || ""))
+      .filter(Boolean)
+  );
+  collapsedOutlineHeadingIds.value = collapsedOutlineHeadingIds.value.filter((id) => validIds.has(String(id || "")));
+}, { deep: true });
+
 watch(storageSortMode, (mode) => {
   if (typeof window === "undefined") {
     return;
@@ -6850,7 +7160,12 @@ const applyTerminalDragHeight = (rawHeight) => {
   terminalPanelHeight.value = clamp(Math.round(rawHeight), TERMINAL_MIN_HEIGHT, maxH);
 };
 
-const resizeTerminalFrom = (startY, startH) => {
+const measureTerminalHeightFromClientY = (clientYInput) => {
+  const clientY = Number(clientYInput || 0);
+  return Math.max(0, Math.round(window.innerHeight - clientY));
+};
+
+const resizeTerminalFrom = () => {
   terminalDragSizing = true;
   document.body.style.userSelect = "none";
 
@@ -6864,8 +7179,7 @@ const resizeTerminalFrom = (startY, startH) => {
   }
 
   const onMove = (ev) => {
-    const dy = startY - ev.clientY;
-    applyTerminalDragHeight(startH + dy);
+    applyTerminalDragHeight(measureTerminalHeightFromClientY(ev.clientY));
   };
 
   const onUp = () => {
@@ -6889,10 +7203,8 @@ const resizeTerminalFrom = (startY, startH) => {
 
 const startTerminalPullResize = (event) => {
   event.preventDefault();
-  const startH = terminalOpen.value
-    ? (terminalMaximized.value ? getTerminalMaxHeight() : terminalPanelHeight.value)
-    : 0;
-  resizeTerminalFrom(event.clientY, startH);
+  applyTerminalDragHeight(measureTerminalHeightFromClientY(event.clientY));
+  resizeTerminalFrom();
 };
 
 const runTerminalCommand = async () => {

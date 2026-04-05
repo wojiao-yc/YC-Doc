@@ -1588,11 +1588,20 @@ const headingPrefixRangeForBlock = (block, docLength) => {
   };
 };
 
+const HEADING_SUBTITLE_META_PATTERN = /^\s*<!--\s*yc-heading-subtitle\s*:/i;
+
 const addHiddenSyntaxRangeDecoration = (decorations, from, to) => {
   if (to <= from) {
     return;
   }
   decorations.push(Decoration.replace({}).range(from, to));
+};
+
+const isHeadingSubtitleMetaBlock = (block, doc) => {
+  if (block?.type !== "html_block") {
+    return false;
+  }
+  return HEADING_SUBTITLE_META_PATTERN.test(String(doc.sliceString(block.from, block.to) || ""));
 };
 
 const addHiddenSyntaxRangeDecorationsByLine = (decorations, doc, fromInput, toInput, docLength) => {
@@ -2328,6 +2337,7 @@ const buildDecorations = (view, blocks, currentBlockId) => {
       const hideImageSourceLines = blockType === "image" && !blockKeepsSourceVisible;
       const hideMathSourceLines = blockType === "math_block" && !blockKeepsSourceVisible;
       const hideTableSourceLines = blockType === "table" && !blockKeepsSourceVisible;
+      const hideHeadingSubtitleMetaLines = isHeadingSubtitleMetaBlock(block, doc);
 
       const lineRange = resolveLineRange(doc, block);
       for (let lineNumber = lineRange.fromLine; lineNumber <= lineRange.toLine; lineNumber += 1) {
@@ -2353,7 +2363,8 @@ const buildDecorations = (view, blocks, currentBlockId) => {
           isMathSourceAnchorLine ? "cm-block-math-source-anchor" : "",
           isMathSourceHiddenLine ? "cm-block-math-source-hidden" : "",
           isTableSourceAnchorLine ? "cm-block-table-source-anchor" : "",
-          isTableSourceHiddenLine ? "cm-block-table-source-hidden" : ""
+          isTableSourceHiddenLine ? "cm-block-table-source-hidden" : "",
+          hideHeadingSubtitleMetaLines ? "cm-block-heading-subtitle-hidden" : ""
         ]
           .filter(Boolean)
           .join(" ");
@@ -2383,6 +2394,8 @@ const buildDecorations = (view, blocks, currentBlockId) => {
         } else if (blockType === "thematic_break") {
           addHiddenSyntaxRangeDecoration(decorations, blockFrom, blockTo);
         } else if (blockType === "image" || blockType === "math_block" || blockType === "table") {
+          addHiddenSyntaxRangeDecorationsByLine(decorations, doc, blockFrom, blockTo, docLength);
+        } else if (hideHeadingSubtitleMetaLines) {
           addHiddenSyntaxRangeDecorationsByLine(decorations, doc, blockFrom, blockTo, docLength);
         }
       }

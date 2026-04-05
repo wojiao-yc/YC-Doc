@@ -3,13 +3,52 @@ import { serializeImageLine } from "../editor/parser/parse-image.js";
 
 const MARKDOWN_SAVE_DELAY_MS = 500;
 const MAX_MARKDOWN_FILE_BYTES = 20 * 1024 * 1024;
-const HEADING_LINE_PATTERN = /^#\s+(.*?)\s*$/;
+const SECTION_HEADING_PATTERN = /^#\s+(.*?)\s*$/;
+const HEADING_LINE_PATTERN = /^\s{0,3}(#{1,6})[ \t]+(.+?)\s*$/;
+const HEADING_SUBTITLE_META_PATTERN = /^\s*<!--\s*yc-heading-subtitle\s*:\s*(.*?)\s*-->\s*$/i;
 const OPEN_FENCE_PATTERN = /^\s{0,3}(`{3,}|~{3,})(.*)$/;
 
 const clamp = (value, min, max) => Math.min(max, Math.max(min, value));
 const normalizeMarkdownText = (value) => String(value || "").replace(/\r\n/g, "\n");
 const trimOuterBlankLines = (value) => String(value || "").replace(/^\n+/, "").replace(/\n+$/, "");
 const trimClosingHeadingHashes = (text) => String(text || "").replace(/[ \t]+#+[ \t]*$/, "").trim();
+const normalizeHeadingSubtitle = (value) => String(value || "")
+  .replace(/\r?\n+/g, " ")
+  .replace(/\s+/g, " ")
+  .replace(/-->/g, "")
+  .trim();
+
+const parseHeadingSubtitleMeta = (lineText = "") => {
+  const match = String(lineText || "").match(HEADING_SUBTITLE_META_PATTERN);
+  return match ? normalizeHeadingSubtitle(match[1]) : "";
+};
+
+const serializeHeadingSubtitleMeta = (subtitleInput = "") => {
+  const subtitle = normalizeHeadingSubtitle(subtitleInput);
+  return subtitle ? `<!-- yc-heading-subtitle:${subtitle} -->` : "";
+};
+
+const extractHeadingSubtitleFromBody = (rawBody = "") => {
+  const normalized = normalizeMarkdownText(rawBody);
+  const lines = normalized.split("\n");
+  const subtitle = parseHeadingSubtitleMeta(lines[0] || "");
+  if (!subtitle) {
+    return {
+      subtitle: "",
+      content: trimOuterBlankLines(normalized)
+    };
+  }
+
+  lines.splice(0, 1);
+  if (lines[0] === "") {
+    lines.splice(0, 1);
+  }
+
+  return {
+    subtitle,
+    content: trimOuterBlankLines(lines.join("\n"))
+  };
+};
 
 const createBlankStep = (id = 1) => ({
   id,
@@ -42,10 +81,12 @@ const collectHeadingSections = (rawMarkdown) => {
     }
     const sectionEnd = Math.max(currentSection.start, Math.min(text.length, Number(endPos || 0)));
     const rawBody = text.slice(currentSection.bodyStart, sectionEnd);
+    const { subtitle, content } = extractHeadingSubtitleFromBody(rawBody);
     sections.push({
       ...currentSection,
       end: sectionEnd,
-      content: trimOuterBlankLines(rawBody)
+      subtitle,
+      content
     });
     currentSection = null;
   };
@@ -68,7 +109,7 @@ const collectHeadingSections = (rawMarkdown) => {
       activeFence = null;
     }
 
-    const headingMatch = !activeFence ? line.match(HEADING_LINE_PATTERN) : null;
+    const headingMatch = !activeFence ? line.match(SECTION_HEADING_PATTERN) : null;
     if (headingMatch) {
       closeCurrentSectionAt(lineStart);
       currentSection = {
@@ -99,8 +140,15 @@ const serializeHeadingSections = ({ prologue = "", sections = [] } = {}) => {
   const normalizedPrologue = trimOuterBlankLines(normalizeMarkdownText(prologue));
   const chunks = (Array.isArray(sections) ? sections : []).map((section) => {
     const title = trimClosingHeadingHashes(section?.title || "");
+    const subtitle = serializeHeadingSubtitleMeta(section?.subtitle || "");
     const content = trimOuterBlankLines(normalizeMarkdownText(section?.content || ""));
     const headingLine = title ? `# ${title}` : "# ";
+    if (subtitle && content) {
+      return `${headingLine}\n${subtitle}\n\n${content}`;
+    }
+    if (subtitle) {
+      return `${headingLine}\n${subtitle}`;
+    }
     return content ? `${headingLine}\n\n${content}` : headingLine;
   });
 
@@ -135,10 +183,84 @@ const sectionsToSteps = ({ prologue = "", sections = [] } = {}) => {
     return {
       id: index + 1,
       title: String(section?.title || "").trim(),
-      subtitle: "",
+      subtitle: String(section?.subtitle || "").trim(),
       content
     };
   });
+};
+
+const collectHeadingOutline = (rawMarkdown) => {
+  const text = normalizeMarkdownText(rawMarkdown);
+  const lines = text.split("\n");
+  const headings = [];
+
+  let activeFence = null;
+  let offset = 0;
+
+  for (let lineIndex = 0; lineIndex < lines.length; lineIndex += 1) {
+    const line = String(lines[lineIndex] || "");
+    const lineStart = offset;
+    const hasNewline = lineIndex < lines.length - 1;
+    const lineEnd = lineStart + line.length + (hasNewline ? 1 : 0);
+
+    if (!activeFence) {
+      const openFenceMatch = line.match(OPEN_FENCE_PATTERN);
+      if (openFenceMatch) {
+        activeFence = {
+          marker: openFenceMatch[1][0] === "~" ? "~" : "`",
+          length: openFenceMatch[1].length
+        };
+      }
+    } else if (closeFencePatternFor(activeFence.marker.repeat(activeFence.length)).test(line)) {
+      activeFence = null;
+    }
+
+    const headingMatch = !activeFence ? line.match(HEADING_LINE_PATTERN) : null;
+    if (headingMatch) {
+      const level = String(headingMatch[1] || "").length;
+      const nextLine = lineIndex < lines.length - 1 ? String(lines[lineIndex + 1] || "") : "";
+      const nextHasNewline = lineIndex + 1 < lines.length - 1;
+      const subtitle = parseHeadingSubtitleMeta(nextLine);
+      const subtitleMetaFrom = subtitle ? lineEnd : -1;
+      const subtitleMetaTo = subtitle
+        ? lineEnd + nextLine.length + (nextHasNewline ? 1 : 0)
+        : -1;
+
+      headings.push({
+        id: `heading-outline-${headings.length + 1}`,
+        level,
+        title: trimClosingHeadingHashes(headingMatch[2] || ""),
+        subtitle,
+        from: lineStart,
+        to: lineStart + line.length,
+        lineEnd,
+        subtitleMetaFrom,
+        subtitleMetaTo
+      });
+    }
+
+    offset = lineEnd;
+  }
+
+  return headings;
+};
+
+const findSectionIndexForRawPos = (rawMarkdown, rawPosInput = 0) => {
+  const markdown = String(rawMarkdown || "");
+  const rawPos = clamp(Number(rawPosInput || 0), 0, markdown.length);
+  const sections = collectHeadingSections(markdown).sections;
+  if (!Array.isArray(sections) || !sections.length) {
+    return 0;
+  }
+  for (let index = 0; index < sections.length; index += 1) {
+    const section = sections[index];
+    const sectionStart = Number.isFinite(section?.start) ? section.start : 0;
+    const sectionEnd = Number.isFinite(section?.end) ? section.end : markdown.length;
+    if (rawPos >= sectionStart && rawPos < sectionEnd) {
+      return index;
+    }
+  }
+  return clamp(sections.length - 1, 0, sections.length - 1);
 };
 
 export const useMarkdownDocument = ({
@@ -198,6 +320,7 @@ export const useMarkdownDocument = ({
     const model = collectHeadingSections(rawMarkdown);
     return model.sections.map((section) => ({
       title: String(section.title || "").trim(),
+      subtitle: String(section.subtitle || "").trim(),
       content: String(section.content || ""),
       headingStart: section.headingFrom,
       headingEnd: section.headingTo,
@@ -206,6 +329,13 @@ export const useMarkdownDocument = ({
       endIndex: section.end
     }));
   };
+
+  const extractHeadingOutline = (rawMarkdown) =>
+    collectHeadingOutline(rawMarkdown).map((heading) => ({
+      ...heading,
+      title: String(heading.title || "").trim(),
+      subtitle: String(heading.subtitle || "").trim()
+    }));
 
   const serializeStepsToMarkdown = (sourceSteps) => {
     const list = Array.isArray(sourceSteps) ? sourceSteps : [];
@@ -221,6 +351,7 @@ export const useMarkdownDocument = ({
 
     const sections = list.map((step, index) => ({
       title: String(step?.title || "").trim() || defaultStepTitle(index),
+      subtitle: String(step?.subtitle || "").trim(),
       content: String(step?.content || "")
     }));
 
@@ -420,6 +551,7 @@ export const useMarkdownDocument = ({
     const model = collectHeadingSections(documentMarkdown.value);
     const sections = model.sections.map((section) => ({
       title: section.title,
+      subtitle: section.subtitle,
       content: section.content
     }));
 
@@ -434,6 +566,7 @@ export const useMarkdownDocument = ({
     const insertIndex = clamp(currentStepIndex.value + 1, 0, sections.length);
     sections.splice(insertIndex, 0, {
       title: defaultStepTitle(insertIndex),
+      subtitle: "",
       content: ""
     });
     const nextMarkdown = serializeHeadingSections({
@@ -452,6 +585,7 @@ export const useMarkdownDocument = ({
 
     const nextSections = model.sections.map((section) => ({
       title: section.title,
+      subtitle: section.subtitle,
       content: section.content
     }));
     const idx = clamp(currentStepIndex.value, 0, Math.max(0, nextSections.length - 1));
@@ -476,6 +610,7 @@ export const useMarkdownDocument = ({
 
     const nextSections = model.sections.map((section) => ({
       title: section.title,
+      subtitle: section.subtitle,
       content: section.content
     }));
     if (nextSections[safeIndex]?.title === normalizedTitle) {
@@ -488,6 +623,69 @@ export const useMarkdownDocument = ({
       sections: nextSections
     });
     await applyExternalMarkdownChange(nextMarkdown, { focusIndex: safeIndex, focusEditor: false });
+    return true;
+  };
+
+  const renameOutlineHeadingTitle = async (index, nextTitle) => {
+    const markdown = normalizeMarkdownText(documentMarkdown.value);
+    const headings = collectHeadingOutline(markdown);
+    if (!headings.length) {
+      return false;
+    }
+
+    const safeIndex = clamp(Number(index) || 0, 0, Math.max(0, headings.length - 1));
+    const targetHeading = headings[safeIndex];
+    const normalizedTitle = trimClosingHeadingHashes(nextTitle || "");
+    if (!targetHeading || targetHeading.title === normalizedTitle) {
+      return false;
+    }
+
+    const nextHeadingLine = `${"#".repeat(clamp(targetHeading.level, 1, 6))} ${normalizedTitle}`.trimEnd();
+    const nextMarkdown = `${markdown.slice(0, targetHeading.from)}${nextHeadingLine}${markdown.slice(targetHeading.to)}`;
+    await applyExternalMarkdownChange(nextMarkdown, {
+      focusIndex: findSectionIndexForRawPos(nextMarkdown, targetHeading.from),
+      focusEditor: false
+    });
+    return true;
+  };
+
+  const renameOutlineHeadingSubtitle = async (index, nextSubtitle) => {
+    const markdown = normalizeMarkdownText(documentMarkdown.value);
+    const headings = collectHeadingOutline(markdown);
+    if (!headings.length) {
+      return false;
+    }
+
+    const safeIndex = clamp(Number(index) || 0, 0, Math.max(0, headings.length - 1));
+    const targetHeading = headings[safeIndex];
+    const normalizedSubtitle = normalizeHeadingSubtitle(nextSubtitle || "");
+    if (!targetHeading || targetHeading.subtitle === normalizedSubtitle) {
+      return false;
+    }
+
+    let nextMarkdown = markdown;
+    if (targetHeading.subtitleMetaFrom >= 0 && targetHeading.subtitleMetaTo >= targetHeading.subtitleMetaFrom) {
+      const existingMetaText = markdown.slice(targetHeading.subtitleMetaFrom, targetHeading.subtitleMetaTo);
+      const trailingNewline = existingMetaText.endsWith("\n") ? "\n" : "";
+      const replacement = normalizedSubtitle
+        ? `${serializeHeadingSubtitleMeta(normalizedSubtitle)}${trailingNewline}`
+        : "";
+      nextMarkdown = `${markdown.slice(0, targetHeading.subtitleMetaFrom)}${replacement}${markdown.slice(targetHeading.subtitleMetaTo)}`;
+    } else if (normalizedSubtitle) {
+      const insertion = targetHeading.lineEnd > targetHeading.to
+        ? `${serializeHeadingSubtitleMeta(normalizedSubtitle)}\n`
+        : `\n${serializeHeadingSubtitleMeta(normalizedSubtitle)}`;
+      nextMarkdown = `${markdown.slice(0, targetHeading.lineEnd)}${insertion}${markdown.slice(targetHeading.lineEnd)}`;
+    }
+
+    if (nextMarkdown === markdown) {
+      return false;
+    }
+
+    await applyExternalMarkdownChange(nextMarkdown, {
+      focusIndex: findSectionIndexForRawPos(nextMarkdown, targetHeading.from),
+      focusEditor: false
+    });
     return true;
   };
 
@@ -506,6 +704,7 @@ export const useMarkdownDocument = ({
 
     const nextSections = model.sections.map((section) => ({
       title: section.title,
+      subtitle: section.subtitle,
       content: section.content
     }));
     const [moved] = nextSections.splice(fromIndex, 1);
@@ -626,6 +825,7 @@ export const useMarkdownDocument = ({
     clearScheduledMarkdownSave,
     documentMarkdown,
     extractMarkdownSections,
+    extractHeadingOutline,
     flushPendingMarkdownSave,
     formatBytes,
     isMarkdownDirty,
@@ -641,6 +841,8 @@ export const useMarkdownDocument = ({
     parseMarkdownToSteps,
     persistActiveMarkdownBeforeSwitch,
     removeStep,
+    renameOutlineHeadingSubtitle,
+    renameOutlineHeadingTitle,
     renameStepTitle,
     resetBlankEditorState,
     saveMarkdown,

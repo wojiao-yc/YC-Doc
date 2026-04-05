@@ -120,6 +120,9 @@
   --yc-term-session-select-border: var(--yc-border-contrast);
   --yc-term-session-select-text: var(--yc-text-secondary);
   --yc-term-session-select-hover: var(--yc-border);
+  --yc-term-session-select-hover-bg: color-mix(in srgb, var(--yc-term-tab-hover-bg) 72%, transparent);
+  --yc-term-session-select-hover-text: var(--yc-term-tab-hover-text);
+  --yc-term-session-select-icon: var(--yc-term-tab-text);
   --yc-term-session-bg: var(--yc-bg-overlay);
   --yc-term-session-border: var(--yc-border-strong);
   --yc-term-session-text: var(--yc-text-secondary);
@@ -132,6 +135,17 @@
   --yc-term-window-btn-hover: var(--yc-bg-hover);
   --yc-term-window-btn-close-hover: rgba(244, 63, 94, 0.16);
   --yc-term-window-btn-close-text: inherit;
+  --yc-term-shell-bg: var(--yc-term-pane-bg);
+  --yc-term-shell-border: var(--yc-term-pane-border);
+  --yc-term-tabs-bg: var(--yc-term-pane-head-bg);
+  --yc-term-tabs-border: var(--yc-term-pane-head-border);
+  --yc-term-top-fade-height: 54px;
+  --yc-term-top-fade-start: color-mix(in srgb, var(--yc-term-tabs-bg) 48%, transparent);
+  --yc-term-top-fade-mid: color-mix(in srgb, var(--yc-term-tabs-bg) 18%, transparent);
+  --yc-term-top-fade-mid-stop: 56%;
+  --yc-term-tab-text: var(--yc-text-muted);
+  --yc-term-tab-hover-bg: var(--yc-bg-hover);
+  --yc-term-tab-hover-text: var(--yc-text-primary);
   --yc-term-pane-bg: var(--yc-bg-panel);
   --yc-term-pane-border: var(--yc-border-strong);
   --yc-term-pane-focus: var(--yc-accent);

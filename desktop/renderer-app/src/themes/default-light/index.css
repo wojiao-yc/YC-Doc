@@ -65,6 +65,10 @@
   --yc-syntax-meta: #8d7159;
   --yc-syntax-delimiter: #8a97a7;
   --yc-syntax-link: #46617f;
+  --yc-term-top-fade-height: 52px;
+  --yc-term-top-fade-start: rgba(243, 246, 250, 0.78);
+  --yc-term-top-fade-mid: rgba(243, 246, 250, 0.22);
+  --yc-term-top-fade-mid-stop: 52%;
   --yc-graph-root-node: #94a3b8;
   --yc-graph-arrow: #64748b;
   --yc-graph-edge: rgba(100, 116, 139, 0.38);

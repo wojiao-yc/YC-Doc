@@ -232,6 +232,19 @@
   border: 0 !important;
 }
 
+.yc-editor-host .cm-line.cm-block-heading-subtitle-hidden {
+  height: 0 !important;
+  min-height: 0 !important;
+  line-height: 0 !important;
+  font-size: 0 !important;
+  padding-top: 0 !important;
+  padding-bottom: 0 !important;
+  border: 0 !important;
+  margin: 0 !important;
+  overflow: hidden !important;
+  pointer-events: none;
+}
+
 .yc-editor-host .cm-line.cm-block-math-block.cm-block-source-visible {
   background: transparent !important;
   box-shadow: none !important;

@@ -161,6 +161,17 @@
   --yc-term-window-btn-hover: #f4e8d0;
   --yc-term-window-btn-close-hover: rgba(159, 45, 32, 0.16);
   --yc-term-window-btn-close-text: #9f2d20;
+  --yc-term-shell-bg: #fff8ec;
+  --yc-term-shell-border: #d5c09a;
+  --yc-term-tabs-bg: #f3e6cc;
+  --yc-term-tabs-border: #d5c09a;
+  --yc-term-top-fade-height: 50px;
+  --yc-term-top-fade-start: rgba(243, 230, 204, 0.8);
+  --yc-term-top-fade-mid: rgba(243, 230, 204, 0.24);
+  --yc-term-top-fade-mid-stop: 52%;
+  --yc-term-tab-text: #7b6255;
+  --yc-term-tab-hover-bg: #f4e8d0;
+  --yc-term-tab-hover-text: #43302b;
   --yc-term-pane-bg: #fff8ec;
   --yc-term-pane-border: #d5c09a;
   --yc-term-pane-focus: var(--yc-accent);
