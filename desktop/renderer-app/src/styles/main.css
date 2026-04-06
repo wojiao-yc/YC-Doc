@@ -376,8 +376,8 @@ body {
 
 .file-sidebar-tools {
   display: grid;
-  grid-template-columns: repeat(5, 34px);
-  gap: -1px;
+  grid-template-columns: repeat(5, 30px);
+  gap: 0px;
   align-items: center;
   justify-content: center;
   width: fit-content;
