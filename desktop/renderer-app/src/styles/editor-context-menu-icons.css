@@ -30,3 +30,16 @@
   line-height: 1;
   text-transform: uppercase;
 }
+
+.yc-editor-context-item[data-menu-id="paragraph-text"] .yc-editor-context-icon.is-fallback {
+  font-size: 15px;
+  font-weight: 520;
+  letter-spacing: 0;
+}
+
+.yc-editor-context-item[data-menu-id="format"] .yc-editor-context-icon-svg path {
+  stroke: currentColor;
+  stroke-width: 8px;
+  stroke-linejoin: round;
+  paint-order: stroke fill;
+}

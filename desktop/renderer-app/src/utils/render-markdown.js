@@ -137,7 +137,7 @@ const resolveMarkedCodeArgs = (codeOrToken, maybeInfoString) => {
 };
 
 const createWikiLinkHtml = (parsed, resolution) => {
-  const classNames = ["wiki-link"];
+  const classNames = ["wiki-link", "term-tip-btn"];
   if (resolution.ambiguous) {
     classNames.push("is-ambiguous");
   } else if (!resolution.exists) {
@@ -165,7 +165,7 @@ const createWikiLinkHtml = (parsed, resolution) => {
     ` data-wiki-state="${encodeAttr(resolution.ambiguous ? "ambiguous" : (resolution.exists ? "resolved" : "missing"))}"`,
     ` data-wiki-suggested-rel-path="${encodeAttr(suggestedRelPath)}"`,
     candidates ? ` data-wiki-candidates="${encodeAttr(candidates)}"` : "",
-    ` title="${encodeAttr(tooltip)}"`,
+    ` data-tip="${encodeAttr(tooltip)}"`,
     `>${escapeHtml(displayText)}</a>`
   ].join("");
 };
@@ -282,9 +282,14 @@ export const renderMarkdownToHtml = ({
     const { text, lang } = resolveMarkedCodeArgs(codeOrToken, maybeInfoString);
     const { language, html } = highlightCodeBlock(text, lang);
     const languageClass = language ? `language-${encodeAttr(language)}` : "";
-    const preClass = languageClass ? ` class="${languageClass}"` : "";
+    const preClass = ` class="md-code-block${languageClass ? ` ${languageClass}` : ""}"`;
     const codeClass = languageClass ? ` class="${languageClass}"` : "";
-    return `<pre${preClass}><code${codeClass}>${html}</code></pre>`;
+    const copyButton = [
+      '<button type="button" class="md-code-copy-btn term-tip-btn" data-copy-code data-tip="复制代码" aria-label="复制代码">',
+      '<span class="md-code-copy-icon" aria-hidden="true"></span>',
+      "</button>"
+    ].join("");
+    return `<pre${preClass}>${copyButton}<code${codeClass}>${html}</code></pre>`;
   };
   const parsed = String(marked.parse(withMath, {
     breaks: true,

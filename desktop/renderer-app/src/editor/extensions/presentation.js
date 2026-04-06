@@ -152,7 +152,7 @@ const MIN_IMAGE_WIDTH = 160;
 const MAX_IMAGE_WIDTH = 1400;
 const SOURCE_TOGGLE_ICON_COLLAPSED = "</>";
 const SOURCE_TOGGLE_ICON_EXPANDED = ">/<";
-const sourceToggleTitle = (isExpanded) => (isExpanded ? "Hide source" : "Show source");
+const sourceToggleTitle = (isExpanded) => (isExpanded ? "收起源码" : "展开源码");
 const CALLOUT_LABELS = {
   note: "NOTE",
   tip: "TIP",
@@ -1158,8 +1158,8 @@ class ImageWidget extends WidgetType {
     toolbar.className = "cm-image-widget-toolbar";
 
     const handle = document.createElement("span");
-    handle.className = "cm-image-widget-resize-handle";
-    handle.setAttribute("title", "Drag to resize image");
+    handle.className = "cm-image-widget-resize-handle term-tip-btn";
+    handle.setAttribute("data-tip", "拖动调整图片尺寸");
     handle.setAttribute("data-image-block-id", this.blockId);
     handle.setAttribute("data-image-width", String(this.width));
     handle.ondragstart = (event) => {
@@ -1168,9 +1168,9 @@ class ImageWidget extends WidgetType {
 
     // Toggle source visibility for this image block.
     const btn = document.createElement("span");
-    btn.className = "cm-image-widget-btn";
+    btn.className = "cm-image-widget-btn term-tip-btn";
     btn.textContent = this.isExpanded ? SOURCE_TOGGLE_ICON_EXPANDED : SOURCE_TOGGLE_ICON_COLLAPSED;
-    btn.setAttribute("title", sourceToggleTitle(this.isExpanded));
+    btn.setAttribute("data-tip", sourceToggleTitle(this.isExpanded));
     btn.setAttribute("data-image-block-id", this.blockId);
 
     toolbar.appendChild(btn);
@@ -1217,9 +1217,9 @@ class MathBlockWidget extends WidgetType {
     }
 
     const btn = document.createElement("span");
-    btn.className = "cm-math-widget-btn";
+    btn.className = "cm-math-widget-btn term-tip-btn";
     btn.textContent = this.isExpanded ? SOURCE_TOGGLE_ICON_EXPANDED : SOURCE_TOGGLE_ICON_COLLAPSED;
-    btn.setAttribute("title", sourceToggleTitle(this.isExpanded));
+    btn.setAttribute("data-tip", sourceToggleTitle(this.isExpanded));
     btn.setAttribute("data-math-block-id", this.blockId);
 
     wrapper.appendChild(content);
@@ -1291,10 +1291,10 @@ class TableBlockWidget extends WidgetType {
 
         const colHandle = document.createElement("button");
         colHandle.type = "button";
-        colHandle.className = "cm-table-widget-col-handle";
+        colHandle.className = "cm-table-widget-col-handle term-tip-btn";
         colHandle.textContent = "";
-        colHandle.setAttribute("title", "Drag to move this column");
-        colHandle.setAttribute("aria-label", "Drag to move this column");
+        colHandle.setAttribute("data-tip", "拖动移动此列");
+        colHandle.setAttribute("aria-label", "拖动移动此列");
         colHandle.setAttribute("data-table-col-handle", "true");
         colHandle.setAttribute("data-table-block-id", this.blockId);
         colHandle.setAttribute("data-table-col-index", String(index));
@@ -1333,10 +1333,10 @@ class TableBlockWidget extends WidgetType {
             td.classList.add("cm-table-widget-row-anchor");
             const rowHandle = document.createElement("button");
             rowHandle.type = "button";
-            rowHandle.className = "cm-table-widget-row-handle";
+            rowHandle.className = "cm-table-widget-row-handle term-tip-btn";
             rowHandle.textContent = "";
-            rowHandle.setAttribute("title", "Drag to move this row");
-            rowHandle.setAttribute("aria-label", "Drag to move this row");
+            rowHandle.setAttribute("data-tip", "拖动移动此行");
+            rowHandle.setAttribute("aria-label", "拖动移动此行");
             rowHandle.setAttribute("data-table-row-handle", "true");
             rowHandle.setAttribute("data-table-block-id", this.blockId);
             rowHandle.setAttribute("data-table-row-index", String(rowIndex));
@@ -1352,20 +1352,20 @@ class TableBlockWidget extends WidgetType {
 
       const addColumnBtn = document.createElement("button");
       addColumnBtn.type = "button";
-      addColumnBtn.className = "cm-table-widget-edge-btn cm-table-widget-add-col-btn";
+      addColumnBtn.className = "cm-table-widget-edge-btn cm-table-widget-add-col-btn term-tip-btn";
       addColumnBtn.textContent = "+";
-      addColumnBtn.setAttribute("title", "Insert one column on the right");
-      addColumnBtn.setAttribute("aria-label", "Insert one column on the right");
+      addColumnBtn.setAttribute("data-tip", "在右侧插入一列");
+      addColumnBtn.setAttribute("aria-label", "在右侧插入一列");
       addColumnBtn.setAttribute("data-table-action", "add-column-right");
       addColumnBtn.setAttribute("data-table-block-id", this.blockId);
       wrapper.appendChild(addColumnBtn);
 
       const addRowBtn = document.createElement("button");
       addRowBtn.type = "button";
-      addRowBtn.className = "cm-table-widget-edge-btn cm-table-widget-add-row-btn";
+      addRowBtn.className = "cm-table-widget-edge-btn cm-table-widget-add-row-btn term-tip-btn";
       addRowBtn.textContent = "+";
-      addRowBtn.setAttribute("title", "Insert one row below");
-      addRowBtn.setAttribute("aria-label", "Insert one row below");
+      addRowBtn.setAttribute("data-tip", "在下方插入一行");
+      addRowBtn.setAttribute("aria-label", "在下方插入一行");
       addRowBtn.setAttribute("data-table-action", "add-row-bottom");
       addRowBtn.setAttribute("data-table-block-id", this.blockId);
       wrapper.appendChild(addRowBtn);
@@ -1377,9 +1377,9 @@ class TableBlockWidget extends WidgetType {
     }
 
     const btn = document.createElement("span");
-    btn.className = "cm-table-widget-btn";
+    btn.className = "cm-table-widget-btn term-tip-btn";
     btn.textContent = this.isExpanded ? SOURCE_TOGGLE_ICON_EXPANDED : SOURCE_TOGGLE_ICON_COLLAPSED;
-    btn.setAttribute("title", sourceToggleTitle(this.isExpanded));
+    btn.setAttribute("data-tip", sourceToggleTitle(this.isExpanded));
     btn.setAttribute("data-table-block-id", this.blockId);
 
     wrapper.appendChild(content);
@@ -1411,10 +1411,10 @@ class InlineMathWidget extends WidgetType {
 
   toDOM() {
     const wrapper = document.createElement("span");
-    wrapper.className = "cm-inline-math-widget";
+    wrapper.className = "cm-inline-math-widget term-tip-btn";
     wrapper.setAttribute("data-math-inline-from", String(this.from));
     wrapper.setAttribute("data-math-inline-to", String(this.to));
-    wrapper.setAttribute("title", "Click to edit formula source");
+    wrapper.setAttribute("data-tip", "点击编辑公式源码");
     try {
       wrapper.innerHTML = renderMathHtml(this.formula, false);
     } catch {

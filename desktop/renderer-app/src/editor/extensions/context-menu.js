@@ -1439,7 +1439,7 @@ const TABLE_MENU_DEFINITION = [
 const CONTEXT_MENU_ICON_NAME_BY_ID = Object.freeze({
   "add-link": "link",
   "add-external-link": "external-link",
-  format: "highlight",
+  format: "format-brush",
   "format-bold": "bold",
   "format-italic": "italic",
   "format-strike": "strikethrough",
@@ -1460,7 +1460,7 @@ const CONTEXT_MENU_ICON_NAME_BY_ID = Object.freeze({
   "paragraph-h6": "h6",
   "paragraph-quote": "quote",
   insert: "add",
-  "insert-footnote": "file",
+  "insert-footnote": "footnote-mark",
   "insert-table": "apps",
   "insert-callout": "notification",
   "insert-divider": "minimize",
@@ -1703,6 +1703,20 @@ class EditorContextMenuController {
     }
   }
 
+  clearMenuActiveState(menuEl) {
+    if (!(menuEl instanceof HTMLElement)) {
+      return;
+    }
+    if (menuEl === this.subMenuEl) {
+      this.submenuActiveIndex = -1;
+    } else if (menuEl === this.rootMenuEl) {
+      this.rootActiveIndex = -1;
+    }
+    this.getMenuButtons(menuEl).forEach((button) => {
+      button.classList.remove("is-active");
+    });
+  }
+
   focusMenuItem(menuEl, indexInput = 0) {
     return this.setMenuActiveIndex(menuEl, indexInput);
   }
@@ -1741,6 +1755,24 @@ class EditorContextMenuController {
 
   getActiveMenuElement() {
     return this.subMenuEl || this.rootMenuEl;
+  }
+
+  getRootMenuItemFromEventTarget(target) {
+    if (!(this.rootMenuEl instanceof HTMLElement) || !(target instanceof Element)) {
+      return null;
+    }
+    const item = target.closest(".yc-editor-context-item");
+    if (!(item instanceof HTMLButtonElement) || !this.rootMenuEl.contains(item)) {
+      return null;
+    }
+    return item;
+  }
+
+  isRelatedTargetWithinActiveRootItem(target) {
+    if (!(this.activeSubmenuItemEl instanceof HTMLButtonElement) || !(target instanceof Node)) {
+      return false;
+    }
+    return this.activeSubmenuItemEl === target || this.activeSubmenuItemEl.contains(target);
   }
 
   handleContextMenu(event) {
@@ -2010,11 +2042,13 @@ class EditorContextMenuController {
         return;
       }
       this.closeSubMenu();
+      this.clearMenuActiveState(this.rootMenuEl);
     }, SUBMENU_CLOSE_DELAY_MS);
   }
 
   closeSubMenu() {
     this.clearSubmenuTimers();
+    this.clearMenuActiveState(this.subMenuEl);
     if (this.subMenuEl) {
       disposeMountedContextMenuIcons(this.subMenuEl);
       this.subMenuEl.remove();
@@ -2026,6 +2060,9 @@ class EditorContextMenuController {
     }
     this.pointerInSubmenu = false;
     this.submenuActiveIndex = -1;
+    if (!this.pointerInRootMenu) {
+      this.clearMenuActiveState(this.rootMenuEl);
+    }
   }
 
   async runItemCommand(item) {
@@ -2109,18 +2146,39 @@ class EditorContextMenuController {
       }
       this.clearSubmenuCloseTimer();
     });
+    if (!isSubmenu) {
+      menu.addEventListener("mousemove", (event) => {
+        this.pointerInRootMenu = true;
+        if (!this.subMenuEl || !(this.activeSubmenuItemEl instanceof HTMLButtonElement)) {
+          return;
+        }
+        const hoveredItem = this.getRootMenuItemFromEventTarget(event?.target instanceof Element ? event.target : null);
+        if (hoveredItem && hoveredItem === this.activeSubmenuItemEl) {
+          return;
+        }
+        this.closeSubMenu();
+        this.clearMenuActiveState(this.rootMenuEl);
+      });
+    }
     menu.addEventListener("mouseleave", (event) => {
       const related = event?.relatedTarget;
       if (isSubmenu) {
         this.pointerInSubmenu = false;
-        if (related instanceof Node && this.rootMenuEl?.contains(related)) {
+        if (related instanceof Node && menu.contains(related)) {
           return;
         }
+        if (this.isRelatedTargetWithinActiveRootItem(related)) {
+          return;
+        }
+        this.closeSubMenu();
+        this.clearMenuActiveState(this.rootMenuEl);
+        return;
       } else {
         this.pointerInRootMenu = false;
         if (related instanceof Node && this.subMenuEl?.contains(related)) {
           return;
         }
+        this.clearMenuActiveState(this.rootMenuEl);
       }
       this.scheduleCloseSubmenu();
     });
@@ -2137,6 +2195,7 @@ class EditorContextMenuController {
       button.type = "button";
       button.className = "yc-editor-context-item";
       button.setAttribute("role", "menuitem");
+      button.dataset.menuId = String(item?.id || "");
       button._ycMenuItem = item;
       if (item?.disabled) {
         button.classList.add("is-disabled");
@@ -2166,7 +2225,7 @@ class EditorContextMenuController {
         button.addEventListener("mouseenter", () => {
           const index = this.getMenuButtons(menu).findIndex((entry) => entry === button);
           this.focusMenuItem(menu, index);
-          this.scheduleOpenSubmenu(item, button);
+          this.openSubmenuForItem(item, button);
         });
         button.addEventListener("mouseleave", (event) => {
           const related = event?.relatedTarget;

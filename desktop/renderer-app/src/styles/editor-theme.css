@@ -135,45 +135,73 @@
 }
 
 .yc-editor-host .cm-code-token-punctuation,
-.yc-editor-host .cm-code-token-operator,
+.yc-editor-host .cm-code-token-brace,
 .yc-editor-host .cm-code-token-entity {
+  color: var(--yc-syntax-delimiter);
+}
+
+.yc-editor-host .cm-code-token-operator,
+.yc-editor-host .cm-code-token-deleted {
   color: var(--yc-syntax-operator);
 }
 
 .yc-editor-host .cm-code-token-property,
+.yc-editor-host .cm-code-token-attr-name {
+  color: var(--yc-syntax-attribute);
+}
+
 .yc-editor-host .cm-code-token-tag,
+.yc-editor-host .cm-code-token-selector {
+  color: var(--yc-syntax-link);
+}
+
 .yc-editor-host .cm-code-token-boolean,
 .yc-editor-host .cm-code-token-number,
 .yc-editor-host .cm-code-token-constant,
-.yc-editor-host .cm-code-token-symbol,
-.yc-editor-host .cm-code-token-deleted {
+.yc-editor-host .cm-code-token-symbol {
   color: var(--yc-syntax-number);
 }
 
-.yc-editor-host .cm-code-token-selector,
-.yc-editor-host .cm-code-token-attr-name,
 .yc-editor-host .cm-code-token-string,
 .yc-editor-host .cm-code-token-char,
 .yc-editor-host .cm-code-token-builtin,
-.yc-editor-host .cm-code-token-inserted {
+.yc-editor-host .cm-code-token-inserted,
+.yc-editor-host .cm-code-token-template-string,
+.yc-editor-host .cm-code-token-interpolation {
   color: var(--yc-syntax-string);
 }
 
+.yc-editor-host .cm-code-token-keyword,
+.yc-editor-host .cm-code-token-control,
+.yc-editor-host .cm-code-token-rule,
+.yc-editor-host .cm-code-token-directive,
 .yc-editor-host .cm-code-token-atrule,
-.yc-editor-host .cm-code-token-attr-value,
-.yc-editor-host .cm-code-token-keyword {
+.yc-editor-host .cm-code-token-attr-value {
   color: var(--yc-syntax-keyword);
+  font-weight: 640;
 }
 
 .yc-editor-host .cm-code-token-function,
-.yc-editor-host .cm-code-token-class-name {
-  color: var(--yc-syntax-type);
+.yc-editor-host .cm-code-token-method {
+  color: var(--yc-syntax-link);
 }
 
-.yc-editor-host .cm-code-token-regex,
-.yc-editor-host .cm-code-token-important,
+.yc-editor-host .cm-code-token-namespace,
+.yc-editor-host .cm-code-token-class-name,
+.yc-editor-host .cm-code-token-decorator {
+  color: var(--yc-syntax-type);
+  font-weight: 560;
+}
+
 .yc-editor-host .cm-code-token-variable {
+  color: var(--yc-text-primary);
+}
+
+.yc-editor-host .cm-code-token-parameter,
+.yc-editor-host .cm-code-token-regex,
+.yc-editor-host .cm-code-token-important {
   color: var(--yc-syntax-meta);
+  font-weight: 650;
 }
 
 .yc-editor-host .cm-wiki-link {

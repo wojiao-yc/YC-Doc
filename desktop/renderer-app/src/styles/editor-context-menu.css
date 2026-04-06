@@ -30,8 +30,8 @@
   line-height: 1;
   padding: 0 9px;
   user-select: none;
-  box-shadow: inset 0 0 0 1px transparent;
-  transition: background-color 0.14s ease, color 0.14s ease, box-shadow 0.14s ease;
+  box-shadow: none;
+  transition: background-color 0.14s ease, color 0.14s ease;
 }
 
 .yc-editor-context-item:hover,
@@ -39,8 +39,8 @@
 .yc-editor-context-item.is-active,
 .yc-editor-context-item.is-open {
   outline: none;
-  background: var(--yc-menu-hover);
-  box-shadow: var(--yc-menu-hover-shadow);
+  background: color-mix(in srgb, var(--yc-menu-hover) 64%, var(--yc-accent-soft-strong) 36%);
+  box-shadow: none;
 }
 
 .yc-editor-context-item.is-disabled,

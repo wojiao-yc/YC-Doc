@@ -7,9 +7,10 @@
   --yc-font-mono: "SFMono-Regular", "Cascadia Mono", "JetBrains Mono", Menlo, Consolas, monospace;
   --yc-font-widget-mono: var(--yc-font-code);
   --yc-font-checkbox: "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
-  --yc-doc-font-size: 17px;
+  --yc-doc-font-size: 16px;
   --yc-doc-line-height: 1.88;
-  --yc-preview-font-size: 15px;
+  --yc-preview-font-size: 14px;
+  --yc-preview-table-font-size: 15px;
   --yc-preview-line-height: 1.8;
   --yc-file-tree-font-size: 0.875rem;
   --yc-file-tree-line-height: 1.25rem;

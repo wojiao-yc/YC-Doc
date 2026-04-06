@@ -60,13 +60,14 @@
             v-for="tab in editorTabsWithMeta"
             :key="tab.id"
             type="button"
-            class="editor-tab"
+            class="editor-tab editor-tab-tip-btn"
             :class="[
               activeEditorTabId === tab.id ? 'editor-tab-active' : '',
               draggedEditorTabDropId === tab.id && draggedEditorTabDropSide === 'before' ? 'is-drop-before' : '',
               draggedEditorTabDropId === tab.id && draggedEditorTabDropSide === 'after' ? 'is-drop-after' : ''
             ]"
-            :title="tab.title"
+            :data-tip="tab.title || ''"
+            :aria-label="tab.title || tab.label"
             draggable="true"
             @click="switchEditorTab(tab.id)"
             @dragstart="onEditorTabDragStart(tab.id)"
@@ -338,9 +339,8 @@
           <button
             type="button"
             class="file-sidebar-workspace-main"
-            :class="[isDark ? 'is-dark' : '', isFileSidebarCollapsed ? 'sidebar-tip-btn' : '']"
-            :title="isFileSidebarCollapsed ? '' : storageLocationText"
-            :data-tip="isFileSidebarCollapsed ? storageLocationText : ''"
+            :class="[isDark ? 'is-dark' : '', isFileSidebarCollapsed ? 'sidebar-tip-btn' : 'term-tip-btn']"
+            :data-tip="storageLocationText"
             @click="handleWorkspaceFooterPrimaryAction"
             @dragover="onStorageTreeRootDragOver"
             @drop="onStorageTreeRootDrop"
@@ -630,16 +630,16 @@
                   >
                     <div class="flex items-center gap-2 flex-wrap mb-2">
                       <span
-                        class="px-1.5 py-0.5 rounded border"
+                        class="px-1.5 py-0.5 rounded border term-tip-btn"
                         :class="saveStatusChipClass"
-                        :title="saveStatusTooltip"
+                        :data-tip="saveStatusTooltip"
                       >
                         {{ saveStatusLabel }}
                       </span>
                       <span
-                        class="px-1.5 py-0.5 rounded border"
+                        class="px-1.5 py-0.5 rounded border term-tip-btn"
                         :class="isDark ? 'bg-slate-800 border-slate-700 text-slate-200' : 'bg-white border-gray-300 text-gray-700'"
-                        :title="currentBlockDebugTitle"
+                        :data-tip="currentBlockDebugTitle"
                       >
                         {{ currentBlockLabel }}
                       </span>
@@ -973,12 +973,13 @@
             v-for="heading in visibleEditorHeadingOutline"
             :key="heading.id"
             @click="handleOutlineSelection(heading)"
-            :title="isInspectorSidebarCollapsed ? (heading.title || '') : ''"
             class="nav-step-item nav-outline-item flex cursor-pointer transition-all border-l-4"
             :class="[
               activeEditorOutlineIndex === heading.outlineIndex ? 'is-active' : '',
+              isInspectorSidebarCollapsed ? 'sidebar-tip-btn' : '',
               'items-center'
             ]"
+            :data-tip="isInspectorSidebarCollapsed ? (heading.title || '') : ''"
           >
             <div class="nav-outline-content" :style="outlineIndentStyle(heading)">
               <div class="nav-step-side nav-outline-side">
@@ -1166,7 +1167,7 @@
       </button>
       <button type="button" class="term-context-item" role="menuitem" :disabled="!canRevealStorageNode(storageNodeMenu.nodeId)" @click="revealStorageNodeInExplorer(storageNodeMenu.nodeId)">
         <AppIcon name="open-folder" class="storage-context-icon" />
-        <span>在文件资源管理器中显示</span>
+        <span>在文件夹中显示</span>
       </button>
       <button type="button" class="term-context-item is-danger" role="menuitem" @click="deleteStorageNode(storageNodeMenu.nodeId)">
         <AppIcon name="delete" class="storage-context-icon" />
@@ -6016,10 +6017,33 @@ const isPreviewInteractiveTarget = (target) => {
   );
 };
 
+const copyPreviewCodeBlock = async (buttonElInput) => {
+  const buttonEl = buttonElInput instanceof HTMLElement ? buttonElInput : null;
+  const codeEl = buttonEl?.closest("pre")?.querySelector("code");
+  const codeText = String(codeEl?.textContent || "");
+  if (!codeText) {
+    showToast("没有可复制的代码");
+    return;
+  }
+  try {
+    await writeDesktopClipboard(codeText);
+    showToast("代码已复制");
+  } catch {
+    showToast("复制失败");
+  }
+};
+
 const handlePreviewNavClick = (event) => {
   const targetElement = event?.target instanceof Element
     ? event.target
     : (event?.target?.parentElement instanceof Element ? event.target.parentElement : null);
+  const copyButton = targetElement?.closest("[data-copy-code]") || null;
+  if (copyButton instanceof HTMLElement) {
+    event.preventDefault();
+    event.stopPropagation();
+    void copyPreviewCodeBlock(copyButton);
+    return;
+  }
   const target = targetElement?.closest(".wiki-link") || null;
   if (target instanceof HTMLElement) {
     event.preventDefault();
