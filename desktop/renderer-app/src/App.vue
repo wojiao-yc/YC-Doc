@@ -138,7 +138,7 @@
         class="border-b themed-divider"
         :class="isFileSidebarCollapsed ? 'px-2 py-3' : 'px-3 py-3'"
       >
-        <div :class="isFileSidebarCollapsed ? 'flex flex-col items-center gap-1.5' : 'flex items-center gap-1.5'">
+        <div :class="isFileSidebarCollapsed ? 'file-sidebar-tools is-collapsed' : 'file-sidebar-tools'">
           <!-- File sidebar actions and tree icons are also centralized in `AppIcon.vue`. -->
           <button
             type="button"
@@ -159,11 +159,11 @@
             <AppIcon name="new-folder" class="chrome-icon file-sidebar-icon" />
           </button>
           <div class="relative storage-sort-menu-shell">
-            <button
-              type="button"
-              class="term-window-btn term-tip-btn file-sidebar-tool-btn"
-              :class="(isStorageSortMenuOpen || storageSortMode !== STORAGE_SORT_DEFAULT_MODE) ? 'is-active' : ''"
-              :data-tip="storageSortTooltip"
+          <button
+            type="button"
+            class="term-window-btn term-tip-btn file-sidebar-tool-btn"
+            :class="isStorageSortMenuOpen ? 'is-active' : ''"
+            :data-tip="storageSortTooltip"
               :aria-label="storageSortTooltip"
               @click.stop="toggleStorageSortMenu"
             >
@@ -194,6 +194,16 @@
               </template>
             </div>
           </div>
+          <button
+            type="button"
+            class="term-window-btn term-tip-btn file-sidebar-tool-btn"
+            :data-tip="allStorageFoldersExpanded ? '全部收起' : '全部展开'"
+            :aria-label="allStorageFoldersExpanded ? '全部收起' : '全部展开'"
+            :disabled="!hasStorageFolders"
+            @click="toggleAllStorageFolders"
+          >
+            <AppIcon :name="allStorageFoldersExpanded ? 'collapse-all' : 'expand-all'" class="chrome-icon file-sidebar-icon" />
+          </button>
           <button
             type="button"
             class="term-window-btn term-tip-btn file-sidebar-tool-btn"
@@ -1041,6 +1051,22 @@
         <AppIcon name="rename" class="storage-context-icon" />
         <span>重命名</span>
       </button>
+      <button type="button" class="term-context-item" role="menuitem" @click="copyStorageNode(storageNodeMenu.nodeId, 'cut')">
+        <AppIcon name="scissor" class="storage-context-icon" />
+        <span>剪切</span>
+      </button>
+      <button type="button" class="term-context-item" role="menuitem" @click="copyStorageNode(storageNodeMenu.nodeId, 'copy')">
+        <AppIcon name="copy" class="storage-context-icon" />
+        <span>复制</span>
+      </button>
+      <button type="button" class="term-context-item" role="menuitem" :disabled="!canPasteIntoStorageNode(storageNodeMenu.nodeId)" @click="pasteIntoStorageNode(storageNodeMenu.nodeId)">
+        <AppIcon name="paste" class="storage-context-icon" />
+        <span>粘贴</span>
+      </button>
+      <button type="button" class="term-context-item" role="menuitem" :disabled="!canRevealStorageNode(storageNodeMenu.nodeId)" @click="revealStorageNodeInExplorer(storageNodeMenu.nodeId)">
+        <AppIcon name="open-folder" class="storage-context-icon" />
+        <span>在文件资源管理器中显示</span>
+      </button>
       <button type="button" class="term-context-item is-danger" role="menuitem" @click="deleteStorageNode(storageNodeMenu.nodeId)">
         <AppIcon name="delete" class="storage-context-icon" />
         <span>删除</span>
@@ -1435,7 +1461,7 @@ const draggedStorageNodeId = ref("");
 const storageTreeDropTargetId = ref("");
 const isStorageTreeImportActive = ref(false);
 const editorImageImportActive = ref(false);
-const fileSidebarWidth = ref(280);
+const fileSidebarWidth = ref(240);
 const storageSortMode = ref("name-asc");
 const STORAGE_ROOT_ID = "workspace-root";
 const storageTree = ref(null);
@@ -1450,8 +1476,8 @@ const SIDEBAR_MAX_WIDTH = 560;
 const SIDEBAR_HIDE_SNAP = 44;
 const SIDEBAR_COLLAPSE_SNAP = SIDEBAR_COLLAPSED_WIDTH + 34;
 const FILE_SIDEBAR_COLLAPSED_WIDTH = 68;
-const FILE_SIDEBAR_MIN_WIDTH = 220;
-const FILE_SIDEBAR_MAX_WIDTH = 520;
+const FILE_SIDEBAR_MIN_WIDTH = 180;
+const FILE_SIDEBAR_MAX_WIDTH = 560;
 const FILE_SIDEBAR_HIDE_SNAP = 44;
 const FILE_SIDEBAR_COLLAPSE_SNAP = FILE_SIDEBAR_COLLAPSED_WIDTH + 30;
 const FILE_TREE_INDENT_STEP = 18;
@@ -1484,6 +1510,13 @@ const storageNodeMenu = ref({
   x: 0,
   y: 0,
   nodeId: ""
+});
+const storageClipboard = ref({
+  mode: "",
+  nodeId: "",
+  relPath: "",
+  nodeType: "file",
+  name: ""
 });
 const storageRenameDialog = ref({
   open: false,
@@ -2989,16 +3022,13 @@ const fileSidebarPanelWidth = computed(() => {
 });
 
 const chromeLeadingWidth = computed(() => (
-  isFileSidebarHidden.value
-    ? 46
-    : Math.max(0, Number(fileSidebarPanelWidth.value || 0))
+  Math.max(
+    Number(fileSidebarPanelWidth.value || 0),
+    116
+  )
 ));
 
-const showChromeStatsChip = computed(() => (
-  !isFileSidebarHidden.value
-  && !isFileSidebarCollapsed.value
-  && chromeLeadingWidth.value >= 136
-));
+const showChromeStatsChip = computed(() => true);
 
 const chromeLeadingStyle = computed(() => ({
   width: `${chromeLeadingWidth.value}px`
@@ -3125,6 +3155,45 @@ const visibleStorageNodes = computed(() => {
   }
   return list;
 });
+
+const collectStorageFolderIds = (node, output = []) => {
+  if (!node || node.type !== "folder") {
+    return output;
+  }
+  output.push(String(node.id || ""));
+  for (const child of Array.isArray(node.children) ? node.children : []) {
+    collectStorageFolderIds(child, output);
+  }
+  return output;
+};
+
+const storageFolderIds = computed(() => (
+  collectStorageFolderIds(storageTree.value, []).filter((id) => id && id !== STORAGE_ROOT_ID)
+));
+
+const hasStorageFolders = computed(() => storageFolderIds.value.length > 0);
+
+const allStorageFoldersExpanded = computed(() => {
+  const folderIds = storageFolderIds.value;
+  return folderIds.length > 0
+    && folderIds.every((id) => storageFolderExpandedMap.value[id] !== false);
+});
+
+const toggleAllStorageFolders = () => {
+  const folderIds = storageFolderIds.value;
+  if (!folderIds.length) {
+    return;
+  }
+  if (allStorageFoldersExpanded.value) {
+    storageFolderExpandedMap.value = Object.fromEntries(
+      [STORAGE_ROOT_ID, ...folderIds].map((id) => [id, id === STORAGE_ROOT_ID])
+    );
+    return;
+  }
+  storageFolderExpandedMap.value = Object.fromEntries(
+    [STORAGE_ROOT_ID, ...folderIds].map((id) => [id, true])
+  );
+};
 
 const storageNodeIconName = (node) => {
   if (String(node?.type || "") === "folder") {
@@ -4486,6 +4555,285 @@ const deleteLocalStorageNode = (nodeId) => {
     parentId: matched.parentId,
     node: matched.node
   };
+};
+
+const splitStorageNodeName = (nameInput = "", isFolder = false) => {
+  const name = String(nameInput || "").trim();
+  if (isFolder) {
+    return {
+      base: name || "新建文件夹",
+      ext: ""
+    };
+  }
+  const dotIndex = name.lastIndexOf(".");
+  if (dotIndex <= 0) {
+    return {
+      base: name || "未命名",
+      ext: ""
+    };
+  }
+  return {
+    base: name.slice(0, dotIndex) || "未命名",
+    ext: name.slice(dotIndex)
+  };
+};
+
+const pickUniqueStorageClipboardName = (folderNode, requestedNameInput = "", isFolder = false) => {
+  const requestedName = String(requestedNameInput || "").trim();
+  const { base, ext } = splitStorageNodeName(requestedName, isFolder);
+  const existingNames = new Set(
+    (Array.isArray(folderNode?.children) ? folderNode.children : [])
+      .map((child) => String(child?.name || "").trim().toLowerCase())
+      .filter(Boolean)
+  );
+  let index = 0;
+  while (index < 10000) {
+    const suffix = index === 0 ? " 副本" : ` 副本 ${index + 1}`;
+    const candidate = `${base}${suffix}${ext}`;
+    if (!existingNames.has(candidate.toLowerCase())) {
+      return candidate;
+    }
+    index += 1;
+  }
+  return `${base}-${Date.now()}${ext}`;
+};
+
+const cloneStorageNodeClipboardBranch = (sourceNode, parentRelPath = "", forcedNameInput = "") => {
+  const type = sourceNode?.type === "folder" ? "folder" : "file";
+  const name = String(forcedNameInput || sourceNode?.name || (type === "folder" ? "新建文件夹" : "未命名.md")).trim()
+    || (type === "folder" ? "新建文件夹" : "未命名.md");
+  const relPath = joinStorageRelPath(parentRelPath, name);
+  const createdAt = Date.now();
+  const updatedAt = createdAt;
+  const children = type === "folder"
+    ? (Array.isArray(sourceNode?.children) ? sourceNode.children : [])
+        .map((child) => cloneStorageNodeClipboardBranch(child, relPath))
+    : [];
+  return {
+    id: relPath || makeStorageNodeId(type),
+    type,
+    name,
+    relPath,
+    absPath: "",
+    size: Number(sourceNode?.size || 0),
+    createdAt,
+    updatedAt,
+    children
+  };
+};
+
+const duplicateLocalStorageNodeToFolder = (nodeIdInput = "", targetFolderIdInput = "") => {
+  const nodeId = String(nodeIdInput || "").trim();
+  const targetFolderId = String(targetFolderIdInput || "").trim();
+  if (!nodeId || !targetFolderId || nodeId === STORAGE_ROOT_ID) {
+    return null;
+  }
+  const draft = cloneStorageTree(storageTree.value);
+  const sourceMatch = findStorageNodeInTree(draft, nodeId);
+  const targetMatch = findStorageNodeInTree(draft, targetFolderId);
+  if (!sourceMatch || !targetMatch || targetMatch.node.type !== "folder") {
+    return null;
+  }
+  if (
+    sourceMatch.node.type === "folder"
+    && isRelPathAffectedByNode(String(targetMatch.node.relPath || ""), String(sourceMatch.node.relPath || ""), "folder")
+  ) {
+    return { error: "cannot_copy_into_descendant" };
+  }
+  const nextName = pickUniqueStorageClipboardName(
+    targetMatch.node,
+    String(sourceMatch.node.name || ""),
+    sourceMatch.node.type === "folder"
+  );
+  const duplicatedNode = cloneStorageNodeClipboardBranch(
+    sourceMatch.node,
+    String(targetMatch.node.relPath || ""),
+    nextName
+  );
+  targetMatch.node.children = [
+    ...(Array.isArray(targetMatch.node.children) ? targetMatch.node.children : []),
+    duplicatedNode
+  ];
+  storageTree.value = draft;
+  return {
+    node: duplicatedNode,
+    relPath: String(duplicatedNode.relPath || ""),
+    parentId: targetFolderId
+  };
+};
+
+const canRevealStorageNode = (nodeIdInput = "") => {
+  const nodeId = String(nodeIdInput || "").trim();
+  if (!isDesktopStorage || !nodeId || nodeId === STORAGE_ROOT_ID) {
+    return false;
+  }
+  return Boolean(getDesktopDataMethod("revealWorkspaceNode"));
+};
+
+const resolveStoragePasteTarget = (nodeIdInput = "") => {
+  const nodeId = String(nodeIdInput || selectedStorageNodeId.value || "").trim();
+  if (!nodeId) {
+    return null;
+  }
+  const matched = findStorageNodeInTree(storageTree.value, nodeId);
+  if (!matched) {
+    return null;
+  }
+  if (matched.node.type === "folder") {
+    return {
+      folderId: String(matched.node.id || ""),
+      folderRelPath: String(matched.node.relPath || "")
+    };
+  }
+  const parentMatch = findStorageNodeInTree(storageTree.value, matched.parentId || STORAGE_ROOT_ID);
+  return {
+    folderId: String(parentMatch?.node?.id || STORAGE_ROOT_ID),
+    folderRelPath: String(parentMatch?.node?.relPath || "")
+  };
+};
+
+const canPasteIntoStorageNode = (nodeIdInput = "") => {
+  const clip = storageClipboard.value;
+  if (!clip?.mode || !clip?.nodeId || !clip?.relPath) {
+    return false;
+  }
+  const target = resolveStoragePasteTarget(nodeIdInput);
+  if (!target?.folderId) {
+    return false;
+  }
+  if (clip.mode === "cut" && target.folderId === String(findStorageNodeInTree(storageTree.value, clip.nodeId)?.parentId || STORAGE_ROOT_ID)) {
+    return true;
+  }
+  if (
+    clip.nodeType === "folder"
+    && isRelPathAffectedByNode(String(target.folderRelPath || ""), String(clip.relPath || ""), "folder")
+  ) {
+    return false;
+  }
+  return target.folderId !== clip.nodeId;
+};
+
+const copyStorageNode = (nodeIdInput = "", modeInput = "copy") => {
+  closeStorageNodeContextMenu();
+  const nodeId = String(nodeIdInput || "").trim();
+  const mode = modeInput === "cut" ? "cut" : "copy";
+  const matched = findStorageNodeInTree(storageTree.value, nodeId);
+  if (!matched || matched.node.id === STORAGE_ROOT_ID) {
+    return;
+  }
+  storageClipboard.value = {
+    mode,
+    nodeId,
+    relPath: String(matched.node.relPath || ""),
+    nodeType: matched.node.type === "folder" ? "folder" : "file",
+    name: String(matched.node.name || "")
+  };
+  showToast(`${mode === "cut" ? "已剪切" : "已复制"}: ${matched.node.name}`);
+};
+
+const revealStorageNodeInExplorer = async (nodeIdInput = "") => {
+  closeStorageNodeContextMenu();
+  const nodeId = String(nodeIdInput || "").trim();
+  const matched = findStorageNodeInTree(storageTree.value, nodeId);
+  if (!matched || matched.node.id === STORAGE_ROOT_ID) {
+    return;
+  }
+  const revealWorkspaceNode = getDesktopDataMethod("revealWorkspaceNode");
+  if (!isDesktopStorage || !revealWorkspaceNode) {
+    showToast("当前环境不支持在资源管理器中显示");
+    return;
+  }
+  try {
+    const result = await revealWorkspaceNode({
+      relPath: String(matched.node.relPath || "")
+    });
+    if (!result?.ok) {
+      throw new Error(String(result?.error || "reveal_workspace_node_failed"));
+    }
+  } catch (error) {
+    showToast(`打开失败: ${String(error?.message || error || "unknown_error")}`);
+  }
+};
+
+const pasteIntoStorageNode = async (nodeIdInput = "") => {
+  closeStorageNodeContextMenu();
+  const clip = storageClipboard.value;
+  if (!clip?.mode || !clip?.nodeId || !clip?.relPath) {
+    return;
+  }
+  const target = resolveStoragePasteTarget(nodeIdInput);
+  if (!target?.folderId) {
+    return;
+  }
+  if (
+    clip.nodeType === "folder"
+    && isRelPathAffectedByNode(String(target.folderRelPath || ""), String(clip.relPath || ""), "folder")
+  ) {
+    showToast("不能粘贴到自己的子目录里");
+    return;
+  }
+  if (clip.mode === "cut") {
+    const moved = await moveStorageNodeToFolder(clip.nodeId, target.folderId);
+    if (moved) {
+      storageClipboard.value = {
+        mode: "",
+        nodeId: "",
+        relPath: "",
+        nodeType: "file",
+        name: ""
+      };
+    }
+    return;
+  }
+
+  const sourceMatch = findStorageNodeInTree(storageTree.value, clip.nodeId);
+  if (!sourceMatch || sourceMatch.node.id === STORAGE_ROOT_ID) {
+    showToast("找不到要复制的文件");
+    return;
+  }
+
+  if (isDesktopStorage) {
+    const duplicateWorkspaceNode = getDesktopDataMethod("duplicateWorkspaceNode");
+    if (!duplicateWorkspaceNode) {
+      showToast("当前桌面会话不支持复制文件，请重启桌面应用");
+      return;
+    }
+    try {
+      const result = await duplicateWorkspaceNode({
+        relPath: String(sourceMatch.node.relPath || ""),
+        targetParentRelPath: String(target.folderRelPath || "")
+      });
+      if (!result?.ok) {
+        throw new Error(String(result?.error || "duplicate_workspace_node_failed"));
+      }
+      await loadDesktopStorageTree({
+        preferredNodeId: String(result.relPath || target.folderId),
+        preferredMarkdownRelPath: normalizeRelPath(activeMarkdownRelPath.value)
+      });
+      showToast(`已复制到 ${basenameOfRelPath(String(result.relPath || "")) || target.folderRelPath || "/"}`);
+      return;
+    } catch (error) {
+      showToast(`复制失败: ${String(error?.message || error || "unknown_error")}`);
+      return;
+    }
+  }
+
+  const duplicated = duplicateLocalStorageNodeToFolder(clip.nodeId, target.folderId);
+  if (!duplicated) {
+    showToast("复制失败");
+    return;
+  }
+  if (duplicated.error === "cannot_copy_into_descendant") {
+    showToast("不能粘贴到自己的子目录里");
+    return;
+  }
+  selectedStorageNodeId.value = String(duplicated.node?.id || target.folderId);
+  storageFolderExpandedMap.value = {
+    ...storageFolderExpandedMap.value,
+    [target.folderId]: true
+  };
+  persistStorageState();
+  showToast(`已复制: ${duplicated.node?.name || sourceMatch.node.name}`);
 };
 
 const closeStorageNodeContextMenu = () => {

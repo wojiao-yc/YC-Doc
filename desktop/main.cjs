@@ -440,6 +440,21 @@ const importWorkspaceFilePayload = ({ rootPath, parentRelPath = "", sourcePath =
   };
 };
 
+const copyWorkspaceEntrySync = (sourceAbs, targetAbs) => {
+  const stat = fs.statSync(sourceAbs);
+  if (stat.isDirectory()) {
+    fs.mkdirSync(targetAbs, { recursive: false });
+    const entries = fs.readdirSync(sourceAbs, { withFileTypes: true });
+    for (const entry of entries) {
+      const nextSource = path.join(sourceAbs, entry.name);
+      const nextTarget = path.join(targetAbs, entry.name);
+      copyWorkspaceEntrySync(nextSource, nextTarget);
+    }
+    return;
+  }
+  fs.copyFileSync(sourceAbs, targetAbs);
+};
+
 const normalizeSavedSteps = (input) =>
   (Array.isArray(input) ? input : [])
     .filter((item) => item && typeof item === "object")
@@ -1309,6 +1324,76 @@ ipcMain.handle("desktop:data:move-workspace-node", async (_event, payload = {}) 
     return {
       ok: false,
       error: String(error?.message || error || "move_workspace_node_failed"),
+      rootPath
+    };
+  }
+});
+
+ipcMain.handle("desktop:data:duplicate-workspace-node", async (_event, payload = {}) => {
+  const rootPath = ensureWorkspaceDir();
+  try {
+    const {
+      absRoot,
+      absTarget,
+      relPath,
+      currentName
+    } = resolveWorkspaceNodeTarget(rootPath, payload?.relPath || "");
+    const stat = fs.statSync(absTarget);
+    const {
+      absTarget: nextParentAbs,
+      relPath: nextParentRelPath
+    } = resolveWorkspacePath(rootPath, payload?.targetParentRelPath || "");
+    fs.mkdirSync(nextParentAbs, { recursive: true });
+    if (!fs.statSync(nextParentAbs).isDirectory()) {
+      throw new Error("target_parent_not_directory");
+    }
+    if (
+      stat.isDirectory()
+      && nextParentRelPath
+      && (nextParentRelPath === relPath || nextParentRelPath.startsWith(`${relPath}/`))
+    ) {
+      throw new Error("cannot_copy_into_descendant");
+    }
+
+    const requestedName = sanitizeWorkspaceName(payload?.name, currentName);
+    const finalName = pickUniqueName(nextParentAbs, requestedName || currentName, stat.isDirectory());
+    const nextAbs = path.join(nextParentAbs, finalName);
+    copyWorkspaceEntrySync(absTarget, nextAbs);
+    const nextRelPath = nextParentRelPath ? `${nextParentRelPath}/${finalName}` : finalName;
+    return {
+      ok: true,
+      rootPath: absRoot,
+      relPath: nextRelPath,
+      previousRelPath: relPath,
+      parentRelPath: nextParentRelPath,
+      absPath: nextAbs,
+      type: stat.isDirectory() ? "folder" : "file",
+      name: finalName
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      error: String(error?.message || error || "duplicate_workspace_node_failed"),
+      rootPath
+    };
+  }
+});
+
+ipcMain.handle("desktop:data:reveal-workspace-node", async (_event, payload = {}) => {
+  const rootPath = ensureWorkspaceDir();
+  try {
+    const { absRoot, absTarget, relPath } = resolveWorkspaceNodeTarget(rootPath, payload?.relPath || "");
+    shell.showItemInFolder(absTarget);
+    return {
+      ok: true,
+      rootPath: absRoot,
+      relPath,
+      absPath: absTarget
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      error: String(error?.message || error || "reveal_workspace_node_failed"),
       rootPath
     };
   }
