@@ -136,7 +136,7 @@
     >
       <div
         class="border-b themed-divider"
-        :class="isFileSidebarCollapsed ? 'px-2 py-3' : 'px-3 py-3'"
+        :class="isFileSidebarCollapsed ? 'px-2 py-3' : 'px-3 py-3 space-y-3'"
       >
         <div :class="isFileSidebarCollapsed ? 'file-sidebar-tools is-collapsed' : 'file-sidebar-tools'">
           <!-- File sidebar actions and tree icons are also centralized in `AppIcon.vue`. -->
@@ -214,6 +214,17 @@
             <AppIcon name="graph" class="chrome-icon file-sidebar-icon" />
           </button>
         </div>
+
+        <label v-if="!isFileSidebarCollapsed" class="file-tree-search-shell">
+          <AppIcon name="search" class="file-tree-search-icon" />
+          <input
+            v-model="storageSearchQuery"
+            type="search"
+            class="file-tree-search-input"
+            placeholder="搜索 Workshop..."
+            spellcheck="false"
+          />
+        </label>
       </div>
 
       <nav
@@ -278,7 +289,43 @@
                 </span>
               </template>
             </span>
-            <span class="file-tree-label truncate">{{ item.name }}</span>
+            <span class="file-tree-entry-content">
+              <span class="file-tree-entry-head">
+                <span class="file-tree-label truncate">{{ item.name }}</span>
+                <span
+                  v-if="item.searchMatchCount"
+                  class="file-tree-match-count"
+                >
+                  {{ item.searchMatchCount }}
+                </span>
+              </span>
+              <span
+                v-if="item.searchMatches?.length"
+                class="file-tree-search-matches"
+              >
+                <span
+                  v-for="(match, matchIndex) in item.searchMatches"
+                  :key="`${item.id}-match-${matchIndex}`"
+                  class="file-tree-search-match"
+                  @click.stop="openStorageSearchMatch(item, match.rawPos)"
+                  v-html="match.html"
+                ></span>
+                <span
+                  v-if="item.searchOverflowCount > 0"
+                  class="file-tree-search-more"
+                  @click.stop="expandStorageSearchMatches(item.id)"
+                >
+                  还有 {{ item.searchOverflowCount }} 处匹配
+                </span>
+                <span
+                  v-else-if="storageSearchMatchDisplayLimit(item.id) > STORAGE_SEARCH_MATCH_BATCH && item.searchMatchCount > STORAGE_SEARCH_MATCH_BATCH"
+                  class="file-tree-search-more"
+                  @click.stop="collapseStorageSearchMatches(item.id)"
+                >
+                  收起匹配
+                </span>
+              </span>
+            </span>
           </template>
         </button>
       </nav>
@@ -538,7 +585,16 @@
                       @dragleave.capture="onEditorImageDragLeave"
                       @paste.capture="onEditorImagePaste"
                     >
+                      <textarea
+                        v-if="isSourceMode"
+                        ref="markdownSourceRef"
+                        :value="documentMarkdown"
+                        class="source-editor-input"
+                        spellcheck="false"
+                        @input="updateMarkdown($event.target.value)"
+                      ></textarea>
                       <EditorShell
+                        v-else
                         ref="markdownEditorRef"
                         :model-value="documentMarkdown"
                         :dark="isDark"
@@ -916,37 +972,38 @@
               'items-center'
             ]"
           >
-            <div class="nav-step-side nav-outline-side">
-              <button
-                v-if="heading.hasChildren"
-                type="button"
-                class="nav-outline-toggle"
-                @click.stop="toggleOutlineCollapse(heading.id)"
-              >
-                <AppIcon :name="heading.isCollapsed ? 'chevron-right' : 'chevron-down'" class="nav-outline-chevron" />
-              </button>
-              <span
-                v-else
-                class="nav-outline-toggle-spacer"
-                aria-hidden="true"
-              ></span>
-            </div>
+            <div class="nav-outline-content" :style="outlineIndentStyle(heading)">
+              <div class="nav-step-side nav-outline-side">
+                <button
+                  v-if="heading.hasChildren"
+                  type="button"
+                  class="nav-outline-toggle"
+                  @click.stop="toggleOutlineCollapse(heading.id)"
+                >
+                  <AppIcon :name="heading.isCollapsed ? 'chevron-right' : 'chevron-down'" class="nav-outline-chevron" />
+                </button>
+                <span
+                  v-else
+                  class="nav-outline-toggle-spacer"
+                  aria-hidden="true"
+                ></span>
+              </div>
 
-            <div
-              v-if="!isInspectorSidebarCollapsed"
-              class="flex-1 min-w-0 nav-outline-body"
-              :class="'flex min-h-[30px] items-center is-single-line'"
-              :style="outlineIndentStyle(heading)"
-            >
-              <input
-                :value="heading.title"
-                type="text"
-                @click.stop
-                @input="handleOutlineHeadingTitleInput(heading.outlineIndex, $event)"
-                class="inspector-step-title-input w-full text-sm font-medium bg-transparent border-b px-1 py-0.5"
-                :class="'is-single-line'"
-                placeholder="标题"
-              />
+              <div
+                v-if="!isInspectorSidebarCollapsed"
+                class="flex-1 min-w-0 nav-outline-body"
+                :class="'flex min-h-[30px] items-center is-single-line'"
+              >
+                <input
+                  :value="heading.title"
+                  type="text"
+                  @click.stop
+                  @input="handleOutlineHeadingTitleInput(heading.outlineIndex, $event)"
+                  class="inspector-step-title-input w-full text-sm font-medium bg-transparent border-b px-1 py-0.5"
+                  :class="'is-single-line'"
+                  placeholder="标题"
+                />
+              </div>
             </div>
           </div>
           <div
@@ -962,26 +1019,37 @@
         v-if="isEditMode && !isInspectorSidebarCollapsed && !isInspectorSidebarHidden && activeMarkdownRelPath"
         class="border-t themed-divider px-4 py-3 space-y-3"
       >
-        <div class="flex items-center justify-between gap-2">
+        <button
+          type="button"
+          class="inspector-panel-toggle w-full"
+          :aria-expanded="backlinksExpanded ? 'true' : 'false'"
+          @click="backlinksExpanded = !backlinksExpanded"
+        >
           <div class="min-w-0">
             <div class="inspector-section-title text-sm font-semibold truncate">
-              Backlinks
+              反向链接
             </div>
-            <p class="inspector-section-meta text-[11px]">
-              {{ wikiLinkIndexLoading ? "索引更新中..." : `当前文档 ${currentBacklinks.length} 条反向链接` }}
-            </p>
           </div>
-          <span class="inspector-badge text-[11px] px-2 py-1 rounded-full border">
-            {{ currentBacklinks.length }}
-          </span>
-        </div>
+          <div class="flex items-center gap-2 shrink-0">
+            <span class="inspector-badge inspector-count-text text-[11px]">
+              {{ currentBacklinks.length }}
+            </span>
+            <AppIcon
+              :name="backlinksExpanded ? 'chevron-down' : 'chevron-right'"
+              class="inspector-panel-toggle-icon"
+            />
+          </div>
+        </button>
 
-        <div v-if="currentBacklinks.length" class="space-y-2 max-h-64 overflow-y-auto pr-1">
+        <div
+          v-if="backlinksExpanded && currentBacklinks.length"
+          class="wiki-backlinks-list space-y-1.5 max-h-64 overflow-y-auto pr-1"
+        >
           <button
             v-for="(link, index) in currentBacklinks"
             :key="`${link.sourceRelPath}:${link.rawFrom}:${index}`"
             type="button"
-            class="wiki-backlink-card w-full rounded-xl border px-3 py-2 text-left transition-all"
+            class="wiki-backlink-card w-full px-2 py-2 text-left transition-all"
             @click="openBacklinkEntry(link)"
           >
             <div class="flex items-center justify-between gap-2">
@@ -1001,8 +1069,8 @@
           </button>
         </div>
         <div
-          v-else
-          class="inspector-empty-card rounded-xl border px-3 py-4 text-xs leading-5"
+          v-else-if="backlinksExpanded"
+          class="inspector-empty-card px-2 py-3 text-xs leading-5"
         >
           当前还没有其它文档链接到这篇笔记。
         </div>
@@ -1012,26 +1080,51 @@
         v-if="isEditMode && !isInspectorSidebarCollapsed && !isInspectorSidebarHidden"
         class="border-t themed-divider p-4 space-y-3"
       >
-        <button
-          @click="addStep"
-          class="sidebar-action-btn is-accent w-full flex items-center justify-center gap-2 px-4 py-2 text-sm rounded-lg border"
-        >
-          ＋ 添加新步骤
-        </button>
-        <button
-          @click="removeStep"
-          class="sidebar-action-btn is-danger w-full flex items-center justify-center gap-2 px-4 py-2 text-sm rounded-lg border"
-        >
-          🗑 删除当前步骤
-        </button>
-
-        <div class="grid grid-cols-1 gap-2">
+        <div class="sidebar-mini-toolbar">
           <button
             type="button"
-            class="sidebar-action-btn is-solid-accent px-3 py-2 text-sm rounded-lg"
-            @click="toggleMode"
+            @click="addStep"
+            class="sidebar-action-btn is-accent is-compact flex-1 inline-flex items-center justify-center gap-1.5 px-3 py-2 text-xs rounded-lg border"
           >
-            👁 展示
+            <AppIcon name="add" class="sidebar-action-icon" />
+            <span>添加步骤</span>
+          </button>
+          <button
+            type="button"
+            @click="removeStep"
+            class="sidebar-action-btn is-danger is-compact flex-1 inline-flex items-center justify-center gap-1.5 px-3 py-2 text-xs rounded-lg border"
+          >
+            <AppIcon name="delete" class="sidebar-action-icon" />
+            <span>删除</span>
+          </button>
+        </div>
+
+        <div class="mode-switch-toolbar">
+          <button
+            type="button"
+            class="mode-switch-btn"
+            :class="mode === 'source' ? 'is-active' : ''"
+            :disabled="!canUseSourceMode"
+            @click="setWorkspaceMode('source')"
+          >
+            源码
+          </button>
+          <button
+            type="button"
+            class="mode-switch-btn"
+            :class="mode === 'preview' ? 'is-active' : ''"
+            @click="setWorkspaceMode('preview')"
+          >
+            预览
+          </button>
+          <button
+            type="button"
+            class="mode-switch-btn"
+            :class="mode === 'view' ? 'is-active' : ''"
+            :disabled="!canUsePresentMode"
+            @click="setWorkspaceMode('view')"
+          >
+            展示
           </button>
         </div>
       </div>
@@ -1417,7 +1510,7 @@ const preprocessMathFormulas = (markdown) => {
   return processedHtml.replace(/<img\b/g, '<img class="md-image"');
 };
 
-const mode = ref("edit");
+const mode = ref("preview");
 const gestureNavigationEnabled = ref(false);
 const collapseHeaderInView = ref(false);
 const collapseStepsSidebarInView = ref(false);
@@ -1428,13 +1521,15 @@ const isDark = computed(() => currentThemeMode.value === "dark");
 const activeImportedTheme = computed(() => (
   currentThemeDefinition.value?.kind === "imported" ? currentThemeDefinition.value : null
 ));
-const isEditMode = computed(() => mode.value === "edit");
+const isEditMode = computed(() => mode.value !== "view");
+const isSourceMode = computed(() => mode.value === "source");
 const terminalPanelHeight = ref(320);
 const terminalMaximized = ref(false);
 const terminalTab = ref("terminal");
 const mainRef = ref(null);
 const contentScrollRef = ref(null);
 const markdownEditorRef = ref(null);
+const markdownSourceRef = ref(null);
 const fileTreeNavRef = ref(null);
 const showEditorDebugPanel = ref(false);
 const editorSelection = ref({ anchor: 0, head: 0 });
@@ -1462,6 +1557,8 @@ const storageTreeDropTargetId = ref("");
 const isStorageTreeImportActive = ref(false);
 const editorImageImportActive = ref(false);
 const fileSidebarWidth = ref(190);
+const storageSearchQuery = ref("");
+const expandedStorageSearchMatchLimitMap = ref({});
 const storageSortMode = ref("name-asc");
 const STORAGE_ROOT_ID = "workspace-root";
 const storageTree = ref(null);
@@ -1535,6 +1632,7 @@ const importedThemes = ref([]);
 const settingsThemeFileInputRef = ref(null);
 const storageRenameInputRef = ref(null);
 const storageNodeMenuRef = ref(null);
+const backlinksExpanded = ref(true);
 const desktopTabMenu = ref({
   open: false,
   x: 0,
@@ -1920,6 +2018,43 @@ const contentPaneKey = computed(() => (
     : `${mode.value}:${currentId.value}`
 ));
 
+const canUseSourceMode = computed(() => (
+  isEditMode.value
+  && !isWorkspaceGraphTabActive.value
+  && !isImagePreviewTabActive.value
+  && Boolean(activeMarkdownRelPath.value)
+));
+
+const canUsePresentMode = computed(() => (
+  !isWorkspaceGraphTabActive.value
+  && !isImagePreviewTabActive.value
+  && Boolean(activeMarkdownRelPath.value)
+));
+
+const focusMarkdownPosition = (posInput = 0) => {
+  const markdown = String(documentMarkdown.value || "");
+  const targetPos = clamp(Number(posInput || 0), 0, markdown.length);
+  if (isSourceMode.value) {
+    const textarea = markdownSourceRef.value;
+    if (textarea && typeof textarea.focus === "function") {
+      textarea.focus();
+      if (typeof textarea.setSelectionRange === "function") {
+        textarea.setSelectionRange(targetPos, targetPos);
+      }
+      return true;
+    }
+  }
+  if (typeof markdownEditorRef.value?.focusPosition === "function") {
+    markdownEditorRef.value.focusPosition(targetPos);
+    return true;
+  }
+  if (typeof markdownEditorRef.value?.focus === "function") {
+    markdownEditorRef.value.focus();
+    return true;
+  }
+  return false;
+};
+
 const normalizeMarkdownForStats = (value = "") => String(value || "")
   .replace(/\r\n/g, "\n")
   .replace(/<!--[\s\S]*?-->/g, " ")
@@ -2035,13 +2170,7 @@ async function focusStepInEditMode(index) {
         markdown.length
       )
     : 0;
-  if (typeof markdownEditorRef.value?.focusPosition === "function") {
-    markdownEditorRef.value.focusPosition(focusPos);
-    return;
-  }
-  if (typeof markdownEditorRef.value?.focus === "function") {
-    markdownEditorRef.value.focus();
-  }
+  focusMarkdownPosition(focusPos);
 }
 
 const {
@@ -2198,7 +2327,7 @@ const activeEditorOutlineIndex = computed(() => {
 });
 
 const outlineIndentStyle = (heading) => ({
-  paddingLeft: `${Math.max(0, Number(heading?.depth ?? Number(heading?.level || 1) - 1)) * 14}px`
+  marginLeft: `${Math.max(0, Number(heading?.depth ?? Number(heading?.level || 1) - 1)) * 8}px`
 });
 
 const handleOutlineSelection = async (heading) => {
@@ -2207,11 +2336,7 @@ const handleOutlineSelection = async (heading) => {
   const stepIndex = findStepIndexForRawPos(markdown, rawPos);
   currentId.value = steps.value?.[stepIndex]?.id ?? currentId.value;
   await nextTick();
-  if (typeof markdownEditorRef.value?.focusPosition === "function") {
-    markdownEditorRef.value.focusPosition(rawPos);
-    return;
-  }
-  markdownEditorRef.value?.focus?.();
+  focusMarkdownPosition(rawPos);
 };
 
 const toggleOutlineCollapse = (headingIdInput = "") => {
@@ -3126,20 +3251,216 @@ const workspaceDisplayName = computed(() => {
 
 const isStorageFolderExpanded = (id) => storageFolderExpandedMap.value[id] !== false;
 
+const normalizedStorageSearchQuery = computed(() => (
+  String(storageSearchQuery.value || "").trim().toLowerCase()
+));
+
+const STORAGE_SEARCH_MATCH_BATCH = 6;
+
+watch(normalizedStorageSearchQuery, () => {
+  expandedStorageSearchMatchLimitMap.value = {};
+});
+
+const escapeSearchSnippetHtml = (value = "") => String(value || "")
+  .replace(/&/g, "&amp;")
+  .replace(/</g, "&lt;")
+  .replace(/>/g, "&gt;")
+  .replace(/"/g, "&quot;")
+  .replace(/'/g, "&#39;");
+
+const compactSearchSnippetText = (value = "", { trimStart = false, trimEnd = false } = {}) => {
+  let text = String(value || "").replace(/\s+/g, " ");
+  if (trimStart) {
+    text = text.replace(/^\s+/g, "");
+  }
+  if (trimEnd) {
+    text = text.replace(/\s+$/g, "");
+  }
+  return text;
+};
+
+const buildSearchSnippets = (textInput = "", queryInput = "", limit = STORAGE_SEARCH_MATCH_BATCH) => {
+  const query = String(queryInput || "").trim().toLowerCase();
+  const text = String(textInput || "");
+  if (!query || !text) {
+    return {
+      matches: [],
+      total: 0
+    };
+  }
+
+  const normalizedText = text.toLowerCase();
+  const snippets = [];
+  let total = 0;
+  let cursor = 0;
+
+  while (cursor < normalizedText.length) {
+    const matchIndex = normalizedText.indexOf(query, cursor);
+    if (matchIndex < 0) {
+      break;
+    }
+    total += 1;
+    if (snippets.length < limit) {
+      const before = 20;
+      const after = 28;
+      const start = Math.max(0, matchIndex - before);
+      const end = Math.min(text.length, matchIndex + query.length + after);
+      const prefix = start > 0 ? "..." : "";
+      const suffix = end < text.length ? "..." : "";
+      const rawBefore = compactSearchSnippetText(text.slice(start, matchIndex), { trimStart: true });
+      const rawMatch = compactSearchSnippetText(text.slice(matchIndex, matchIndex + query.length));
+      const rawAfter = compactSearchSnippetText(text.slice(matchIndex + query.length, end), { trimEnd: true });
+      snippets.push({
+        rawPos: matchIndex,
+        html: `${prefix}${escapeSearchSnippetHtml(rawBefore)}<mark class="file-tree-search-highlight">${escapeSearchSnippetHtml(rawMatch)}</mark>${escapeSearchSnippetHtml(rawAfter)}${suffix}`
+      });
+    }
+    cursor = matchIndex + Math.max(1, query.length);
+  }
+
+  return {
+    matches: snippets,
+    total
+  };
+};
+
+const storageSearchMatchDisplayLimit = (nodeIdInput = "") => {
+  const nodeId = String(nodeIdInput || "");
+  const explicit = Number(expandedStorageSearchMatchLimitMap.value?.[nodeId] || 0);
+  return explicit > 0 ? explicit : STORAGE_SEARCH_MATCH_BATCH;
+};
+
+const expandStorageSearchMatches = (nodeIdInput = "") => {
+  const nodeId = String(nodeIdInput || "");
+  if (!nodeId) {
+    return;
+  }
+  expandedStorageSearchMatchLimitMap.value = {
+    ...expandedStorageSearchMatchLimitMap.value,
+    [nodeId]: storageSearchMatchDisplayLimit(nodeId) + STORAGE_SEARCH_MATCH_BATCH
+  };
+};
+
+const collapseStorageSearchMatches = (nodeIdInput = "") => {
+  const nodeId = String(nodeIdInput || "");
+  if (!nodeId) {
+    return;
+  }
+  const nextMap = { ...expandedStorageSearchMatchLimitMap.value };
+  delete nextMap[nodeId];
+  expandedStorageSearchMatchLimitMap.value = nextMap;
+};
+
+const buildStorageSearchMeta = (node, query = "") => {
+  const normalizedQuery = String(query || "").trim().toLowerCase();
+  if (!normalizedQuery || !node || node.type !== "file") {
+    return {
+      searchMatches: [],
+      searchMatchCount: 0,
+      searchOverflowCount: 0
+    };
+  }
+
+  const relPath = normalizeRelPath(node.relPath || "");
+  const markdown = isMarkdownFileName(String(node.name || relPath))
+    ? (relPath === normalizeRelPath(activeMarkdownRelPath.value)
+      ? String(documentMarkdown.value || "")
+      : String(wikiLinkIndexState.value?.contentsByPath?.[relPath] || ""))
+    : "";
+  const plainText = markdown.replace(/\r\n/g, "\n");
+  const snippetResult = buildSearchSnippets(
+    plainText,
+    normalizedQuery,
+    storageSearchMatchDisplayLimit(node.id)
+  );
+
+  return {
+    searchMatches: snippetResult.matches,
+    searchMatchCount: snippetResult.total,
+    searchOverflowCount: Math.max(0, snippetResult.total - snippetResult.matches.length)
+  };
+};
+
+const buildVisibleStorageNodeEntry = (node, depth, guideDepths = [], query = "") => ({
+  id: node.id,
+  type: node.type,
+  name: node.name,
+  relPath: node.relPath || "",
+  depth,
+  guideDepths,
+  ...buildStorageSearchMeta(node, query)
+});
+
+const buildExpandedStorageEntries = (node, depth, guideDepths = [], query = "") => {
+  if (!node) {
+    return [];
+  }
+  const entries = [buildVisibleStorageNodeEntry(node, depth, guideDepths, query)];
+  if (node.type !== "folder") {
+    return entries;
+  }
+  const ordered = [...(Array.isArray(node.children) ? node.children : [])].sort(compareStorageNodes);
+  for (const child of ordered) {
+    entries.push(...buildExpandedStorageEntries(child, depth + 1, [...guideDepths, depth], query));
+  }
+  return entries;
+};
+
+const storageNodeMatchesSearch = (node, query = "") => {
+  const normalizedQuery = String(query || "").trim().toLowerCase();
+  if (!normalizedQuery || !node) {
+    return true;
+  }
+  const relPath = normalizeRelPath(node.relPath || "");
+  const chunks = [node.name, relPath];
+  if (node.type === "file" && isMarkdownFileName(String(node.name || relPath))) {
+    const note = wikiLinkIndexState.value?.notesByPath?.[relPath];
+    const noteHeadings = Array.isArray(note?.headings)
+      ? note.headings.map((heading) => String(heading?.text || heading?.title || "")).join("\n")
+      : "";
+    const markdown = relPath === normalizeRelPath(activeMarkdownRelPath.value)
+      ? String(documentMarkdown.value || "")
+      : String(wikiLinkIndexState.value?.contentsByPath?.[relPath] || "");
+    chunks.push(noteHeadings, markdown);
+  }
+  return chunks.join("\n").toLowerCase().includes(normalizedQuery);
+};
+
+const buildFilteredStorageEntries = (node, depth, guideDepths = [], query = "") => {
+  if (!node) {
+    return [];
+  }
+  if (storageNodeMatchesSearch(node, query)) {
+    return buildExpandedStorageEntries(node, depth, guideDepths, query);
+  }
+  if (node.type !== "folder") {
+    return [];
+  }
+  const childEntries = [];
+  const ordered = [...(Array.isArray(node.children) ? node.children : [])].sort(compareStorageNodes);
+  for (const child of ordered) {
+    childEntries.push(...buildFilteredStorageEntries(child, depth + 1, [...guideDepths, depth], query));
+  }
+  if (!childEntries.length) {
+    return [];
+  }
+  return [buildVisibleStorageNodeEntry(node, depth, guideDepths, query), ...childEntries];
+};
+
 const visibleStorageNodes = computed(() => {
+  const query = normalizedStorageSearchQuery.value;
+  if (query) {
+    const rootChildren = Array.isArray(storageTree.value?.children) ? storageTree.value.children : [];
+    const orderedRoots = [...rootChildren].sort(compareStorageNodes);
+    return orderedRoots.flatMap((child) => buildFilteredStorageEntries(child, 0, [], query));
+  }
+
   const list = [];
   const walk = (node, depth, guideDepths = []) => {
     if (!node) {
       return;
     }
-    list.push({
-      id: node.id,
-      type: node.type,
-      name: node.name,
-      relPath: node.relPath || "",
-      depth,
-      guideDepths
-    });
+    list.push(buildVisibleStorageNodeEntry(node, depth, guideDepths));
     if (node.type !== "folder" || !isStorageFolderExpanded(node.id)) {
       return;
     }
@@ -3356,6 +3677,17 @@ const activeImagePreviewSrc = computed(() =>
     }
   )
 );
+
+watch([mode, canUseSourceMode, canUsePresentMode], ([currentMode, sourceAllowed, presentAllowed]) => {
+  if (currentMode === "source" && !sourceAllowed) {
+    mode.value = "preview";
+    return;
+  }
+  if (currentMode === "view" && !presentAllowed) {
+    mode.value = "preview";
+    void applyDesktopFullscreenForMode("preview");
+  }
+});
 
 const pickNeighborFileTab = (tabs = [], preferredIndex = 0) => {
   const list = Array.isArray(tabs) ? tabs : [];
@@ -5244,11 +5576,7 @@ const jumpWithinCurrentDocument = async ({ rawPos = null, anchor = "" } = {}) =>
   await nextTick();
 
   if (isEditMode.value) {
-    if (typeof markdownEditorRef.value?.focusPosition === "function") {
-      markdownEditorRef.value.focusPosition(targetPos);
-    } else {
-      markdownEditorRef.value?.focus?.();
-    }
+    focusMarkdownPosition(targetPos);
     return true;
   }
 
@@ -5298,6 +5626,17 @@ const openMarkdownFileByRelPath = async (relPathInput, { anchor = "", rawPos = n
     await selectStorageNode(String(matched.node.id || ""));
   }
   return jumpWithinCurrentDocument({ rawPos, anchor });
+};
+
+const openStorageSearchMatch = async (item, rawPosInput = 0) => {
+  const relPath = normalizeRelPath(item?.relPath || "");
+  if (!relPath) {
+    return false;
+  }
+  return openMarkdownFileByRelPath(relPath, {
+    rawPos: Number(rawPosInput || 0),
+    showMissingToast: true
+  });
 };
 
 const openBacklinkEntry = async (entry) => {
@@ -7374,8 +7713,25 @@ const handleWorkspaceGraphOpenNote = (relPathInput = "") => {
   });
 };
 
-const toggleMode = async () => {
-  const nextMode = isEditMode.value ? "view" : "edit";
+const normalizeWorkspaceMode = (modeInput = "") => {
+  const normalized = String(modeInput || "").trim().toLowerCase();
+  if (normalized === "source" || normalized === "view") {
+    return normalized;
+  }
+  return "preview";
+};
+
+const setWorkspaceMode = async (nextModeInput = "") => {
+  let nextMode = normalizeWorkspaceMode(nextModeInput);
+  if (nextMode === "source" && !canUseSourceMode.value) {
+    nextMode = "preview";
+  }
+  if (nextMode === "view" && !canUsePresentMode.value) {
+    nextMode = "preview";
+  }
+  if (mode.value === nextMode) {
+    return;
+  }
   if (nextMode === "view") {
     editorTabs.value = ensureEditorTabs(editorTabs.value.filter((tab) => tab.kind !== "graph"));
     if (activeEditorTabId.value === EDITOR_GRAPH_TAB_ID) {
@@ -7389,6 +7745,10 @@ const toggleMode = async () => {
   nextTick(() => {
     void syncDesktopTerminalSize();
   });
+};
+
+const toggleMode = async () => {
+  await setWorkspaceMode(mode.value === "view" ? "preview" : "view");
 };
 
 const requestEditorContextImageMarkdown = async () => {
