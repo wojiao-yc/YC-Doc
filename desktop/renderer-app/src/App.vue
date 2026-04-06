@@ -585,14 +585,22 @@
                       @dragleave.capture="onEditorImageDragLeave"
                       @paste.capture="onEditorImagePaste"
                     >
-                      <textarea
+                      <EditorShell
                         v-if="isSourceMode"
                         ref="markdownSourceRef"
-                        :value="documentMarkdown"
-                        class="source-editor-input"
-                        spellcheck="false"
-                        @input="updateMarkdown($event.target.value)"
-                      ></textarea>
+                        :model-value="documentMarkdown"
+                        :dark="isDark"
+                        :presentation-blocks="EMPTY_PRESENTATION_BLOCKS"
+                        :current-block-id="''"
+                        :current-rel-path="activeMarkdownRelPath"
+                        :wiki-link-files="workspaceMarkdownFiles"
+                        :wiki-link-suggestions="getWikiLinkSuggestions"
+                        :wiki-link-suggestion-select="handleWikiLinkSuggestionSelect"
+                        @selection-change="handleEditorSelectionChange"
+                        @update:model-value="updateMarkdown"
+                        @wiki-link-activate="handleEditorWikiLinkActivate"
+                        @external-link-activate="handleEditorExternalLinkActivate"
+                      />
                       <EditorShell
                         v-else
                         ref="markdownEditorRef"
@@ -1530,6 +1538,7 @@ const mainRef = ref(null);
 const contentScrollRef = ref(null);
 const markdownEditorRef = ref(null);
 const markdownSourceRef = ref(null);
+const EMPTY_PRESENTATION_BLOCKS = Object.freeze([]);
 const fileTreeNavRef = ref(null);
 const showEditorDebugPanel = ref(false);
 const editorSelection = ref({ anchor: 0, head: 0 });
@@ -2031,25 +2040,22 @@ const canUsePresentMode = computed(() => (
   && Boolean(activeMarkdownRelPath.value)
 ));
 
+const getActiveMarkdownEditorApi = () => (
+  isSourceMode.value
+    ? markdownSourceRef.value
+    : markdownEditorRef.value
+);
+
 const focusMarkdownPosition = (posInput = 0) => {
   const markdown = String(documentMarkdown.value || "");
   const targetPos = clamp(Number(posInput || 0), 0, markdown.length);
-  if (isSourceMode.value) {
-    const textarea = markdownSourceRef.value;
-    if (textarea && typeof textarea.focus === "function") {
-      textarea.focus();
-      if (typeof textarea.setSelectionRange === "function") {
-        textarea.setSelectionRange(targetPos, targetPos);
-      }
-      return true;
-    }
-  }
-  if (typeof markdownEditorRef.value?.focusPosition === "function") {
-    markdownEditorRef.value.focusPosition(targetPos);
+  const editorApi = getActiveMarkdownEditorApi();
+  if (typeof editorApi?.focusPosition === "function") {
+    editorApi.focusPosition(targetPos);
     return true;
   }
-  if (typeof markdownEditorRef.value?.focus === "function") {
-    markdownEditorRef.value.focus();
+  if (typeof editorApi?.focus === "function") {
+    editorApi.focus();
     return true;
   }
   return false;
@@ -3950,7 +3956,7 @@ const createWikiLinkFileByRelPath = async (relPathInput = "") => {
   }
   showToast(`已创建文件: ${fileName}`);
   await nextTick();
-  markdownEditorRef.value?.refreshWikiLinks?.();
+  getActiveMarkdownEditorApi()?.refreshWikiLinks?.();
   return true;
 };
 
@@ -6647,27 +6653,29 @@ const resolveDraggedStorageImageNode = (dataTransfer = null) => {
 };
 
 const insertMarkdownIntoEditorAtPoint = (markdown, xInput = null, yInput = null) => {
+  const editorApi = getActiveMarkdownEditorApi();
   const x = Number(xInput);
   const y = Number(yInput);
-  if (Number.isFinite(x) && Number.isFinite(y) && typeof markdownEditorRef.value?.insertMarkdownAtPoint === "function") {
-    markdownEditorRef.value.insertMarkdownAtPoint(markdown, x, y);
+  if (Number.isFinite(x) && Number.isFinite(y) && typeof editorApi?.insertMarkdownAtPoint === "function") {
+    editorApi.insertMarkdownAtPoint(markdown, x, y);
     return true;
   }
-  markdownEditorRef.value?.insertMarkdown?.(markdown);
+  editorApi?.insertMarkdown?.(markdown);
   return true;
 };
 
 const moveEditorCursorToPoint = (xInput = null, yInput = null) => {
+  const editorApi = getActiveMarkdownEditorApi();
   const x = Number(xInput);
   const y = Number(yInput);
   if (!Number.isFinite(x) || !Number.isFinite(y)) {
     return false;
   }
-  return Boolean(markdownEditorRef.value?.moveCursorToPoint?.(x, y));
+  return Boolean(editorApi?.moveCursorToPoint?.(x, y));
 };
 
 const clearEditorDropPointPreview = () => {
-  markdownEditorRef.value?.clearPointPreview?.();
+  getActiveMarkdownEditorApi()?.clearPointPreview?.();
 };
 
 const insertWorkspaceImageLinkIntoEditor = async (imageRelPathInput = "", { clientX = null, clientY = null } = {}) => {
@@ -7958,7 +7966,7 @@ const onKeydown = (event) => {
 
   if (isEditMode.value && mod && key === "f") {
     event.preventDefault();
-    markdownEditorRef.value?.openSearch?.();
+    getActiveMarkdownEditorApi()?.openSearch?.();
     return;
   }
 

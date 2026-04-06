@@ -31,6 +31,25 @@ const escapeHtml = (value) =>
     .replace(/'/g, "&#39;");
 
 const encodeAttr = (value) => escapeHtml(String(value || ""));
+const CALLOUT_HEAD_PATTERN = /^\s*\[!([A-Za-z][A-Za-z0-9_-]*)\](?:\s+(.*))?$/;
+const CALLOUT_LABELS = Object.freeze({
+  note: "NOTE",
+  tip: "TIP",
+  info: "INFO",
+  warning: "WARNING",
+  caution: "CAUTION",
+  danger: "DANGER",
+  important: "IMPORTANT"
+});
+const CALLOUT_ICONS = Object.freeze({
+  note: "i",
+  tip: "+",
+  info: "i",
+  warning: "!",
+  caution: "!",
+  danger: "!",
+  important: "!"
+});
 
 const normalizeCodeLanguage = (value = "") => {
   const raw = String(value || "").trim().toLowerCase();
@@ -69,6 +88,23 @@ const normalizeCodeLanguage = (value = "") => {
     return "markdown";
   }
   return normalized;
+};
+
+const normalizeCalloutType = (valueInput = "") =>
+  String(valueInput || "note")
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9_-]/g, "")
+    || "note";
+
+const calloutLabelForType = (typeInput = "") => {
+  const type = normalizeCalloutType(typeInput);
+  return CALLOUT_LABELS[type] || type.toUpperCase();
+};
+
+const calloutIconForType = (typeInput = "") => {
+  const type = normalizeCalloutType(typeInput);
+  return CALLOUT_ICONS[type] || "!";
 };
 
 const highlightCodeBlock = (codeInput = "", languageInput = "") => {
@@ -153,6 +189,55 @@ const normalizeImageSourcesInHtml = (htmlInput = "", {
 
 const ensureImageClass = (htmlInput = "") => String(htmlInput || "").replace(/<img\b/g, '<img class="md-image"');
 
+const wrapTablesInHtml = (htmlInput = "") =>
+  String(htmlInput || "")
+    .replace(/<table>/g, '<div class="md-table-wrap"><table>')
+    .replace(/<\/table>/g, "</table></div>");
+
+const decorateCalloutBlockquotesInHtml = (htmlInput = "") =>
+  String(htmlInput || "").replace(
+    /<blockquote>\s*<p>([\s\S]*?)<\/p>\s*([\s\S]*?)<\/blockquote>/g,
+    (match, firstParagraphRaw, bodyRaw) => {
+      const firstParagraph = String(firstParagraphRaw || "").trim();
+      const firstParagraphParts = firstParagraph
+        .split(/<br\s*\/?>/gi)
+        .map((part) => String(part || "").trim());
+      const markerOnly = String(firstParagraphParts[0] || "").replace(/<[^>]*>/g, "").trim();
+      const headMatch = markerOnly.match(CALLOUT_HEAD_PATTERN);
+      if (!headMatch) {
+        return match;
+      }
+
+      const calloutType = normalizeCalloutType(headMatch[1]);
+      const calloutLabel = calloutLabelForType(calloutType);
+      const calloutIcon = calloutIconForType(calloutType);
+      const title = String(headMatch[2] || "").trim();
+      const firstParagraphBody = firstParagraphParts.slice(1).join("<br>").trim();
+      const extraBody = String(bodyRaw || "").trim();
+      const body = [
+        firstParagraphBody ? `<p>${firstParagraphBody}</p>` : "",
+        extraBody
+      ]
+        .filter(Boolean)
+        .join("");
+
+      const titleHtml = title
+        ? `<span class="md-callout-subtitle">${escapeHtml(title)}</span>`
+        : "";
+
+      return [
+        `<div class="md-callout md-callout-${encodeAttr(calloutType)}">`,
+        '<div class="md-callout-head">',
+        `<span class="md-callout-icon" aria-hidden="true">${escapeHtml(calloutIcon)}</span>`,
+        `<span class="md-callout-title">${escapeHtml(calloutLabel)}</span>`,
+        titleHtml,
+        "</div>",
+        body ? `<div class="md-callout-body">${body}</div>` : "",
+        "</div>"
+      ].join("");
+    }
+  );
+
 const preprocessMathFormulas = (markdownInput = "", renderMathFormula = null) => {
   const markdown = String(markdownInput || "");
   if (!markdown) {
@@ -207,7 +292,9 @@ export const renderMarkdownToHtml = ({
     renderer
   }) || "");
 
-  const withHeadingIds = applyHeadingIdsToHtml(parsed, rawMarkdown);
+  const withCallouts = decorateCalloutBlockquotesInHtml(parsed);
+  const withTables = wrapTablesInHtml(withCallouts);
+  const withHeadingIds = applyHeadingIdsToHtml(withTables, rawMarkdown);
   return ensureImageClass(normalizeImageSourcesInHtml(withHeadingIds, {
     currentRelPath,
     workspaceRootPath

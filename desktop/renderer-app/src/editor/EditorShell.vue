@@ -8,7 +8,6 @@
 <script setup>
 import { onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { createMarkdownEditor } from "./core/create-editor";
-import { parseMarkdownToSemanticSnapshot } from "./parser/parse-markdown";
 
 const props = defineProps({
   dark: {
@@ -165,8 +164,6 @@ watch(
     if (!editorApi || editorApi.getDoc() === nextDoc) {
       return;
     }
-    const snapshot = parseMarkdownToSemanticSnapshot(nextDoc);
-    latestPresentationBlocks = snapshot.blocks;
     editorApi.setDoc(nextDoc, {
       presentationData: {
         blocks: latestPresentationBlocks,

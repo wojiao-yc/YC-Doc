@@ -5,6 +5,7 @@ import { createEditorState } from "./create-state.js";
 import { createEditorView } from "./create-view.js";
 import { coreExtensions } from "../extensions/core.js";
 import { markdownExtensions } from "../extensions/markdown.js";
+import { codeBlockHighlightExtensions } from "../extensions/code-block-highlight.js";
 import { presentationExtensions, setPresentationDataEffect } from "../extensions/presentation.js";
 import { contextMenuExtensions } from "../extensions/context-menu.js";
 import { createWikiLinkEventExtensions } from "../extensions/wikilink-events.js";
@@ -54,6 +55,7 @@ export const createMarkdownEditor = ({
     extensions: [
       ...coreExtensions,
       ...markdownExtensions,
+      ...codeBlockHighlightExtensions,
       ...presentationExtensions,
       ...wikiLinkEventConfig.extensions,
       wikiLinkAutocompleteExtension,

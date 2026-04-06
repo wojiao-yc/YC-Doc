@@ -126,6 +126,56 @@
   border-radius: 6px;
 }
 
+.yc-editor-host .cm-code-token-comment,
+.yc-editor-host .cm-code-token-prolog,
+.yc-editor-host .cm-code-token-doctype,
+.yc-editor-host .cm-code-token-cdata {
+  color: var(--yc-syntax-comment);
+  font-style: italic;
+}
+
+.yc-editor-host .cm-code-token-punctuation,
+.yc-editor-host .cm-code-token-operator,
+.yc-editor-host .cm-code-token-entity {
+  color: var(--yc-syntax-operator);
+}
+
+.yc-editor-host .cm-code-token-property,
+.yc-editor-host .cm-code-token-tag,
+.yc-editor-host .cm-code-token-boolean,
+.yc-editor-host .cm-code-token-number,
+.yc-editor-host .cm-code-token-constant,
+.yc-editor-host .cm-code-token-symbol,
+.yc-editor-host .cm-code-token-deleted {
+  color: var(--yc-syntax-number);
+}
+
+.yc-editor-host .cm-code-token-selector,
+.yc-editor-host .cm-code-token-attr-name,
+.yc-editor-host .cm-code-token-string,
+.yc-editor-host .cm-code-token-char,
+.yc-editor-host .cm-code-token-builtin,
+.yc-editor-host .cm-code-token-inserted {
+  color: var(--yc-syntax-string);
+}
+
+.yc-editor-host .cm-code-token-atrule,
+.yc-editor-host .cm-code-token-attr-value,
+.yc-editor-host .cm-code-token-keyword {
+  color: var(--yc-syntax-keyword);
+}
+
+.yc-editor-host .cm-code-token-function,
+.yc-editor-host .cm-code-token-class-name {
+  color: var(--yc-syntax-type);
+}
+
+.yc-editor-host .cm-code-token-regex,
+.yc-editor-host .cm-code-token-important,
+.yc-editor-host .cm-code-token-variable {
+  color: var(--yc-syntax-meta);
+}
+
 .yc-editor-host .cm-wiki-link {
   border-radius: 4px;
   padding: 0 0.08em;

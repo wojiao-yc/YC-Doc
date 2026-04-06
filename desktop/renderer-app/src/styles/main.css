@@ -2020,6 +2020,115 @@ body {
   color: inherit;
 }
 
+.markdown-render .md-table-wrap {
+  overflow-x: auto;
+  border: 1px solid color-mix(in srgb, var(--yc-border-contrast) 68%, transparent);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--yc-bg-panel) 92%, transparent);
+}
+
+.markdown-render .md-table-wrap table {
+  margin: 0;
+  width: 100%;
+  min-width: 460px;
+  border-collapse: collapse;
+}
+
+.markdown-render .md-table-wrap th,
+.markdown-render .md-table-wrap td {
+  padding: 0.52rem 0.68rem;
+  border-right: 1px solid color-mix(in srgb, var(--yc-border-contrast) 54%, transparent);
+  border-bottom: 1px solid color-mix(in srgb, var(--yc-border-contrast) 54%, transparent);
+  text-align: left;
+  vertical-align: top;
+}
+
+.markdown-render .md-table-wrap th {
+  font-weight: 600;
+  color: var(--yc-text-primary);
+  background: color-mix(in srgb, var(--yc-bg-subtle-hover) 76%, transparent);
+}
+
+.markdown-render .md-table-wrap tr:last-child td {
+  border-bottom: 0;
+}
+
+.markdown-render .md-table-wrap th:last-child,
+.markdown-render .md-table-wrap td:last-child {
+  border-right: 0;
+}
+
+.markdown-render .md-callout {
+  margin: 0.72em 0;
+  border-radius: 12px;
+  border: 1px solid color-mix(in srgb, var(--yc-border-contrast) 68%, transparent);
+  background: color-mix(in srgb, var(--yc-bg-panel) 95%, transparent);
+  overflow: hidden;
+}
+
+.markdown-render .md-callout-head {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.52rem 0.7rem;
+  border-bottom: 1px solid color-mix(in srgb, var(--yc-border-contrast) 46%, transparent);
+  background: color-mix(in srgb, var(--yc-bg-subtle-hover) 76%, transparent);
+  color: var(--yc-text-primary);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+
+.markdown-render .md-callout-icon {
+  width: 1.2em;
+  min-width: 1.2em;
+  display: inline-flex;
+  justify-content: center;
+  align-items: center;
+  font-weight: 800;
+}
+
+.markdown-render .md-callout-subtitle {
+  font-size: 12px;
+  font-weight: 500;
+  opacity: 0.86;
+  letter-spacing: 0;
+}
+
+.markdown-render .md-callout-body {
+  padding: 0.64rem 0.8rem 0.76rem;
+}
+
+.markdown-render .md-callout-body > :first-child {
+  margin-top: 0;
+}
+
+.markdown-render .md-callout-body > :last-child {
+  margin-bottom: 0;
+}
+
+.markdown-render .md-callout-warning,
+.markdown-render .md-callout-caution {
+  border-color: color-mix(in srgb, var(--yc-callout-warning-border) 62%, var(--yc-border-contrast));
+}
+
+.markdown-render .md-callout-warning .md-callout-head,
+.markdown-render .md-callout-caution .md-callout-head {
+  background: color-mix(in srgb, var(--yc-callout-warning-bg) 78%, var(--yc-bg-panel));
+  color: var(--yc-callout-warning-title);
+}
+
+.markdown-render .md-callout-danger,
+.markdown-render .md-callout-important {
+  border-color: color-mix(in srgb, var(--yc-callout-danger-border) 58%, var(--yc-border-contrast));
+}
+
+.markdown-render .md-callout-danger .md-callout-head,
+.markdown-render .md-callout-important .md-callout-head {
+  background: color-mix(in srgb, var(--yc-callout-danger-bg) 76%, var(--yc-bg-panel));
+  color: var(--yc-callout-danger-title);
+}
+
 .markdown-render .token.comment,
 .markdown-render .token.prolog,
 .markdown-render .token.doctype,

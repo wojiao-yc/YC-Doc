@@ -1261,8 +1261,6 @@ const executeCommand = async (view, commandId, menuContext = {}) => {
         return commandInsertCodeBlock(view);
       case "insert-math-block":
         return commandInsertMathBlock(view);
-      case "insert-database":
-        return commandInsertDatabase(view);
       case "clipboard-cut":
         return commandCut(view);
       case "clipboard-copy":
@@ -1336,8 +1334,7 @@ const MENU_DEFINITION = [
       { id: "insert-divider", icon: "-", label: "分隔线" },
       { type: "separator" },
       { id: "insert-code-block", icon: "{}", label: "代码块" },
-      { id: "insert-math-block", icon: "M", label: "数学块" },
-      { id: "insert-database", icon: "db", label: "新建数据库" }
+      { id: "insert-math-block", icon: "M", label: "数学块" }
     ]
   },
   { type: "separator" },
@@ -1442,7 +1439,7 @@ const TABLE_MENU_DEFINITION = [
 const CONTEXT_MENU_ICON_NAME_BY_ID = Object.freeze({
   "add-link": "link",
   "add-external-link": "external-link",
-  format: "tool",
+  format: "highlight",
   "format-bold": "bold",
   "format-italic": "italic",
   "format-strike": "strikethrough",
@@ -1461,7 +1458,6 @@ const CONTEXT_MENU_ICON_NAME_BY_ID = Object.freeze({
   "paragraph-h4": "h4",
   "paragraph-h5": "h5",
   "paragraph-h6": "h6",
-  "paragraph-text": "line-height",
   "paragraph-quote": "quote",
   insert: "add",
   "insert-footnote": "file",
@@ -1471,7 +1467,6 @@ const CONTEXT_MENU_ICON_NAME_BY_ID = Object.freeze({
   "insert-image": "image",
   "insert-code-block": "code-block",
   "insert-math-block": "formula",
-  "insert-database": "storage",
   "editor-settings": "settings",
   "editor-width-narrower": "arrow-left",
   "editor-width-wider": "arrow-right",
