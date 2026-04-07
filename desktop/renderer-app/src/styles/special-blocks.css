@@ -459,12 +459,14 @@
   font-size: 0.78em;
   line-height: 0;
   vertical-align: super;
+  color: var(--yc-annotation-color);
 }
 
 .yc-editor-host .cm-table-widget-cell-editor sub {
   font-size: 0.78em;
   line-height: 0;
   vertical-align: sub;
+  color: var(--yc-annotation-color);
 }
 
 .yc-editor-host .cm-table-widget-cell-editor a {

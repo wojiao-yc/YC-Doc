@@ -142,17 +142,38 @@
   --yc-sidebar-button-active-bg: rgba(138, 92, 245, 0.18);
   --yc-sidebar-button-active-border: rgba(138, 92, 245, 0.28);
   --yc-sidebar-button-active-text: #efe7ff;
+  --yc-chrome-sidebar-toggle-bg: rgba(138, 92, 245, 0.2);
+  --yc-chrome-sidebar-toggle-border: rgba(138, 92, 245, 0.3);
+  --yc-chrome-sidebar-toggle-text: #efe7ff;
+  --yc-chrome-sidebar-toggle-hover-bg: rgba(138, 92, 245, 0.26);
+  --yc-chrome-sidebar-toggle-hover-border: rgba(138, 92, 245, 0.38);
+  --yc-chrome-sidebar-toggle-hover-text: #ffffff;
+  --yc-editor-markdown-prefix: #c9b3ff;
+  --yc-preview-marker-color: #c9b3ff;
+  --yc-annotation-color: #cdbbff;
+  --yc-annotation-bg: rgba(138, 92, 245, 0.18);
 
-  --yc-syntax-keyword: #ff7ab8;
-  --yc-syntax-type: #8ad6ff;
-  --yc-syntax-string: #9fe870;
-  --yc-syntax-number: #ffd866;
-  --yc-syntax-attribute: #7dcfff;
+  --yc-syntax-keyword: #c79bff;
+  --yc-syntax-type: #d7c2ff;
+  --yc-syntax-string: #b89bff;
+  --yc-syntax-number: #dac4ff;
+  --yc-syntax-attribute: #a78bfa;
   --yc-syntax-operator: #d7dae4;
-  --yc-syntax-comment: #7f879b;
-  --yc-syntax-meta: #c79bff;
-  --yc-syntax-delimiter: #aab0c2;
-  --yc-syntax-link: #82aaff;
+  --yc-syntax-comment: #8d93a8;
+  --yc-syntax-meta: #cdbbff;
+  --yc-syntax-delimiter: #c9b3ff;
+  --yc-syntax-link: #ccb9ff;
+
+  --yc-code-syntax-keyword: #ff7ab8;
+  --yc-code-syntax-type: #8ad6ff;
+  --yc-code-syntax-string: #9fe870;
+  --yc-code-syntax-number: #ffd866;
+  --yc-code-syntax-attribute: #7dcfff;
+  --yc-code-syntax-operator: #d7dae4;
+  --yc-code-syntax-comment: #7f879b;
+  --yc-code-syntax-meta: #c79bff;
+  --yc-code-syntax-delimiter: #aab0c2;
+  --yc-code-syntax-link: #82aaff;
 
   --yc-editor-math-command: #7dcfff;
   --yc-editor-math-number: #ffd866;

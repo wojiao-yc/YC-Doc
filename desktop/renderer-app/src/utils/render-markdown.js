@@ -239,6 +239,28 @@ const decorateCalloutBlockquotesInHtml = (htmlInput = "") =>
     }
   );
 
+const applyHighlightMarkSyntax = (htmlInput = "") => {
+  const html = String(htmlInput || "");
+  if (!html || !html.includes("==")) {
+    return html;
+  }
+
+  const protectedBlocks = [];
+  const withPlaceholders = html.replace(/<(pre|code)\b[^>]*>[\s\S]*?<\/\1>/gi, (match) => {
+    const index = protectedBlocks.push(match) - 1;
+    return `\u0000HTML_MARK_${index}\u0000`;
+  });
+
+  const withMarks = withPlaceholders.replace(/==(?=\S)([\s\S]*?\S)==/g, "<mark>$1</mark>");
+  return withMarks.replace(/\u0000HTML_MARK_(\d+)\u0000/g, (_, indexText) => {
+    const index = Number(indexText);
+    if (!Number.isFinite(index) || index < 0 || index >= protectedBlocks.length) {
+      return "";
+    }
+    return protectedBlocks[index] || "";
+  });
+};
+
 const preprocessMathFormulas = (markdownInput = "", renderMathFormula = null) => {
   const markdown = String(markdownInput || "");
   if (!markdown) {
@@ -314,7 +336,8 @@ export const renderMarkdownToHtml = ({
     renderer
   }) || "");
 
-  const withCallouts = decorateCalloutBlockquotesInHtml(parsed);
+  const withHighlights = applyHighlightMarkSyntax(parsed);
+  const withCallouts = decorateCalloutBlockquotesInHtml(withHighlights);
   const withTables = wrapTablesInHtml(withCallouts);
   const withHeadingIds = applyHeadingIdsToHtml(withTables, rawMarkdown);
   return ensureImageClass(normalizeImageSourcesInHtml(withHeadingIds, {

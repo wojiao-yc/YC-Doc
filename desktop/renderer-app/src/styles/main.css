@@ -1820,12 +1820,13 @@ body {
   justify-content: center;
   color: var(--yc-text-muted);
   background: transparent;
+  box-shadow: none;
   transition: all 0.15s ease;
 }
 
 .sidebar-collapse-btn:hover {
-  color: var(--yc-text-primary);
-  background: var(--yc-bg-subtle-hover);
+  color: var(--yc-chrome-sidebar-toggle-hover-text);
+  background: var(--yc-chrome-sidebar-toggle-hover-bg);
 }
 
 .sidebar-resize-handle {
@@ -2156,6 +2157,10 @@ body {
 .markdown-render ul,
 .markdown-render ol {
   padding-left: 1.5em;
+}
+
+.markdown-render li::marker {
+  color: var(--yc-preview-marker-color);
 }
 
 .markdown-render ul:has(> li > input[type="checkbox"]) {
@@ -2500,40 +2505,71 @@ body {
   color: var(--yc-callout-danger-title);
 }
 
+.markdown-render blockquote {
+  padding-left: 0.92rem;
+  border-left: 3px solid var(--yc-blockquote-accent);
+  color: var(--yc-blockquote-color);
+}
+
+.markdown-render mark {
+  background: var(--yc-mark-bg);
+  box-shadow: inset 0 0 0 1px var(--yc-mark-shadow);
+  color: var(--yc-mark-text);
+  border-radius: 4px;
+  padding: 0 0.12em;
+  box-decoration-break: clone;
+  -webkit-box-decoration-break: clone;
+}
+
+.markdown-render sup,
+.markdown-render sub,
+.markdown-render sup a,
+.markdown-render sub a {
+  color: var(--yc-annotation-color);
+}
+
+.markdown-render sup a,
+.markdown-render sub a {
+  background: var(--yc-annotation-bg);
+  border-radius: 999px;
+  padding: 0 0.28em;
+  text-decoration: none;
+}
+
 .markdown-render .token.comment,
 .markdown-render .token.prolog,
 .markdown-render .token.doctype,
 .markdown-render .token.cdata {
-  color: var(--yc-syntax-comment);
+  color: var(--yc-code-syntax-comment);
   font-style: italic;
 }
 
 .markdown-render .token.punctuation,
 .markdown-render .token.brace,
 .markdown-render .token.entity {
-  color: var(--yc-syntax-delimiter);
+  color: var(--yc-code-syntax-delimiter);
 }
 
 .markdown-render .token.operator,
 .markdown-render .token.deleted {
-  color: var(--yc-syntax-operator);
+  color: var(--yc-code-syntax-operator);
 }
 
 .markdown-render .token.property,
 .markdown-render .token.attr-name {
-  color: var(--yc-syntax-attribute);
+  color: var(--yc-code-syntax-attribute);
 }
 
 .markdown-render .token.tag,
 .markdown-render .token.selector {
-  color: var(--yc-syntax-link);
+  color: var(--yc-code-syntax-link);
 }
 
 .markdown-render .token.boolean,
 .markdown-render .token.number,
 .markdown-render .token.constant,
 .markdown-render .token.symbol {
-  color: var(--yc-syntax-number);
+  color: var(--yc-code-syntax-number);
 }
 
 .markdown-render .token.string,
@@ -2542,7 +2578,7 @@ body {
 .markdown-render .token.inserted,
 .markdown-render .token.template-string,
 .markdown-render .token.interpolation {
-  color: var(--yc-syntax-string);
+  color: var(--yc-code-syntax-string);
 }
 
 .markdown-render .token.keyword,
@@ -2550,19 +2586,19 @@ body {
 .markdown-render .token.attr-value,
 .markdown-render .token.directive,
 .markdown-render .token.rule {
-  color: var(--yc-syntax-keyword);
+  color: var(--yc-code-syntax-keyword);
   font-weight: 640;
 }
 
 .markdown-render .token.function,
 .markdown-render .token.method {
-  color: var(--yc-syntax-link);
+  color: var(--yc-code-syntax-link);
 }
 
 .markdown-render .token.namespace,
 .markdown-render .token.class-name,
 .markdown-render .token.decorator {
-  color: var(--yc-syntax-type);
+  color: var(--yc-code-syntax-type);
   font-weight: 560;
 }
 
@@ -2573,7 +2609,7 @@ body {
 .markdown-render .token.parameter,
 .markdown-render .token.regex,
 .markdown-render .token.important {
-  color: var(--yc-syntax-meta);
+  color: var(--yc-code-syntax-meta);
   font-weight: 650;
 }
 
@@ -2993,8 +3029,8 @@ body {
 }
 
 .chrome-sidebar-toggle-btn:hover {
-  background: var(--yc-bg-subtle-hover);
-  border-color: transparent;
+  background: var(--yc-chrome-sidebar-toggle-hover-bg);
+  color: var(--yc-chrome-sidebar-toggle-hover-text);
 }
 
 .term-window-btn-close:hover {
@@ -3486,8 +3522,8 @@ body {
 }
 
 .dark-ui .sidebar-collapse-btn:hover {
-  color: var(--yc-text-primary);
-  background: var(--yc-bg-subtle-hover);
+  color: var(--yc-chrome-sidebar-toggle-hover-text);
+  background: var(--yc-chrome-sidebar-toggle-hover-bg);
 }
 
 .dark-ui .sidebar-resize-handle:hover {

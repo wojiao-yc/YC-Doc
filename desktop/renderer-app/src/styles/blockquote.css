@@ -1,5 +1,5 @@
 .yc-editor-host .cm-line.cm-block-blockquote {
-  border-left: 3px solid var(--yc-blockquote-accent);
+  border-left: 3px solid color-mix(in srgb, var(--yc-border-contrast) 82%, transparent);
   background: transparent;
   color: var(--yc-blockquote-color);
   padding-left: 0.9rem;
