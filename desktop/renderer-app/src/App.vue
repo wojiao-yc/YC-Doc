@@ -5,6 +5,7 @@
     class="app-root-shell flex h-screen min-h-0 overflow-hidden flex-col"
     :data-theme="activeThemeId"
     :data-theme-mode="currentThemeMode"
+    :style="appThemeInlineStyle"
     :class="{
       'dark-ui': isDark,
       'desktop-frameless-windowed': isDesktopWindowControls && !windowIsMaximized
@@ -1282,8 +1283,70 @@
 
             <template v-else-if="settingsWindow.section === 'appearance'">
               <div class="settings-window-card" :class="isDark ? 'is-dark' : ''">
+                <div class="settings-window-card-title">主题色主题</div>
+                <div class="settings-window-card-text">这是一个单独的主题。只有切换到“主题色主题”时，下面的主题色设置才会生效；其它主题保持自己的原始配色，不会被这里覆盖。</div>
+                <label class="settings-window-toggle-row" :class="isDark ? 'is-dark' : ''">
+                  <span>启用自定义主题色</span>
+                  <input v-model="themeAccentEnabled" type="checkbox" class="settings-window-checkbox" />
+                </label>
+                <div v-if="!isThemeColorThemeActive" class="settings-window-note">
+                  当前主题不是“主题色主题”，下面的颜色设置暂时不会应用。
+                  <button type="button" class="settings-window-link" @click="applyThemeSelection(THEME_COLOR_THEME_ID)">切换到主题色主题</button>
+                </div>
+                <div class="settings-accent-panel" :class="themeAccentControlsEnabled ? '' : 'is-disabled'">
+                  <div class="settings-accent-picker-row">
+                    <label class="settings-accent-swatch-shell" :aria-disabled="!themeAccentEnabled">
+                      <input v-model="themeAccentHex" class="settings-accent-native" type="color" :disabled="!themeAccentControlsEnabled" />
+                      <span class="settings-accent-swatch" :style="{ background: themeAccentHex }"></span>
+                    </label>
+                    <div class="settings-accent-meta">
+                      <div class="settings-accent-label">当前主题色</div>
+                      <div class="settings-accent-value">{{ themeAccentHex.toUpperCase() }}</div>
+                    </div>
+                    <button type="button" class="settings-window-button" :class="isDark ? 'is-dark' : ''" @click="resetThemeAccentTheme">重置</button>
+                  </div>
+
+                  <label class="settings-accent-range-group">
+                    <div class="settings-accent-range-header">
+                      <span>饱和度强度</span>
+                      <span>{{ themeAccentSaturation }}%</span>
+                    </div>
+                    <input
+                      v-model.number="themeAccentSaturation"
+                      class="settings-accent-range"
+                      type="range"
+                      min="65"
+                      max="145"
+                      step="1"
+                      :disabled="!themeAccentControlsEnabled"
+                    />
+                    <div class="settings-accent-range-captions">
+                      <span>柔和</span>
+                      <span>{{ themeAccentPresetLabel }}</span>
+                      <span>鲜明</span>
+                    </div>
+                  </label>
+
+                  <div class="settings-accent-rgb-grid">
+                    <label class="settings-accent-channel">
+                      <span>R</span>
+                      <input v-model.number="themeAccentRed" type="number" min="0" max="255" step="1" :disabled="!themeAccentControlsEnabled" />
+                    </label>
+                    <label class="settings-accent-channel">
+                      <span>G</span>
+                      <input v-model.number="themeAccentGreen" type="number" min="0" max="255" step="1" :disabled="!themeAccentControlsEnabled" />
+                    </label>
+                    <label class="settings-accent-channel">
+                      <span>B</span>
+                      <input v-model.number="themeAccentBlue" type="number" min="0" max="255" step="1" :disabled="!themeAccentControlsEnabled" />
+                    </label>
+                  </div>
+                </div>
+              </div>
+
+              <div class="settings-window-card" :class="isDark ? 'is-dark' : ''">
                 <div class="settings-window-card-title">主题</div>
-                <div class="settings-window-card-text">内置主题会自动从 `src/themes/*/meta.js` 发现，样式文件也会自动加载。新增主题只需要新建目录、写 `index.css` 和 `meta.js`。</div>
+                <div class="settings-window-card-text">内置主题会自动从 `src/themes/*/meta.js` 发现，样式文件也会自动加载。新增主题只需要新建目录、写 `index.css` 和 `meta.js`。你仍然可以在这里切换不同主题；“主题色主题”是其中一个可自定义强调色的独立主题，其它主题不会被上面的颜色设置覆盖。</div>
                 <div class="settings-theme-grid">
                   <button
                     v-for="theme in availableThemes"
@@ -1513,6 +1576,11 @@ const availableThemes = computed(() => buildThemeCatalog(importedThemes.value));
 const currentThemeDefinition = computed(() => resolveThemeDefinition(activeThemeId.value, importedThemes.value));
 const currentThemeMode = computed(() => resolveThemeMode(activeThemeId.value, importedThemes.value));
 const isDark = computed(() => currentThemeMode.value === "dark");
+const themeAccentEnabled = ref(false);
+const themeAccentRed = ref(155);
+const themeAccentGreen = ref(109);
+const themeAccentBlue = ref(72);
+const themeAccentSaturation = ref(100);
 const activeImportedTheme = computed(() => (
   currentThemeDefinition.value?.kind === "imported" ? currentThemeDefinition.value : null
 ));
@@ -1902,8 +1970,10 @@ const EDITOR_TABS_STORAGE_KEY = "yc-doc.editor-tabs.v2";
 const LEGACY_EDITOR_TABS_STORAGE_KEY = "yc-doc.editor-tabs.v1";
 const THEME_PREFS_STORAGE_KEY = "yc-doc.theme-prefs.v2";
 const LEGACY_THEME_PREFS_STORAGE_KEY = "yc-doc.theme-prefs.v1";
+const THEME_ACCENT_THEME_STORAGE_KEY = "yc-doc.theme-accent-theme.v1";
 const WIKI_LINK_INDEX_DEBOUNCE_MS = 220;
 const CUSTOM_THEME_STYLE_ID = "yc-doc-custom-theme-style";
+const THEME_COLOR_THEME_ID = "theme-color";
 const SETTINGS_SECTIONS = Object.freeze([
   { id: "general", label: "通用", icon: "settings" },
   { id: "editor", label: "编辑器", icon: "tool" },
@@ -1912,6 +1982,270 @@ const SETTINGS_SECTIONS = Object.freeze([
 ]);
 
 const { toast, showToast } = useToast();
+const clampByte = (value, fallback = 0) => {
+  const numeric = Number(value);
+  return clamp(Number.isFinite(numeric) ? Math.round(numeric) : fallback, 0, 255);
+};
+
+const padHex = (value) => clampByte(value).toString(16).padStart(2, "0");
+
+const rgbToHex = ({ r = 0, g = 0, b = 0 } = {}) => `#${padHex(r)}${padHex(g)}${padHex(b)}`;
+
+const hexToRgb = (value, fallback = { r: 155, g: 109, b: 72 }) => {
+  const raw = String(value || "").trim().replace(/^#/, "");
+  const normalized = raw.length === 3
+    ? raw.split("").map((segment) => segment + segment).join("")
+    : raw;
+  if (!/^[\da-fA-F]{6}$/.test(normalized)) {
+    return {
+      r: clampByte(fallback.r, 155),
+      g: clampByte(fallback.g, 109),
+      b: clampByte(fallback.b, 72)
+    };
+  }
+  return {
+    r: Number.parseInt(normalized.slice(0, 2), 16),
+    g: Number.parseInt(normalized.slice(2, 4), 16),
+    b: Number.parseInt(normalized.slice(4, 6), 16)
+  };
+};
+
+const rgbToCss = ({ r = 0, g = 0, b = 0 } = {}, alpha = 1) => (
+  alpha >= 1
+    ? `rgb(${clampByte(r)}, ${clampByte(g)}, ${clampByte(b)})`
+    : `rgba(${clampByte(r)}, ${clampByte(g)}, ${clampByte(b)}, ${clamp(Number(alpha) || 0, 0, 1)})`
+);
+
+const rgbToHsl = ({ r = 0, g = 0, b = 0 } = {}) => {
+  const red = clampByte(r) / 255;
+  const green = clampByte(g) / 255;
+  const blue = clampByte(b) / 255;
+  const max = Math.max(red, green, blue);
+  const min = Math.min(red, green, blue);
+  const lightness = (max + min) / 2;
+  const delta = max - min;
+  if (delta === 0) {
+    return { h: 0, s: 0, l: lightness };
+  }
+  const saturation = lightness > 0.5
+    ? delta / (2 - max - min)
+    : delta / (max + min);
+  let hue = 0;
+  switch (max) {
+    case red:
+      hue = ((green - blue) / delta) + (green < blue ? 6 : 0);
+      break;
+    case green:
+      hue = ((blue - red) / delta) + 2;
+      break;
+    default:
+      hue = ((red - green) / delta) + 4;
+      break;
+  }
+  return {
+    h: hue * 60,
+    s: saturation,
+    l: lightness
+  };
+};
+
+const hslToRgb = ({ h = 0, s = 0, l = 0 } = {}) => {
+  const hue = ((Number(h) % 360) + 360) % 360;
+  const saturation = clamp(Number(s) || 0, 0, 1);
+  const lightness = clamp(Number(l) || 0, 0, 1);
+  if (saturation === 0) {
+    const gray = Math.round(lightness * 255);
+    return { r: gray, g: gray, b: gray };
+  }
+  const chroma = (1 - Math.abs(2 * lightness - 1)) * saturation;
+  const segment = hue / 60;
+  const secondary = chroma * (1 - Math.abs((segment % 2) - 1));
+  let red = 0;
+  let green = 0;
+  let blue = 0;
+  if (segment >= 0 && segment < 1) {
+    red = chroma;
+    green = secondary;
+  } else if (segment < 2) {
+    red = secondary;
+    green = chroma;
+  } else if (segment < 3) {
+    green = chroma;
+    blue = secondary;
+  } else if (segment < 4) {
+    green = secondary;
+    blue = chroma;
+  } else if (segment < 5) {
+    red = secondary;
+    blue = chroma;
+  } else {
+    red = chroma;
+    blue = secondary;
+  }
+  const match = lightness - chroma / 2;
+  return {
+    r: Math.round((red + match) * 255),
+    g: Math.round((green + match) * 255),
+    b: Math.round((blue + match) * 255)
+  };
+};
+
+const shiftHue = (hue = 0, delta = 0) => (((Number(hue) || 0) + Number(delta || 0)) % 360 + 360) % 360;
+
+const relativeLuminance = ({ r = 0, g = 0, b = 0 } = {}) => {
+  const normalize = (value) => {
+    const channel = clampByte(value) / 255;
+    return channel <= 0.03928 ? channel / 12.92 : ((channel + 0.055) / 1.055) ** 2.4;
+  };
+  return 0.2126 * normalize(r) + 0.7152 * normalize(g) + 0.0722 * normalize(b);
+};
+
+const applyThemeAccentRgb = (rgbInput = {}) => {
+  themeAccentRed.value = clampByte(rgbInput.r, themeAccentRed.value);
+  themeAccentGreen.value = clampByte(rgbInput.g, themeAccentGreen.value);
+  themeAccentBlue.value = clampByte(rgbInput.b, themeAccentBlue.value);
+};
+
+const themeAccentHex = computed({
+  get: () => rgbToHex({
+    r: themeAccentRed.value,
+    g: themeAccentGreen.value,
+    b: themeAccentBlue.value
+  }),
+  set: (value) => {
+    applyThemeAccentRgb(hexToRgb(value, {
+      r: themeAccentRed.value,
+      g: themeAccentGreen.value,
+      b: themeAccentBlue.value
+    }));
+  }
+});
+
+const themeAccentPresetLabel = computed(() => {
+  if (themeAccentSaturation.value <= 82) {
+    return "低饱和";
+  }
+  if (themeAccentSaturation.value >= 122) {
+    return "高饱和";
+  }
+  return "标准";
+});
+
+const isThemeColorThemeActive = computed(() => activeThemeId.value === THEME_COLOR_THEME_ID);
+const themeAccentControlsEnabled = computed(() => themeAccentEnabled.value && isThemeColorThemeActive.value);
+
+const buildThemeAccentThemeStyle = ({ enabled = false, rgb = null, saturation = 100, dark = false } = {}) => {
+  if (!enabled || !rgb) {
+    return {};
+  }
+  const saturationScale = clamp((Number(saturation) || 100) / 100, 0.65, 1.45);
+  const baseHsl = rgbToHsl(rgb);
+  const accentRgb = hslToRgb({
+    h: baseHsl.h,
+    s: clamp(baseHsl.s * saturationScale, 0.18, 0.96),
+    l: clamp(baseHsl.l, dark ? 0.54 : 0.3, dark ? 0.78 : 0.66)
+  });
+  const accentHsl = rgbToHsl(accentRgb);
+  const accentStrongRgb = hslToRgb({
+    h: accentHsl.h,
+    s: clamp(accentHsl.s * 1.04, 0.18, 1),
+    l: clamp(accentHsl.l + (dark ? 0.08 : -0.1), 0.16, 0.86)
+  });
+  const accentSoftAlpha = dark ? 0.22 : 0.12;
+  const accentSoftStrongAlpha = dark ? 0.32 : 0.22;
+  const accentContrast = relativeLuminance(accentRgb) > 0.5 ? "#1f2937" : "#ffffff";
+  const textOnAccentRgb = hslToRgb({
+    h: accentHsl.h,
+    s: clamp(accentHsl.s * 0.96, 0.16, 1),
+    l: clamp(accentHsl.l + (dark ? 0.18 : -0.16), 0.18, 0.9)
+  });
+  const linkRgb = hslToRgb({
+    h: shiftHue(accentHsl.h, dark ? 10 : 6),
+    s: clamp(accentHsl.s * 0.9, 0.14, 0.92),
+    l: clamp(accentHsl.l + (dark ? 0.14 : -0.02), 0.26, 0.82)
+  });
+  const linkHoverRgb = hslToRgb({
+    h: shiftHue(accentHsl.h, dark ? 6 : 2),
+    s: clamp(accentHsl.s * 0.95, 0.16, 0.96),
+    l: clamp(accentHsl.l + (dark ? 0.2 : -0.08), 0.18, 0.88)
+  });
+  const syntaxTypeRgb = hslToRgb({
+    h: shiftHue(accentHsl.h, 18),
+    s: clamp(accentHsl.s * 0.7, 0.1, 0.82),
+    l: clamp(accentHsl.l + (dark ? 0.16 : -0.02), 0.28, 0.82)
+  });
+  const syntaxMetaRgb = hslToRgb({
+    h: shiftHue(accentHsl.h, -18),
+    s: clamp(accentHsl.s * 0.34, 0.08, 0.5),
+    l: clamp(accentHsl.l + (dark ? 0.08 : 0.04), 0.34, 0.78)
+  });
+  return {
+    "--yc-accent": rgbToCss(accentRgb),
+    "--yc-accent-strong": rgbToCss(accentStrongRgb),
+    "--yc-accent-soft": rgbToCss(accentRgb, accentSoftAlpha),
+    "--yc-accent-soft-strong": rgbToCss(accentRgb, accentSoftStrongAlpha),
+    "--yc-accent-contrast": accentContrast,
+    "--yc-text-on-accent": rgbToCss(textOnAccentRgb),
+    "--yc-link": rgbToCss(linkRgb),
+    "--yc-link-hover": rgbToCss(linkHoverRgb),
+    "--yc-link-soft": rgbToCss(linkRgb, dark ? 0.18 : 0.1),
+    "--yc-link-decoration": rgbToCss(linkRgb, dark ? 0.7 : 0.5),
+    "--yc-syntax-keyword": rgbToCss(accentStrongRgb),
+    "--yc-syntax-type": rgbToCss(syntaxTypeRgb),
+    "--yc-syntax-string": rgbToCss(accentRgb),
+    "--yc-syntax-number": rgbToCss(accentStrongRgb),
+    "--yc-syntax-attribute": rgbToCss(accentRgb),
+    "--yc-syntax-meta": rgbToCss(syntaxMetaRgb),
+    "--yc-blockquote-accent": rgbToCss(accentRgb),
+    "--yc-table-highlight-color": rgbToCss(accentStrongRgb),
+    "--yc-table-highlight-bg": rgbToCss(accentRgb, dark ? 0.16 : 0.1),
+    "--yc-table-highlight-bg-strong": rgbToCss(accentRgb, dark ? 0.26 : 0.16),
+    "--yc-table-handle-active": rgbToCss(accentStrongRgb),
+    "--yc-table-edge-btn-active": rgbToCss(accentStrongRgb),
+    "--yc-graph-root-node": rgbToCss(accentRgb, dark ? 0.56 : 0.62),
+    "--yc-graph-node-fill": rgbToCss(accentRgb, dark ? 0.56 : 0.62),
+    "--yc-graph-node-hover": rgbToCss(accentRgb),
+    "--yc-graph-arrow": rgbToCss(accentStrongRgb, dark ? 0.88 : 0.78),
+    "--yc-graph-edge": rgbToCss(accentRgb, dark ? 0.24 : 0.18),
+    "--yc-graph-edge-active": rgbToCss(accentRgb, dark ? 0.82 : 0.74),
+    "--yc-progress-fill": `linear-gradient(90deg, ${rgbToCss(accentRgb)} 0%, ${rgbToCss(accentStrongRgb)} 100%)`
+  };
+};
+
+const appThemeInlineStyle = computed(() => buildThemeAccentThemeStyle({
+  enabled: themeAccentControlsEnabled.value,
+  rgb: {
+    r: themeAccentRed.value,
+    g: themeAccentGreen.value,
+    b: themeAccentBlue.value
+  },
+  saturation: themeAccentSaturation.value,
+  dark: currentThemeMode.value === "dark"
+}));
+
+const persistThemeAccentThemePrefs = () => {
+  if (typeof window === "undefined") {
+    return;
+  }
+  try {
+    localStorage.setItem(THEME_ACCENT_THEME_STORAGE_KEY, JSON.stringify({
+      enabled: themeAccentEnabled.value,
+      r: clampByte(themeAccentRed.value, 155),
+      g: clampByte(themeAccentGreen.value, 109),
+      b: clampByte(themeAccentBlue.value, 72),
+      saturation: clamp(Number(themeAccentSaturation.value) || 100, 65, 145)
+    }));
+  } catch {
+    // ignore storage failure
+  }
+};
+
+const resetThemeAccentTheme = () => {
+  themeAccentEnabled.value = false;
+  applyThemeAccentRgb({ r: 138, g: 92, b: 245 });
+  themeAccentSaturation.value = 100;
+  persistThemeAccentThemePrefs();
+};
 const createEmptyWikiLinkIndex = () => ({
   files: [],
   notesByPath: {},
@@ -2641,6 +2975,19 @@ if (typeof window !== "undefined") {
         activeThemeId.value = DEFAULT_THEME_ID;
       }
     }
+    const rawThemeAccentThemePrefs = localStorage.getItem(THEME_ACCENT_THEME_STORAGE_KEY);
+    if (rawThemeAccentThemePrefs) {
+      const parsedThemeAccentThemePrefs = JSON.parse(rawThemeAccentThemePrefs);
+      themeAccentEnabled.value = parsedThemeAccentThemePrefs?.enabled === true;
+      applyThemeAccentRgb({
+        r: parsedThemeAccentThemePrefs?.r,
+        g: parsedThemeAccentThemePrefs?.g,
+        b: parsedThemeAccentThemePrefs?.b
+      });
+      themeAccentSaturation.value = clamp(Number(parsedThemeAccentThemePrefs?.saturation) || 100, 65, 145);
+    } else {
+      applyThemeAccentRgb({ r: 138, g: 92, b: 245 });
+    }
     gestureNavigationEnabled.value = localStorage.getItem(GESTURE_NAV_STORAGE_KEY) === "1";
     collapseHeaderInView.value = localStorage.getItem(VIEW_HEADER_COLLAPSE_STORAGE_KEY) === "1";
     collapseStepsSidebarInView.value = localStorage.getItem(VIEW_STEPS_SIDEBAR_COLLAPSE_STORAGE_KEY) === "1";
@@ -2682,6 +3029,26 @@ if (typeof window !== "undefined") {
 }
 
 applyThemePreference();
+
+watch([themeAccentEnabled, themeAccentRed, themeAccentGreen, themeAccentBlue, themeAccentSaturation], () => {
+  const nextRed = clampByte(themeAccentRed.value, 138);
+  const nextGreen = clampByte(themeAccentGreen.value, 92);
+  const nextBlue = clampByte(themeAccentBlue.value, 245);
+  const nextSaturation = clamp(Number(themeAccentSaturation.value) || 100, 65, 145);
+  if (themeAccentRed.value !== nextRed) {
+    themeAccentRed.value = nextRed;
+  }
+  if (themeAccentGreen.value !== nextGreen) {
+    themeAccentGreen.value = nextGreen;
+  }
+  if (themeAccentBlue.value !== nextBlue) {
+    themeAccentBlue.value = nextBlue;
+  }
+  if (themeAccentSaturation.value !== nextSaturation) {
+    themeAccentSaturation.value = nextSaturation;
+  }
+  persistThemeAccentThemePrefs();
+});
 
 const makeStorageNodeId = (prefix) => `${prefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
 

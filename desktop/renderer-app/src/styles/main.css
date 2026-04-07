@@ -1091,6 +1091,157 @@ body {
   cursor: pointer;
 }
 
+.settings-accent-panel {
+  margin-top: 14px;
+  display: grid;
+  gap: 16px;
+  padding: 18px 20px;
+  border: 1px solid color-mix(in srgb, var(--yc-settings-card-border) 88%, transparent);
+  border-radius: 18px;
+  background: color-mix(in srgb, var(--yc-settings-card-bg) 94%, transparent);
+}
+
+.settings-accent-panel.is-disabled {
+  opacity: 0.62;
+}
+
+.settings-accent-picker-row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 18px;
+  align-items: center;
+}
+
+.settings-accent-swatch-shell {
+  position: relative;
+  width: 112px;
+  height: 112px;
+  border-radius: 24px;
+  border: 1px solid color-mix(in srgb, var(--yc-settings-button-border) 84%, transparent);
+  background: color-mix(in srgb, var(--yc-bg-panel) 86%, white 14%);
+  box-shadow: inset 0 1px 0 color-mix(in srgb, white 12%, transparent);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  overflow: hidden;
+}
+
+.settings-accent-native {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.settings-accent-native:disabled {
+  cursor: not-allowed;
+}
+
+.settings-accent-swatch {
+  width: 60px;
+  height: 60px;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, white 22%, transparent);
+  box-shadow: 0 14px 30px color-mix(in srgb, var(--yc-accent) 24%, transparent);
+}
+
+.settings-accent-meta {
+  display: grid;
+  gap: 8px;
+}
+
+.settings-accent-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--yc-settings-card-title);
+}
+
+.settings-accent-value {
+  font-size: 26px;
+  line-height: 1;
+  letter-spacing: 0.04em;
+  color: var(--yc-text-primary);
+}
+
+.settings-accent-range-group {
+  display: grid;
+  gap: 8px;
+}
+
+.settings-accent-range-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 13px;
+  color: var(--yc-settings-note);
+}
+
+.settings-accent-range-header strong {
+  color: var(--yc-settings-card-title);
+  font-weight: 600;
+}
+
+.settings-accent-range {
+  width: 100%;
+  accent-color: var(--yc-accent);
+}
+
+.settings-accent-range-captions {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 12px;
+  color: var(--yc-settings-note);
+}
+
+.settings-accent-rgb-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.settings-accent-channel {
+  display: grid;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--yc-settings-note);
+}
+
+.settings-accent-channel span {
+  font-weight: 600;
+  color: var(--yc-settings-card-title);
+}
+
+.settings-accent-channel input {
+  min-height: 44px;
+  border: 1px solid var(--yc-settings-button-border);
+  border-radius: 12px;
+  background: var(--yc-settings-button-bg);
+  color: var(--yc-text-primary);
+  padding: 0 12px;
+  font-size: 15px;
+}
+
+.settings-accent-channel input:focus {
+  border-color: var(--yc-accent);
+  outline: none;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--yc-accent) 18%, transparent);
+}
+
+@media (max-width: 900px) {
+  .settings-accent-picker-row {
+    grid-template-columns: 1fr;
+  }
+
+  .settings-accent-rgb-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
 .themed-secondary-btn,
 .themed-accent-btn,
 .sidebar-action-btn {

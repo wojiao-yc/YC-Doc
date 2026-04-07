@@ -81,7 +81,7 @@
                 <circle
                   class="workspace-graph-node-circle"
                   :r="node.radius"
-                  :fill="hoveredNodeId === node.id ? '#f97316' : '#94a3b8'"
+                  :fill="hoveredNodeId === node.id ? 'var(--yc-graph-node-hover)' : 'var(--yc-graph-node-fill)'"
                 />
                 <text
                   v-if="showLabels && labelsVisible"
@@ -713,7 +713,7 @@ onBeforeUnmount(() => {
 }
 
 .workspace-graph-edge.is-highlighted {
-  stroke: #f97316;
+  stroke: var(--yc-graph-edge-active);
 }
 
 .workspace-graph-edge.is-dimmed {

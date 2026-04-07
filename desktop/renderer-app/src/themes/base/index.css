@@ -328,6 +328,8 @@
   --yc-checkbox-checked-border: var(--yc-accent);
   --yc-checkbox-check: #ffffff;
   --yc-graph-root-node: #94a3b8;
+  --yc-graph-node-fill: var(--yc-graph-root-node);
+  --yc-graph-node-hover: var(--yc-accent);
   --yc-graph-arrow: #64748b;
   --yc-graph-edge: rgba(100, 116, 139, 0.38);
   --yc-graph-edge-active: color-mix(in srgb, var(--yc-accent) 72%, transparent);
