@@ -1087,27 +1087,8 @@
 
       <div
         v-if="isEditMode && !isInspectorSidebarCollapsed && !isInspectorSidebarHidden"
-        class="border-t themed-divider p-4 space-y-3"
+        class="border-t themed-divider p-4"
       >
-        <div class="sidebar-mini-toolbar">
-          <button
-            type="button"
-            @click="addStep"
-            class="sidebar-action-btn is-accent is-compact flex-1 inline-flex items-center justify-center gap-1.5 px-3 py-2 text-xs rounded-lg border"
-          >
-            <AppIcon name="add" class="sidebar-action-icon" />
-            <span>添加步骤</span>
-          </button>
-          <button
-            type="button"
-            @click="removeStep"
-            class="sidebar-action-btn is-danger is-compact flex-1 inline-flex items-center justify-center gap-1.5 px-3 py-2 text-xs rounded-lg border"
-          >
-            <AppIcon name="delete" class="sidebar-action-icon" />
-            <span>删除</span>
-          </button>
-        </div>
-
         <div class="mode-switch-toolbar">
           <button
             type="button"
@@ -1116,16 +1097,20 @@
             :disabled="!canUseSourceMode"
             @click="setWorkspaceMode('source')"
           >
-            源码
+            <AppIcon name="code" class="mode-switch-icon" />
+            <span class="mode-switch-label">源码</span>
           </button>
+          <span class="mode-switch-divider" aria-hidden="true"></span>
           <button
             type="button"
             class="mode-switch-btn"
             :class="mode === 'preview' ? 'is-active' : ''"
             @click="setWorkspaceMode('preview')"
           >
-            预览
+            <AppIcon name="eye" class="mode-switch-icon" />
+            <span class="mode-switch-label">预览</span>
           </button>
+          <span class="mode-switch-divider" aria-hidden="true"></span>
           <button
             type="button"
             class="mode-switch-btn"
@@ -1133,7 +1118,8 @@
             :disabled="!canUsePresentMode"
             @click="setWorkspaceMode('view')"
           >
-            展示
+            <AppIcon name="whiteboard" class="mode-switch-icon" />
+            <span class="mode-switch-label">展示</span>
           </button>
         </div>
       </div>
@@ -2200,15 +2186,13 @@ const {
   parseMarkdownToSteps,
   persistActiveMarkdownBeforeSwitch,
   renameOutlineHeadingTitle,
-  removeStep,
   resetBlankEditorState,
   saveMarkdown,
   saveStatus,
   updateMarkdown,
   serializeStepsToMarkdown,
   stepDisplayTitle,
-  writeActiveMarkdownNow,
-  addStep
+  writeActiveMarkdownNow
 } = useMarkdownDocument({
   steps,
   currentId,
