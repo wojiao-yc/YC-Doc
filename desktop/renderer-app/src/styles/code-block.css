@@ -115,20 +115,15 @@
 }
 
 .yc-editor-host .cm-code-block-copy-btn {
-  width: 100%;
-  min-width: 0;
-  height: 32px;
+  width: 28px;
+  height: 28px;
   border: 0;
-  border-radius: 7px;
-  padding: 0 9px;
-  display: flex;
+  border-radius: 8px;
+  padding: 0;
+  display: inline-flex;
   align-items: center;
-  gap: 8px;
-  white-space: nowrap;
-  font-size: 13px;
-  line-height: 1;
-  font-weight: 500;
-  color: var(--yc-menu-text);
+  justify-content: center;
+  color: color-mix(in srgb, var(--yc-code-block-color) 68%, var(--yc-text-muted) 32%);
   background: transparent;
   cursor: pointer;
   user-select: none;
@@ -140,11 +135,20 @@
 .yc-editor-host .cm-code-block-copy-btn:focus-visible,
 .yc-editor-host .cm-code-block-copy-btn[data-copy-state="copied"] {
   outline: none;
+  color: var(--yc-menu-text);
   background: color-mix(in srgb, var(--yc-menu-hover) 64%, var(--yc-accent-soft-strong) 36%);
 }
 
 .yc-editor-host .cm-code-block-copy-btn[data-copy-state="failed"] {
   color: var(--yc-callout-danger-title);
+  background: color-mix(in srgb, var(--yc-menu-hover) 52%, transparent);
+}
+
+.yc-editor-host .cm-code-block-copy-btn .cm-code-block-copy-icon-svg {
+  width: 14px;
+  height: 14px;
+  display: block;
+  pointer-events: none;
 }
 
 .yc-editor-host .cm-code-block-copy-icon {

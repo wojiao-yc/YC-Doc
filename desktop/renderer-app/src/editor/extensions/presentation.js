@@ -4,7 +4,7 @@ import katex from "katex";
 import { marked } from "marked";
 import { parseImageLine, serializeImageLine } from "../parser/parse-image.js";
 import { copyText } from "../../utils/clipboard.js";
-import { createCopyIconSvgElement } from "../../utils/copy-icon.js";
+import { createAppIconSvgElement } from "../../utils/app-icon.js";
 import { resolveWorkspaceAssetSrc } from "../../utils/workspace-media.js";
 
 const HEADING_PREFIX_PATTERN = /^\s{0,3}#{1,6}[ \t]+/;
@@ -1150,6 +1150,20 @@ class CodeBlockCopyWidget extends WidgetType {
     const wrapper = document.createElement("span");
     wrapper.className = "cm-code-block-copy-widget";
 
+    const copyButtonEl = document.createElement("button");
+    copyButtonEl.type = "button";
+    copyButtonEl.className = "cm-code-block-copy-btn";
+    copyButtonEl.setAttribute("data-code-block-id", this.blockId);
+    copyButtonEl.setAttribute("aria-label", "\u590d\u5236\u4ee3\u7801");
+
+    const copyIconEl = createAppIconSvgElement("copy", "cm-code-block-copy-icon-svg");
+    if (copyIconEl) {
+      copyButtonEl.appendChild(copyIconEl);
+    }
+
+    wrapper.appendChild(copyButtonEl);
+    return wrapper;
+
     const trigger = document.createElement("button");
     trigger.type = "button";
     trigger.className = "cm-code-block-copy-trigger";
@@ -1169,7 +1183,7 @@ class CodeBlockCopyWidget extends WidgetType {
     button.setAttribute("data-code-block-id", this.blockId);
     button.setAttribute("aria-label", "复制代码块");
 
-    const icon = createCopyIconSvgElement("cm-code-block-copy-icon-svg");
+    const icon = createAppIconSvgElement("copy", "cm-code-block-copy-icon-svg");
     button.setAttribute("aria-label", "\u590d\u5236\u4ee3\u7801");
 
     const label = document.createElement("span");
@@ -3265,6 +3279,28 @@ const showCodeBlockCopyFeedback = (button, ok) => {
   if (!(button instanceof HTMLElement)) {
     return;
   }
+
+  const feedbackResetTimer = Number(button.dataset.resetTimer || 0);
+  if (feedbackResetTimer) {
+    window.clearTimeout(feedbackResetTimer);
+  }
+
+  const feedbackLabelText = ok ? "\u5df2\u590d\u5236" : "\u590d\u5236\u5931\u8d25";
+  button.dataset.copyState = ok ? "copied" : "failed";
+  button.setAttribute("aria-label", feedbackLabelText);
+  button.title = feedbackLabelText;
+
+  const feedbackTimer = window.setTimeout(() => {
+    if (!button.isConnected) {
+      return;
+    }
+    button.setAttribute("aria-label", "\u590d\u5236\u4ee3\u7801");
+    button.title = "";
+    delete button.dataset.copyState;
+    delete button.dataset.resetTimer;
+  }, 1400);
+  button.dataset.resetTimer = String(feedbackTimer);
+  return;
 
   const label = button.querySelector(".cm-code-block-copy-label");
   if (!(label instanceof HTMLElement)) {

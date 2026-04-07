@@ -2122,60 +2122,27 @@ body {
 }
 
 .markdown-render .md-code-copy-btn {
-  width: 100%;
-  min-width: 0;
-  height: 32px;
+  width: 28px;
+  height: 28px;
   border: 0;
-  border-radius: 7px;
-  padding: 0 9px;
-  display: flex;
+  border-radius: 8px;
+  padding: 0;
+  display: inline-flex;
   align-items: center;
-  gap: 8px;
+  justify-content: center;
   cursor: pointer;
   user-select: none;
   -webkit-user-select: none;
-  white-space: nowrap;
-  font-size: 13px;
-  line-height: 1;
-  font-weight: 500;
-  color: var(--yc-menu-text);
+  color: color-mix(in srgb, var(--yc-code-block-color) 68%, var(--yc-text-muted) 32%);
   background: transparent;
   transition: background-color 0.14s ease, color 0.14s ease;
 }
 
-.markdown-render .md-code-copy-btn .md-code-copy-icon {
-  position: relative;
-  width: 12px;
-  height: 12px;
-  display: inline-block;
-  flex: 0 0 auto;
-}
-
-.markdown-render .md-code-copy-btn .md-code-copy-icon::before,
-.markdown-render .md-code-copy-btn .md-code-copy-icon::after {
-  content: "";
-  position: absolute;
-  width: 7px;
-  height: 7px;
-  border: 1.5px solid currentColor;
-  border-radius: 2px;
-}
-
-.markdown-render .md-code-copy-btn .md-code-copy-label {
-  display: inline-block;
-  flex: 1 1 auto;
-  font-family: "PingFang SC", "Source Han Sans SC", "Microsoft YaHei", "Noto Sans CJK SC", sans-serif;
-}
-
-.markdown-render .md-code-copy-btn .md-code-copy-icon::before {
-  top: 0;
-  left: 4px;
-}
-
-.markdown-render .md-code-copy-btn .md-code-copy-icon::after {
-  top: 3px;
-  left: 1px;
-  opacity: 0.88;
+.markdown-render .md-code-copy-btn .md-code-copy-icon-svg {
+  width: 14px;
+  height: 14px;
+  display: block;
+  pointer-events: none;
 }
 
 .markdown-render .md-code-copy-btn:hover,

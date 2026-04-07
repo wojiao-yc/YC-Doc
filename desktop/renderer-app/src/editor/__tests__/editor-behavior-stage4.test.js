@@ -134,12 +134,10 @@ test("preview markdown keeps code-copy buttons and unified selection styling for
   const mainCss = readSrc("styles/main.css");
 
   assert.match(renderer, /md-code-copy-btn/);
-  assert.match(renderer, /md-code-action-trigger/);
-  assert.match(renderer, /md-code-action-menu/);
   assert.match(renderer, /data-copy-code/);
-  assert.match(renderer, /md-code-copy-label/);
+  assert.match(renderer, /renderAppIconSvgMarkup\("copy", "md-code-copy-icon-svg"\)/);
   assert.match(mainCss, /\.markdown-render \.md-code-copy-btn \{/);
-  assert.match(mainCss, /\.markdown-render \.md-code-action-menu \{/);
+  assert.match(mainCss, /\.markdown-render \.md-code-copy-btn \.md-code-copy-icon-svg \{/);
   assert.match(mainCss, /z-index:\s*1/);
   assert.match(mainCss, /user-select:\s*none/);
   assert.match(mainCss, /\.markdown-render::selection/);
@@ -164,14 +162,14 @@ test("editor code blocks expose a copy button and explicit selection styling", (
 
   assert.doesNotMatch(core, /drawSelection/);
   assert.match(presentation, /CodeBlockCopyWidget/);
-  assert.match(presentation, /cm-code-block-copy-trigger/);
-  assert.match(presentation, /cm-code-block-copy-menu/);
+  assert.match(presentation, /createAppIconSvgElement\("copy", "cm-code-block-copy-icon-svg"\)/);
+  assert.match(presentation, /cm-code-block-copy-btn/);
   assert.match(presentation, /resolveCodeBlockRangeById/);
   assert.match(presentation, /extractCodeBlockContent/);
   assert.match(presentation, /copyText\(codeText\)/);
   assert.match(presentation, /cm-table-widget-cell-content/);
-  assert.match(codeBlockCss, /\.yc-editor-host \.cm-code-block-copy-trigger \{/);
-  assert.match(codeBlockCss, /\.yc-editor-host \.cm-code-block-copy-menu \{/);
+  assert.match(codeBlockCss, /\.yc-editor-host \.cm-code-block-copy-btn \{/);
+  assert.match(codeBlockCss, /\.yc-editor-host \.cm-code-block-copy-btn \.cm-code-block-copy-icon-svg \{/);
   assert.match(themeCss, /\.yc-editor-host \.cm-content::selection/);
   assert.match(themeCss, /\.yc-editor-host \.cm-content \*::selection/);
 });
