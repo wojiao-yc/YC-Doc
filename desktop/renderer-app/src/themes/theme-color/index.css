@@ -152,6 +152,23 @@
   --yc-preview-marker-color: #c9b3ff;
   --yc-annotation-color: #cdbbff;
   --yc-annotation-bg: rgba(138, 92, 245, 0.18);
+  --yc-wikilink-color: #ccb9ff;
+  --yc-wikilink-bg: rgba(138, 92, 245, 0.18);
+  --yc-wikilink-decoration: rgba(204, 185, 255, 0.54);
+  --yc-wikilink-hover-bg: rgba(138, 92, 245, 0.28);
+  --yc-wikilink-menu-bg: rgba(17, 18, 22, 0.98);
+  --yc-wikilink-menu-border: #343744;
+  --yc-wikilink-menu-shadow: 0 20px 40px rgba(0, 0, 0, 0.34);
+  --yc-wikilink-menu-text: #f3f4f6;
+  --yc-wikilink-menu-muted: #a5a8b5;
+  --yc-wikilink-menu-item-hover-bg: rgba(138, 92, 245, 0.18);
+  --yc-wikilink-menu-item-hover-shadow: inset 0 0 0 1px rgba(138, 92, 245, 0.26);
+  --yc-wikilink-menu-meta-bg: rgba(138, 92, 245, 0.14);
+  --yc-wikilink-menu-meta-text: #d7c8ff;
+  --yc-wikilink-menu-detail: #b7bac5;
+  --yc-wikilink-menu-footer-border: rgba(80, 84, 99, 0.64);
+  --yc-wikilink-menu-hint-text: #a5a8b5;
+  --yc-wikilink-menu-hint-token: #cdbbff;
 
   --yc-syntax-keyword: #c79bff;
   --yc-syntax-type: #d7c2ff;

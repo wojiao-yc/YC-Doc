@@ -94,7 +94,7 @@
 }
 
 .yc-editor-host .cm-source-wikilink-delim {
-  color: var(--yc-link);
+  color: var(--yc-wikilink-source-delim);
   font-weight: 600;
 }
 
@@ -233,23 +233,23 @@
 }
 
 .yc-editor-host .cm-wiki-link-resolved {
-  color: var(--yc-link);
-  background: var(--yc-editor-link-resolved-bg);
-  text-decoration-color: var(--yc-link-decoration);
+  color: var(--yc-wikilink-resolved-color);
+  background: var(--yc-wikilink-resolved-bg);
+  text-decoration-color: var(--yc-wikilink-resolved-decoration);
 }
 
 .yc-editor-host .cm-wiki-link-missing {
-  color: var(--yc-editor-link-missing);
-  background: var(--yc-editor-link-missing-bg);
+  color: var(--yc-wikilink-missing-color);
+  background: var(--yc-wikilink-missing-bg);
   text-decoration-style: dashed;
-  text-decoration-color: var(--yc-editor-link-missing-decoration);
+  text-decoration-color: var(--yc-wikilink-missing-decoration);
 }
 
 .yc-editor-host .cm-wiki-link-ambiguous {
-  color: var(--yc-editor-link-ambiguous);
-  background: var(--yc-editor-link-ambiguous-bg);
+  color: var(--yc-wikilink-ambiguous-color);
+  background: var(--yc-wikilink-ambiguous-bg);
   text-decoration-style: dotted;
-  text-decoration-color: var(--yc-editor-link-ambiguous-decoration);
+  text-decoration-color: var(--yc-wikilink-ambiguous-decoration);
 }
 
 .yc-wikilink-autocomplete {
@@ -260,9 +260,9 @@
   max-height: min(72vh, 720px);
   padding: 6px;
   border-radius: 14px;
-  border: 1px solid var(--yc-menu-border);
-  background: var(--yc-menu-bg);
-  box-shadow: var(--yc-menu-shadow);
+  border: 1px solid var(--yc-wikilink-menu-border);
+  background: var(--yc-wikilink-menu-bg);
+  box-shadow: var(--yc-wikilink-menu-shadow);
   backdrop-filter: blur(12px);
   display: flex;
   flex-direction: column;
@@ -288,7 +288,7 @@
   border: 0;
   border-radius: 10px;
   background: transparent;
-  color: var(--yc-menu-text);
+  color: var(--yc-wikilink-menu-text);
   padding: 9px 10px;
   text-align: left;
   display: flex;
@@ -302,11 +302,12 @@
 
 .yc-wikilink-autocomplete-item:hover,
 .yc-wikilink-autocomplete-item.is-active {
-  background: var(--yc-accent-soft);
+  background: var(--yc-wikilink-menu-item-hover-bg);
+  box-shadow: var(--yc-wikilink-menu-item-hover-shadow);
 }
 
 .yc-wikilink-autocomplete-item.is-warning {
-  color: var(--yc-editor-link-missing);
+  color: var(--yc-wikilink-missing-color);
 }
 
 .yc-wikilink-autocomplete-label {
@@ -335,8 +336,8 @@
   font-size: 11px;
   font-weight: 700;
   line-height: 1;
-  color: var(--yc-menu-muted);
-  background: var(--yc-bg-subtle-hover);
+  color: var(--yc-wikilink-menu-meta-text);
+  background: var(--yc-wikilink-menu-meta-bg);
   border-radius: 999px;
   padding: 4px 8px;
 }
@@ -344,7 +345,7 @@
 .yc-wikilink-autocomplete-detail {
   font-size: 11px;
   line-height: 1.35;
-  color: var(--yc-text-muted);
+  color: var(--yc-wikilink-menu-detail);
   overflow-wrap: anywhere;
   word-break: break-word;
 }
@@ -353,7 +354,7 @@
   flex: 0 0 auto;
   margin-top: 4px;
   padding: 8px 10px 4px;
-  border-top: 1px solid color-mix(in srgb, var(--yc-menu-border) 76%, transparent);
+  border-top: 1px solid var(--yc-wikilink-menu-footer-border);
   display: flex;
   align-items: center;
   gap: 12px;
@@ -367,12 +368,12 @@
   gap: 7px;
   font-size: 11px;
   line-height: 1.2;
-  color: var(--yc-text-muted);
+  color: var(--yc-wikilink-menu-hint-text);
   flex: 0 0 auto;
 }
 
 .yc-wikilink-autocomplete-hint-token {
   min-width: 16px;
   font-weight: 700;
-  color: var(--yc-accent);
+  color: var(--yc-wikilink-menu-hint-token);
 }

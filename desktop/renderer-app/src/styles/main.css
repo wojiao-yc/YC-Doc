@@ -2653,12 +2653,12 @@ body {
 }
 
 .markdown-render .wiki-link {
-  color: var(--yc-link);
+  color: var(--yc-wikilink-color);
   text-decoration: underline;
   text-decoration-thickness: 1.5px;
   text-underline-offset: 0.18em;
-  text-decoration-color: var(--yc-link-decoration);
-  background: var(--yc-link-soft);
+  text-decoration-color: var(--yc-wikilink-decoration);
+  background: var(--yc-wikilink-bg);
   border-radius: var(--yc-preview-link-radius);
   padding: var(--yc-preview-link-padding);
   transition: background-color 0.15s ease, color 0.15s ease;
@@ -2666,43 +2666,21 @@ body {
 }
 
 .markdown-render .wiki-link:hover {
-  background: color-mix(in srgb, var(--yc-link-soft) var(--yc-preview-link-hover-mix), transparent);
+  background: var(--yc-wikilink-hover-bg);
 }
 
 .markdown-render .wiki-link.is-unresolved {
-  color: var(--yc-editor-link-missing);
+  color: var(--yc-wikilink-missing-color);
   text-decoration-style: dashed;
-  text-decoration-color: var(--yc-editor-link-missing-decoration);
-  background: var(--yc-editor-link-missing-bg);
+  text-decoration-color: var(--yc-wikilink-missing-decoration);
+  background: var(--yc-wikilink-missing-bg);
 }
 
 .markdown-render .wiki-link.is-ambiguous {
-  color: var(--yc-editor-link-ambiguous);
+  color: var(--yc-wikilink-ambiguous-color);
   text-decoration-style: dotted;
-  text-decoration-color: var(--yc-editor-link-ambiguous-decoration);
-  background: var(--yc-editor-link-ambiguous-bg);
-}
-
-.dark-ui .markdown-render .wiki-link {
-  color: var(--yc-link);
-  text-decoration-color: var(--yc-link-decoration);
-  background: var(--yc-link-soft);
-}
-
-.dark-ui .markdown-render .wiki-link:hover {
-  background: color-mix(in srgb, var(--yc-link-soft) var(--yc-preview-link-hover-mix-dark), transparent);
-}
-
-.dark-ui .markdown-render .wiki-link.is-unresolved {
-  color: var(--yc-editor-link-missing);
-  text-decoration-color: var(--yc-editor-link-missing-decoration);
-  background: var(--yc-editor-link-missing-bg);
-}
-
-.dark-ui .markdown-render .wiki-link.is-ambiguous {
-  color: var(--yc-editor-link-ambiguous);
-  text-decoration-color: var(--yc-editor-link-ambiguous-decoration);
-  background: var(--yc-editor-link-ambiguous-bg);
+  text-decoration-color: var(--yc-wikilink-ambiguous-decoration);
+  background: var(--yc-wikilink-ambiguous-bg);
 }
 
 .toast {
