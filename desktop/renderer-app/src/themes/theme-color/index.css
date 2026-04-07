@@ -47,13 +47,13 @@
   --yc-shell-footer-bg: rgba(43, 44, 49, 0.94);
   --yc-shell-sidebar-bg: #2a2b30;
 
-  --yc-menu-bg: rgba(43, 44, 49, 0.98);
-  --yc-menu-border: #505463;
-  --yc-menu-hover: #373944;
+  --yc-menu-bg: rgba(17, 18, 22, 0.98);
+  --yc-menu-border: #343744;
+  --yc-menu-hover: #252833;
   --yc-menu-text: #f3f4f6;
   --yc-menu-muted: #a5a8b5;
   --yc-menu-danger: #ff8f9c;
-  --yc-menu-separator: #3a3c45;
+  --yc-menu-separator: #2d303b;
 
   --yc-tooltip-bg: #2a2b30;
   --yc-tooltip-border: #505463;
@@ -128,6 +128,35 @@
   --yc-runner-btn-hover: #3a3c45;
   --yc-runner-status: #a5a8b5;
   --yc-runner-status-ok: #5fd19a;
+
+  --yc-preview-selection: rgba(138, 92, 245, 0.2);
+  --yc-preview-selection-text: inherit;
+  --yc-input-selection-bg: rgba(138, 92, 245, 0.26);
+  --yc-input-selection-text: #ffffff;
+  --yc-input-focus-bg: color-mix(in srgb, #232327 72%, #31333a 28%);
+  --yc-input-focus-border: rgba(138, 92, 245, 0.46);
+  --yc-input-focus-ring: 0 0 0 2px rgba(138, 92, 245, 0.18);
+  --yc-sidebar-button-hover-bg: rgba(138, 92, 245, 0.14);
+  --yc-sidebar-button-hover-border: rgba(138, 92, 245, 0.22);
+  --yc-sidebar-button-hover-text: #f8f3ff;
+  --yc-sidebar-button-active-bg: rgba(138, 92, 245, 0.18);
+  --yc-sidebar-button-active-border: rgba(138, 92, 245, 0.28);
+  --yc-sidebar-button-active-text: #efe7ff;
+
+  --yc-syntax-keyword: #ff7ab8;
+  --yc-syntax-type: #8ad6ff;
+  --yc-syntax-string: #9fe870;
+  --yc-syntax-number: #ffd866;
+  --yc-syntax-attribute: #7dcfff;
+  --yc-syntax-operator: #d7dae4;
+  --yc-syntax-comment: #7f879b;
+  --yc-syntax-meta: #c79bff;
+  --yc-syntax-delimiter: #aab0c2;
+  --yc-syntax-link: #82aaff;
+
+  --yc-editor-math-command: #7dcfff;
+  --yc-editor-math-number: #ffd866;
+  --yc-editor-math-operator: #d7dae4;
 
   --yc-graph-root-node: rgba(138, 92, 245, 0.58);
   --yc-graph-node-fill: rgba(138, 92, 245, 0.58);

@@ -2134,9 +2134,9 @@ const themeAccentPresetLabel = computed(() => {
 const isThemeColorThemeActive = computed(() => activeThemeId.value === THEME_COLOR_THEME_ID);
 const themeAccentControlsEnabled = computed(() => themeAccentEnabled.value && isThemeColorThemeActive.value);
 
-const buildThemeAccentThemeStyle = ({ enabled = false, rgb = null, saturation = 100, dark = false } = {}) => {
-  if (!enabled || !rgb) {
-    return {};
+const buildThemeAccentPalette = ({ rgb = null, saturation = 100, dark = false } = {}) => {
+  if (!rgb) {
+    return null;
   }
   const saturationScale = clamp((Number(saturation) || 100) / 100, 0.65, 1.45);
   const baseHsl = rgbToHsl(rgb);
@@ -2169,16 +2169,50 @@ const buildThemeAccentThemeStyle = ({ enabled = false, rgb = null, saturation = 
     s: clamp(accentHsl.s * 0.95, 0.16, 0.96),
     l: clamp(accentHsl.l + (dark ? 0.2 : -0.08), 0.18, 0.88)
   });
-  const syntaxTypeRgb = hslToRgb({
-    h: shiftHue(accentHsl.h, 18),
-    s: clamp(accentHsl.s * 0.7, 0.1, 0.82),
-    l: clamp(accentHsl.l + (dark ? 0.16 : -0.02), 0.28, 0.82)
+  const editorMetaKeyRgb = hslToRgb({
+    h: shiftHue(accentHsl.h, 10),
+    s: clamp(accentHsl.s * 0.8, 0.14, 0.92),
+    l: clamp(accentHsl.l + (dark ? 0.08 : -0.02), 0.24, 0.82)
   });
-  const syntaxMetaRgb = hslToRgb({
-    h: shiftHue(accentHsl.h, -18),
-    s: clamp(accentHsl.s * 0.34, 0.08, 0.5),
-    l: clamp(accentHsl.l + (dark ? 0.08 : 0.04), 0.34, 0.78)
+  const editorMetaNumberRgb = hslToRgb({
+    h: shiftHue(accentHsl.h, -8),
+    s: clamp(accentHsl.s * 0.92, 0.16, 0.98),
+    l: clamp(accentHsl.l + (dark ? 0.12 : -0.06), 0.22, 0.88)
   });
+  return {
+    accentRgb,
+    accentStrongRgb,
+    accentSoftAlpha,
+    accentSoftStrongAlpha,
+    accentContrast,
+    textOnAccentRgb,
+    linkRgb,
+    linkHoverRgb,
+    editorMetaKeyRgb,
+    editorMetaNumberRgb
+  };
+};
+
+const buildThemeAccentThemeStyle = ({ enabled = false, rgb = null, saturation = 100, dark = false } = {}) => {
+  if (!enabled || !rgb) {
+    return {};
+  }
+  const palette = buildThemeAccentPalette({ rgb, saturation, dark });
+  if (!palette) {
+    return {};
+  }
+  const {
+    accentRgb,
+    accentStrongRgb,
+    accentSoftAlpha,
+    accentSoftStrongAlpha,
+    accentContrast,
+    textOnAccentRgb,
+    linkRgb,
+    linkHoverRgb,
+    editorMetaKeyRgb,
+    editorMetaNumberRgb
+  } = palette;
   return {
     "--yc-accent": rgbToCss(accentRgb),
     "--yc-accent-strong": rgbToCss(accentStrongRgb),
@@ -2190,12 +2224,35 @@ const buildThemeAccentThemeStyle = ({ enabled = false, rgb = null, saturation = 
     "--yc-link-hover": rgbToCss(linkHoverRgb),
     "--yc-link-soft": rgbToCss(linkRgb, dark ? 0.18 : 0.1),
     "--yc-link-decoration": rgbToCss(linkRgb, dark ? 0.7 : 0.5),
-    "--yc-syntax-keyword": rgbToCss(accentStrongRgb),
-    "--yc-syntax-type": rgbToCss(syntaxTypeRgb),
-    "--yc-syntax-string": rgbToCss(accentRgb),
-    "--yc-syntax-number": rgbToCss(accentStrongRgb),
-    "--yc-syntax-attribute": rgbToCss(accentRgb),
-    "--yc-syntax-meta": rgbToCss(syntaxMetaRgb),
+    "--yc-bg-active": rgbToCss(accentRgb, dark ? 0.2 : 0.14),
+    "--yc-bg-selected": rgbToCss(accentRgb, dark ? 0.16 : 0.12),
+    "--yc-bg-drop-target": rgbToCss(accentRgb, dark ? 0.18 : 0.14),
+    "--yc-bg-drop-shadow": rgbToCss(accentStrongRgb, dark ? 0.34 : 0.24),
+    "--yc-preview-selection": rgbToCss(accentRgb, dark ? 0.18 : 0.14),
+    "--yc-input-selection-bg": rgbToCss(accentRgb, dark ? 0.28 : 0.22),
+    "--yc-input-selection-text": accentContrast,
+    "--yc-input-focus-bg": dark
+      ? `color-mix(in srgb, var(--yc-bg-panel) 72%, ${rgbToCss(accentRgb, 0.08)} 28%)`
+      : `color-mix(in srgb, var(--yc-bg-panel) 86%, ${rgbToCss(accentRgb, 0.08)} 14%)`,
+    "--yc-input-focus-border": rgbToCss(accentRgb, dark ? 0.46 : 0.34),
+    "--yc-input-focus-ring": `0 0 0 2px ${rgbToCss(accentRgb, dark ? 0.18 : 0.14)}`,
+    "--yc-sidebar-button-hover-bg": rgbToCss(accentRgb, dark ? 0.14 : 0.1),
+    "--yc-sidebar-button-hover-border": rgbToCss(accentRgb, dark ? 0.22 : 0.16),
+    "--yc-sidebar-button-hover-text": dark ? "#f8f3ff" : rgbToCss(accentStrongRgb),
+    "--yc-sidebar-button-active-bg": rgbToCss(accentRgb, dark ? 0.18 : 0.14),
+    "--yc-sidebar-button-active-border": rgbToCss(accentRgb, dark ? 0.28 : 0.22),
+    "--yc-sidebar-button-active-text": dark ? "#efe7ff" : rgbToCss(accentStrongRgb),
+    "--yc-editor-search-bg": rgbToCss(accentRgb, dark ? 0.22 : 0.16),
+    "--yc-editor-search-outline": rgbToCss(accentStrongRgb, dark ? 0.52 : 0.38),
+    "--yc-editor-context-line": rgbToCss(accentRgb, dark ? 0.12 : 0.08),
+    "--yc-editor-delim": rgbToCss(linkRgb, dark ? 0.76 : 0.9),
+    "--yc-editor-image-alt": rgbToCss(editorMetaKeyRgb),
+    "--yc-editor-image-title": rgbToCss(accentStrongRgb),
+    "--yc-editor-meta-key": rgbToCss(editorMetaKeyRgb),
+    "--yc-editor-meta-number": rgbToCss(editorMetaNumberRgb),
+    "--yc-editor-comment-link": rgbToCss(linkRgb),
+    "--yc-editor-link-bg": rgbToCss(linkRgb, dark ? 0.14 : 0.1),
+    "--yc-editor-link-resolved-bg": rgbToCss(linkRgb, dark ? 0.18 : 0.12),
     "--yc-blockquote-accent": rgbToCss(accentRgb),
     "--yc-table-highlight-color": rgbToCss(accentStrongRgb),
     "--yc-table-highlight-bg": rgbToCss(accentRgb, dark ? 0.16 : 0.1),
@@ -2211,6 +2268,33 @@ const buildThemeAccentThemeStyle = ({ enabled = false, rgb = null, saturation = 
     "--yc-progress-fill": `linear-gradient(90deg, ${rgbToCss(accentRgb)} 0%, ${rgbToCss(accentStrongRgb)} 100%)`
   };
 };
+
+const resolvedXtermTheme = computed(() => {
+  const baseTheme = resolveXtermTheme(activeThemeId.value, importedThemes.value);
+  if (!themeAccentControlsEnabled.value) {
+    return baseTheme;
+  }
+  const palette = buildThemeAccentPalette({
+    rgb: {
+      r: themeAccentRed.value,
+      g: themeAccentGreen.value,
+      b: themeAccentBlue.value
+    },
+    saturation: themeAccentSaturation.value,
+    dark: currentThemeMode.value === "dark"
+  });
+  if (!palette) {
+    return baseTheme;
+  }
+  const accentContrast = palette.accentContrast === "#ffffff" ? "#111827" : "#ffffff";
+  return {
+    ...baseTheme,
+    cursor: rgbToCss(palette.accentRgb),
+    cursorAccent: accentContrast,
+    selectionBackground: rgbToCss(palette.accentRgb, currentThemeMode.value === "dark" ? 0.28 : 0.22),
+    selectionInactiveBackground: rgbToCss(palette.accentRgb, currentThemeMode.value === "dark" ? 0.16 : 0.12)
+  };
+});
 
 const appThemeInlineStyle = computed(() => buildThemeAccentThemeStyle({
   enabled: themeAccentControlsEnabled.value,
@@ -7551,7 +7635,7 @@ const handleChromeDragMouseDown = (event) => {
 };
 
 const applyXtermTheme = () => {
-  const xtermTheme = resolveXtermTheme(activeThemeId.value, importedThemes.value);
+  const xtermTheme = resolvedXtermTheme.value;
   for (const pane of ["primary", "secondary"]) {
     const term = termOf(pane);
     if (term) {
@@ -7560,7 +7644,7 @@ const applyXtermTheme = () => {
   }
 };
 
-watch([activeThemeId, importedThemes], () => {
+watch([activeThemeId, importedThemes, resolvedXtermTheme], () => {
   applyXtermTheme();
 }, { deep: true });
 
@@ -7736,7 +7820,7 @@ const buildPaneTerminal = async (pane) => {
           convertEol: false,
           rightClickSelectsWord: true,
           allowTransparency: false,
-          theme: resolveXtermTheme(activeThemeId.value, importedThemes.value)
+          theme: resolvedXtermTheme.value
         });
         const fit = new FitAddon();
         term.loadAddon(fit);
@@ -7747,7 +7831,7 @@ const buildPaneTerminal = async (pane) => {
             xtermNodes[i].remove();
           }
         }
-        term.options.theme = resolveXtermTheme(activeThemeId.value, importedThemes.value);
+        term.options.theme = resolvedXtermTheme.value;
         fit.fit();
 
         term.attachCustomKeyEventHandler((ev) => {

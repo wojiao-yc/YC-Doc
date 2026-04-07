@@ -1,8 +1,23 @@
-const cloneXtermTheme = (theme = {}) => ({
-  background: String(theme.background || "#ffffff"),
-  foreground: String(theme.foreground || "#0f172a"),
-  cursor: String(theme.cursor || "#f97316")
-});
+const cloneXtermTheme = (theme = {}) => {
+  const nextTheme = {
+    background: String(theme.background || "#ffffff"),
+    foreground: String(theme.foreground || "#0f172a"),
+    cursor: String(theme.cursor || "#f97316")
+  };
+  if (theme.cursorAccent) {
+    nextTheme.cursorAccent = String(theme.cursorAccent);
+  }
+  if (theme.selectionBackground) {
+    nextTheme.selectionBackground = String(theme.selectionBackground);
+  }
+  if (theme.selectionInactiveBackground) {
+    nextTheme.selectionInactiveBackground = String(theme.selectionInactiveBackground);
+  }
+  if (theme.selectionForeground) {
+    nextTheme.selectionForeground = String(theme.selectionForeground);
+  }
+  return nextTheme;
+};
 
 export const DEFAULT_THEME_ID = "default-light";
 export const IMPORTED_THEME_ID_PREFIX = "imported-theme-";

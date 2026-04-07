@@ -39,8 +39,8 @@
 .yc-editor-context-item.is-active,
 .yc-editor-context-item.is-open {
   outline: none;
-  background: color-mix(in srgb, var(--yc-menu-hover) 64%, var(--yc-accent-soft-strong) 36%);
-  box-shadow: none;
+  background: var(--yc-menu-hover);
+  box-shadow: var(--yc-menu-hover-shadow);
 }
 
 .yc-editor-context-item.is-disabled,

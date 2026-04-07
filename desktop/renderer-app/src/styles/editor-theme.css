@@ -113,15 +113,23 @@
   color: var(--yc-editor-image-title);
 }
 
-.yc-editor-host .cm-source-image-meta-key,
-.yc-editor-host .cm-source-math-command {
+.yc-editor-host .cm-source-image-meta-key {
   color: var(--yc-editor-meta-key);
   font-weight: 600;
 }
 
-.yc-editor-host .cm-source-image-meta-number,
-.yc-editor-host .cm-source-math-number {
+.yc-editor-host .cm-source-math-command {
+  color: var(--yc-editor-math-command, var(--yc-editor-meta-key));
+  font-weight: 600;
+}
+
+.yc-editor-host .cm-source-image-meta-number {
   color: var(--yc-editor-meta-number);
+  font-weight: 700;
+}
+
+.yc-editor-host .cm-source-math-number {
+  color: var(--yc-editor-math-number, var(--yc-editor-meta-number));
   font-weight: 700;
 }
 

@@ -288,6 +288,19 @@
   --yc-editor-context-line: color-mix(in srgb, var(--yc-accent) 10%, transparent);
   --yc-editor-search-bg: color-mix(in srgb, var(--yc-accent) 20%, transparent);
   --yc-editor-search-outline: color-mix(in srgb, var(--yc-accent) 44%, transparent);
+  --yc-preview-selection: color-mix(in srgb, var(--yc-accent) 20%, transparent);
+  --yc-preview-selection-text: inherit;
+  --yc-input-selection-bg: var(--yc-editor-selection-native);
+  --yc-input-selection-text: inherit;
+  --yc-input-focus-bg: color-mix(in srgb, var(--yc-bg-panel) 92%, var(--yc-bg-panel-alt));
+  --yc-input-focus-border: color-mix(in srgb, var(--yc-accent) 28%, var(--yc-border-strong));
+  --yc-input-focus-ring: 0 0 0 2px color-mix(in srgb, var(--yc-accent) 16%, transparent);
+  --yc-sidebar-button-hover-bg: var(--yc-bg-hover);
+  --yc-sidebar-button-hover-border: color-mix(in srgb, var(--yc-border-contrast) 72%, transparent);
+  --yc-sidebar-button-hover-text: var(--yc-text-primary);
+  --yc-sidebar-button-active-bg: var(--yc-bg-selected);
+  --yc-sidebar-button-active-border: color-mix(in srgb, var(--yc-accent) 24%, transparent);
+  --yc-sidebar-button-active-text: var(--yc-text-on-accent);
   --yc-editor-inline-del: rgba(239, 68, 68, 0.72);
   --yc-editor-inline-mark: rgba(250, 204, 21, 0.3);
   --yc-editor-inline-mark-shadow: rgba(202, 138, 4, 0.24);
@@ -301,6 +314,8 @@
   --yc-editor-image-title: var(--yc-syntax-keyword);
   --yc-editor-meta-key: var(--yc-syntax-attribute);
   --yc-editor-meta-number: var(--yc-syntax-number);
+  --yc-editor-math-command: var(--yc-syntax-type);
+  --yc-editor-math-number: var(--yc-syntax-number);
   --yc-editor-math-operator: var(--yc-syntax-operator);
   --yc-editor-comment-link: var(--yc-syntax-link);
   --yc-editor-link-bg: color-mix(in srgb, var(--yc-link) 10%, transparent);

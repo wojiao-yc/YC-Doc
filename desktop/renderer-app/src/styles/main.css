@@ -18,6 +18,18 @@ body {
   background: transparent;
 }
 
+#app input::selection,
+#app textarea::selection {
+  background: var(--yc-input-selection-bg);
+  color: var(--yc-input-selection-text);
+}
+
+#app input::-moz-selection,
+#app textarea::-moz-selection {
+  background: var(--yc-input-selection-bg);
+  color: var(--yc-input-selection-text);
+}
+
 [v-cloak] {
   display: none;
 }
@@ -459,8 +471,15 @@ body {
 
 .file-tree-search-input:focus {
   outline: none;
-  border-color: color-mix(in srgb, var(--yc-accent) 28%, var(--yc-border-strong));
-  background: color-mix(in srgb, var(--yc-bg-panel) 92%, var(--yc-bg-panel-alt));
+  border-color: var(--yc-input-focus-border);
+  background: var(--yc-input-focus-bg);
+  box-shadow: var(--yc-input-focus-ring);
+}
+
+.file-tree-search-input::selection,
+.file-tree-search-input::-moz-selection {
+  background: var(--yc-input-selection-bg);
+  color: var(--yc-input-selection-text);
 }
 
 .file-sidebar-tool-btn {
@@ -475,16 +494,16 @@ body {
 }
 
 .file-sidebar-tool-btn.is-active {
-  color: var(--yc-text-on-accent);
-  background: var(--yc-accent-soft);
-  border-color: color-mix(in srgb, var(--yc-accent) 18%, transparent);
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--yc-accent) 10%, transparent);
+  color: var(--yc-sidebar-button-active-text);
+  background: var(--yc-sidebar-button-active-bg);
+  border-color: var(--yc-sidebar-button-active-border);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--yc-sidebar-button-active-border) 72%, transparent);
 }
 
 .file-sidebar-tool-btn:hover {
-  background: var(--yc-bg-hover);
-  border-color: color-mix(in srgb, var(--yc-border-contrast) 72%, transparent);
-  color: var(--yc-text-primary);
+  background: var(--yc-sidebar-button-hover-bg);
+  border-color: var(--yc-sidebar-button-hover-border);
+  color: var(--yc-sidebar-button-hover-text);
 }
 
 .file-sidebar-tool-btn:disabled {
@@ -539,8 +558,8 @@ body {
 }
 
 .file-sidebar-workspace-main:hover {
-  background: var(--yc-bg-hover);
-  color: var(--yc-text-primary);
+  background: var(--yc-sidebar-button-hover-bg);
+  color: var(--yc-sidebar-button-hover-text);
 }
 
 .file-sidebar-workspace-main.is-dark {
@@ -548,8 +567,8 @@ body {
 }
 
 .file-sidebar-workspace-main.is-dark:hover {
-  background: var(--yc-bg-hover);
-  color: var(--yc-text-primary);
+  background: var(--yc-sidebar-button-hover-bg);
+  color: var(--yc-sidebar-button-hover-text);
 }
 
 .workspace-switch-icon {
@@ -1938,8 +1957,10 @@ body {
 }
 
 .nav-step-item.is-active {
-  background: var(--yc-bg-selected);
+  background: var(--yc-sidebar-button-active-bg);
   border-left-color: var(--yc-accent);
+  color: var(--yc-sidebar-button-active-text);
+  box-shadow: inset 0 0 0 1px var(--yc-sidebar-button-active-border);
 }
 
 .nav-step-item:hover {
@@ -2003,8 +2024,8 @@ body {
 }
 
 .nav-step-index-badge.is-active {
-  background: color-mix(in srgb, var(--yc-accent) 16%, var(--yc-bg-panel));
-  color: var(--yc-text-on-accent);
+  background: var(--yc-sidebar-button-active-bg);
+  color: var(--yc-sidebar-button-active-text);
 }
 
 .nav-outline-body {
@@ -2066,7 +2087,14 @@ body {
 
 .source-editor-input:focus {
   outline: none;
-  border-color: color-mix(in srgb, var(--yc-accent) 24%, var(--yc-border-strong));
+  border-color: var(--yc-input-focus-border);
+  box-shadow: var(--yc-input-focus-ring);
+}
+
+.source-editor-input::selection,
+.source-editor-input::-moz-selection {
+  background: var(--yc-input-selection-bg);
+  color: var(--yc-input-selection-text);
 }
 
 .markdown-render {
@@ -2389,15 +2417,15 @@ body {
 
 .markdown-render::selection,
 .markdown-render *::selection {
-  background-color: transparent;
-  color: inherit;
+  background-color: var(--yc-preview-selection);
+  color: var(--yc-preview-selection-text);
   text-shadow: none;
 }
 
 .markdown-render::-moz-selection,
 .markdown-render *::-moz-selection {
-  background-color: transparent;
-  color: inherit;
+  background-color: var(--yc-preview-selection);
+  color: var(--yc-preview-selection-text);
   text-shadow: none;
 }
 
@@ -3426,9 +3454,9 @@ body {
 }
 
 .dark-ui .file-sidebar-tool-btn.is-active {
-  color: var(--yc-text-on-accent);
-  background: var(--yc-accent-soft);
-  border-color: color-mix(in srgb, var(--yc-accent) 22%, transparent);
+  color: var(--yc-sidebar-button-active-text);
+  background: var(--yc-sidebar-button-active-bg);
+  border-color: var(--yc-sidebar-button-active-border);
 }
 
 .dark-ui .file-sidebar-tool-btn {
@@ -3436,9 +3464,9 @@ body {
 }
 
 .dark-ui .file-sidebar-tool-btn:hover {
-  color: var(--yc-text-primary);
-  background: var(--yc-bg-hover);
-  border-color: var(--yc-border);
+  color: var(--yc-sidebar-button-hover-text);
+  background: var(--yc-sidebar-button-hover-bg);
+  border-color: var(--yc-sidebar-button-hover-border);
 }
 
 .dark-ui .workspace-footer-info-label {
