@@ -57,6 +57,7 @@ test("presentation hides markdown syntax by default and keeps active token sourc
   assert.match(presentation, /blockKeepsSourceVisible/);
   assert.match(presentation, /isTokenRelatedToActiveToken/);
   assert.match(presentation, /AUTO_SOURCE_REVEAL_BLOCK_TYPES/);
+  assert.doesNotMatch(presentation, /"math_block"\s*\]/);
 });
 
 test("presentation also supports block-level markdown rendering and source reveal", () => {
@@ -80,7 +81,8 @@ test("image source toggle updates immediately and prunes stale expanded-image id
   assert.match(presentation, /validImageIds/);
   assert.match(presentation, /this\.blocks = \[\]/);
   assert.match(presentation, /btn\.textContent\s*=\s*this\.isExpanded/);
-  assert.match(presentation, /btn\.setAttribute\(\"title\"/);
+  assert.match(presentation, /btn\.className = "cm-image-widget-btn"/);
+  assert.doesNotMatch(presentation, /sourceToggleTitle/);
 });
 
 test("editor theme exposes inline style classes used by hidden-syntax rendering", () => {
@@ -122,6 +124,56 @@ test("list and special-block styles include rendered widgets for hidden-source m
   assert.match(presentation, /data-task-toggle-from/);
   assert.match(special, /\.cm-table-widget/);
   assert.match(special, /\.cm-block-thematic-break\.cm-block-source-visible/);
+  assert.doesNotMatch(presentation, /cm-table-widget-btn term-tip-btn/);
+  assert.doesNotMatch(presentation, /cm-table-widget-col-handle term-tip-btn/);
+  assert.doesNotMatch(presentation, /cm-table-widget-row-handle term-tip-btn/);
+});
+
+test("preview markdown keeps code-copy buttons and unified selection styling for tables and code blocks", () => {
+  const renderer = readSrc("utils/render-markdown.js");
+  const mainCss = readSrc("styles/main.css");
+
+  assert.match(renderer, /md-code-copy-btn/);
+  assert.match(renderer, /md-code-action-trigger/);
+  assert.match(renderer, /md-code-action-menu/);
+  assert.match(renderer, /data-copy-code/);
+  assert.match(renderer, /md-code-copy-label/);
+  assert.match(mainCss, /\.markdown-render \.md-code-copy-btn \{/);
+  assert.match(mainCss, /\.markdown-render \.md-code-action-menu \{/);
+  assert.match(mainCss, /z-index:\s*1/);
+  assert.match(mainCss, /user-select:\s*none/);
+  assert.match(mainCss, /\.markdown-render::selection/);
+  assert.match(mainCss, /\.markdown-render \*::selection/);
+  assert.match(mainCss, /background-color:\s*transparent/);
+});
+
+test("math widgets only use the explicit toggle button and no longer auto-open source below", () => {
+  const presentation = readSrc("editor/extensions/presentation.js");
+
+  assert.match(presentation, /resolveMathBlockRangeById/);
+  assert.match(presentation, /effects:\s*toggleMathExpandEffect\.of\(blockId\)/);
+  assert.match(presentation, /cursorOutsideRange/);
+  assert.doesNotMatch(presentation, /mathWidget && !target\.closest\("\.cm-math-widget-btn"\)/);
+});
+
+test("editor code blocks expose a copy button and explicit selection styling", () => {
+  const core = readSrc("editor/extensions/core.js");
+  const presentation = readSrc("editor/extensions/presentation.js");
+  const codeBlockCss = readSrc("styles/code-block.css");
+  const themeCss = readSrc("styles/editor-theme.css");
+
+  assert.doesNotMatch(core, /drawSelection/);
+  assert.match(presentation, /CodeBlockCopyWidget/);
+  assert.match(presentation, /cm-code-block-copy-trigger/);
+  assert.match(presentation, /cm-code-block-copy-menu/);
+  assert.match(presentation, /resolveCodeBlockRangeById/);
+  assert.match(presentation, /extractCodeBlockContent/);
+  assert.match(presentation, /copyText\(codeText\)/);
+  assert.match(presentation, /cm-table-widget-cell-content/);
+  assert.match(codeBlockCss, /\.yc-editor-host \.cm-code-block-copy-trigger \{/);
+  assert.match(codeBlockCss, /\.yc-editor-host \.cm-code-block-copy-menu \{/);
+  assert.match(themeCss, /\.yc-editor-host \.cm-content::selection/);
+  assert.match(themeCss, /\.yc-editor-host \.cm-content \*::selection/);
 });
 
 test("editor includes custom right-click context menu extension with grouped commands", () => {

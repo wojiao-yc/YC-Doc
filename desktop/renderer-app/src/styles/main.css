@@ -2039,51 +2039,141 @@ body {
 
 .markdown-render pre.md-code-block {
   position: relative;
-  padding-top: calc(var(--yc-preview-code-block-padding) + 22px);
+  padding-top: calc(var(--yc-preview-code-block-padding) + 24px);
 }
 
-.markdown-render .md-code-copy-btn {
+.markdown-render .md-code-actions {
   position: absolute;
   top: 8px;
   right: 8px;
-  width: 28px;
-  height: 28px;
-  border: 1px solid transparent;
-  border-radius: 8px;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(-2px);
+  transition: opacity 0.14s ease, transform 0.14s ease;
+}
+
+.markdown-render pre.md-code-block:hover .md-code-actions,
+.markdown-render pre.md-code-block:focus-within .md-code-actions,
+.markdown-render .md-code-actions:hover,
+.markdown-render .md-code-actions:focus-within {
+  opacity: 1;
+  pointer-events: auto;
+  transform: none;
+}
+
+.markdown-render .md-code-action-trigger {
+  width: 24px;
+  height: 24px;
+  border: 0;
+  border-radius: 7px;
   padding: 0;
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  background: transparent;
+  color: color-mix(in srgb, var(--yc-code-block-color) 68%, var(--yc-text-muted) 32%);
   cursor: pointer;
-  color: var(--yc-text-secondary);
-  background: color-mix(in srgb, var(--yc-bg-panel) 90%, transparent);
-  transition: background-color 0.14s ease, color 0.14s ease, border-color 0.14s ease;
+  user-select: none;
+  -webkit-user-select: none;
+  transition: background-color 0.14s ease, color 0.14s ease;
+}
+
+.markdown-render .md-code-action-trigger:hover,
+.markdown-render .md-code-action-trigger:focus-visible {
+  outline: none;
+  background: color-mix(in srgb, var(--yc-menu-hover) 72%, transparent);
+  color: var(--yc-menu-text);
+}
+
+.markdown-render .md-code-action-trigger-dots {
+  position: relative;
+  width: 3px;
+  height: 3px;
+  border-radius: 999px;
+  background: currentColor;
+  display: inline-block;
+  box-shadow: -5px 0 0 currentColor, 5px 0 0 currentColor;
+}
+
+.markdown-render .md-code-action-menu {
+  min-width: 136px;
+  margin-top: 6px;
+  padding: 5px;
+  border-radius: 12px;
+  border: 1px solid var(--yc-menu-border);
+  background: var(--yc-menu-bg);
+  box-shadow: var(--yc-menu-shadow);
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(-6px) scale(0.98);
+  transform-origin: top right;
+  transition: opacity 0.14s ease, transform 0.14s ease;
+}
+
+.markdown-render .md-code-actions:hover .md-code-action-menu,
+.markdown-render .md-code-actions:focus-within .md-code-action-menu {
+  opacity: 1;
+  pointer-events: auto;
+  transform: none;
+}
+
+.markdown-render .md-code-copy-btn {
+  width: 100%;
+  min-width: 0;
+  height: 32px;
+  border: 0;
+  border-radius: 7px;
+  padding: 0 9px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  user-select: none;
+  -webkit-user-select: none;
+  white-space: nowrap;
+  font-size: 13px;
+  line-height: 1;
+  font-weight: 500;
+  color: var(--yc-menu-text);
+  background: transparent;
+  transition: background-color 0.14s ease, color 0.14s ease;
 }
 
 .markdown-render .md-code-copy-btn .md-code-copy-icon {
   position: relative;
-  width: 14px;
-  height: 14px;
-  display: block;
+  width: 12px;
+  height: 12px;
+  display: inline-block;
+  flex: 0 0 auto;
 }
 
 .markdown-render .md-code-copy-btn .md-code-copy-icon::before,
 .markdown-render .md-code-copy-btn .md-code-copy-icon::after {
   content: "";
   position: absolute;
-  width: 8px;
-  height: 8px;
-  border: 1.4px solid currentColor;
+  width: 7px;
+  height: 7px;
+  border: 1.5px solid currentColor;
   border-radius: 2px;
 }
 
+.markdown-render .md-code-copy-btn .md-code-copy-label {
+  display: inline-block;
+  flex: 1 1 auto;
+  font-family: "PingFang SC", "Source Han Sans SC", "Microsoft YaHei", "Noto Sans CJK SC", sans-serif;
+}
+
 .markdown-render .md-code-copy-btn .md-code-copy-icon::before {
-  top: 1px;
+  top: 0;
   left: 4px;
 }
 
 .markdown-render .md-code-copy-btn .md-code-copy-icon::after {
-  top: 4px;
+  top: 3px;
   left: 1px;
   opacity: 0.88;
 }
@@ -2091,22 +2181,12 @@ body {
 .markdown-render .md-code-copy-btn:hover,
 .markdown-render .md-code-copy-btn:focus-visible {
   outline: none;
-  color: var(--yc-text-primary);
-  border-color: color-mix(in srgb, var(--yc-border-contrast) 52%, transparent);
-  background: color-mix(in srgb, var(--yc-bg-hover) 92%, transparent);
+  color: var(--yc-menu-text);
+  background: color-mix(in srgb, var(--yc-menu-hover) 64%, var(--yc-accent-soft-strong) 36%);
 }
 
-.markdown-render-dark .md-code-copy-btn {
-  color: #9CA3AF;
-  border-color: color-mix(in srgb, #374151 56%, transparent);
-  background: color-mix(in srgb, #0b1220 85%, transparent);
-}
-
-.markdown-render-dark .md-code-copy-btn:hover,
-.markdown-render-dark .md-code-copy-btn:focus-visible {
-  color: #E5E7EB;
-  border-color: color-mix(in srgb, #60a5fa 56%, transparent);
-  background: color-mix(in srgb, #1f2937 90%, transparent);
+.markdown-render-dark .md-code-action-trigger {
+  color: color-mix(in srgb, var(--yc-code-block-color) 74%, var(--yc-menu-muted) 26%);
 }
 
 .markdown-render code {
@@ -2114,6 +2194,12 @@ body {
   padding: var(--yc-preview-code-inline-padding);
   font-family: var(--yc-font-code);
   color: var(--yc-preview-code-inline-color);
+}
+
+.markdown-render,
+.markdown-render * {
+  user-select: none;
+  -webkit-user-select: none;
 }
 
 .markdown-render pre code {
@@ -2160,6 +2246,20 @@ body {
 .markdown-render .md-table-wrap th:last-child,
 .markdown-render .md-table-wrap td:last-child {
   border-right: 0;
+}
+
+.markdown-render::selection,
+.markdown-render *::selection {
+  background-color: transparent;
+  color: inherit;
+  text-shadow: none;
+}
+
+.markdown-render::-moz-selection,
+.markdown-render *::-moz-selection {
+  background-color: transparent;
+  color: inherit;
+  text-shadow: none;
 }
 
 .markdown-render .md-callout {

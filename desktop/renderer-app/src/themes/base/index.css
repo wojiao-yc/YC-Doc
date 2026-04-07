@@ -284,6 +284,7 @@
   --yc-progress-rail: #dbe2ea;
   --yc-progress-fill: linear-gradient(90deg, color-mix(in srgb, var(--yc-accent) 76%, white 24%) 0%, var(--yc-accent-strong) 100%);
   --yc-editor-selection: color-mix(in srgb, var(--yc-accent) 24%, transparent);
+  --yc-editor-selection-native: rgba(155, 109, 72, 0.24);
   --yc-editor-context-line: color-mix(in srgb, var(--yc-accent) 10%, transparent);
   --yc-editor-search-bg: color-mix(in srgb, var(--yc-accent) 20%, transparent);
   --yc-editor-search-outline: color-mix(in srgb, var(--yc-accent) 44%, transparent);

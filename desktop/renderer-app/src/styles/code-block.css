@@ -14,10 +14,13 @@
 }
 
 .yc-editor-host .cm-line.cm-block-code-block.cm-block-start {
+  position: relative;
+  overflow: visible;
   border-top-left-radius: 10px;
   border-top-right-radius: 10px;
   /* Keep spacing inside the line box to avoid CodeMirror cursor/coords drift from line margins. */
-  padding-top: 0.97rem;
+  padding-top: 2.25rem;
+  padding-right: 2.4rem;
 }
 
 .yc-editor-host .cm-line.cm-block-code-block.cm-block-end {
@@ -32,4 +35,165 @@
 
 .yc-editor-shell.is-dark .yc-editor-host .cm-line.cm-block-code-block.cm-block-current {
   background: var(--yc-code-block-bg);
+}
+
+.yc-editor-host .cm-code-block-copy-widget {
+  position: absolute;
+  top: 0.55rem;
+  right: 0.7rem;
+  z-index: 4;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(-2px);
+  transition: opacity 0.14s ease, transform 0.14s ease;
+}
+
+.yc-editor-host .cm-line.cm-block-code-block.cm-block-start:hover .cm-code-block-copy-widget,
+.yc-editor-host .cm-line.cm-block-code-block.cm-block-start.cm-block-current .cm-code-block-copy-widget,
+.yc-editor-host .cm-code-block-copy-widget:hover,
+.yc-editor-host .cm-code-block-copy-widget:focus-within {
+  opacity: 1;
+  pointer-events: auto;
+  transform: none;
+}
+
+.yc-editor-host .cm-code-block-copy-trigger {
+  width: 24px;
+  height: 24px;
+  border: 0;
+  border-radius: 7px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  color: color-mix(in srgb, var(--yc-code-block-color) 68%, var(--yc-text-muted) 32%);
+  cursor: pointer;
+  transition: background-color 0.14s ease, color 0.14s ease;
+}
+
+.yc-editor-host .cm-code-block-copy-trigger:hover,
+.yc-editor-host .cm-code-block-copy-trigger:focus-visible {
+  outline: none;
+  background: color-mix(in srgb, var(--yc-menu-hover) 72%, transparent);
+  color: var(--yc-menu-text);
+}
+
+.yc-editor-host .cm-code-block-copy-trigger-dots {
+  position: relative;
+  width: 3px;
+  height: 3px;
+  border-radius: 999px;
+  background: currentColor;
+  display: inline-block;
+  box-shadow: -5px 0 0 currentColor, 5px 0 0 currentColor;
+}
+
+.yc-editor-host .cm-code-block-copy-menu {
+  min-width: 136px;
+  margin-top: 6px;
+  padding: 5px;
+  border-radius: 12px;
+  border: 1px solid var(--yc-menu-border);
+  background: var(--yc-menu-bg);
+  box-shadow: var(--yc-menu-shadow);
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(-6px) scale(0.98);
+  transform-origin: top right;
+  transition: opacity 0.14s ease, transform 0.14s ease;
+}
+
+.yc-editor-host .cm-code-block-copy-widget:hover .cm-code-block-copy-menu,
+.yc-editor-host .cm-code-block-copy-widget:focus-within .cm-code-block-copy-menu {
+  opacity: 1;
+  pointer-events: auto;
+  transform: none;
+}
+
+.yc-editor-host .cm-code-block-copy-btn {
+  width: 100%;
+  min-width: 0;
+  height: 32px;
+  border: 0;
+  border-radius: 7px;
+  padding: 0 9px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  white-space: nowrap;
+  font-size: 13px;
+  line-height: 1;
+  font-weight: 500;
+  color: var(--yc-menu-text);
+  background: transparent;
+  cursor: pointer;
+  user-select: none;
+  -webkit-user-select: none;
+  transition: background-color 0.14s ease, color 0.14s ease;
+}
+
+.yc-editor-host .cm-code-block-copy-btn:hover,
+.yc-editor-host .cm-code-block-copy-btn:focus-visible,
+.yc-editor-host .cm-code-block-copy-btn[data-copy-state="copied"] {
+  outline: none;
+  background: color-mix(in srgb, var(--yc-menu-hover) 64%, var(--yc-accent-soft-strong) 36%);
+}
+
+.yc-editor-host .cm-code-block-copy-btn[data-copy-state="failed"] {
+  color: var(--yc-callout-danger-title);
+}
+
+.yc-editor-host .cm-code-block-copy-icon {
+  position: relative;
+  width: 12px;
+  height: 12px;
+  display: inline-block;
+  flex: 0 0 auto;
+}
+
+.yc-editor-host .cm-code-block-copy-icon::before,
+.yc-editor-host .cm-code-block-copy-icon::after {
+  content: "";
+  position: absolute;
+  width: 7px;
+  height: 7px;
+  border: 1.5px solid currentColor;
+  border-radius: 2px;
+}
+
+.yc-editor-host .cm-code-block-copy-icon::before {
+  top: 0;
+  left: 4px;
+}
+
+.yc-editor-host .cm-code-block-copy-icon::after {
+  top: 3px;
+  left: 1px;
+  opacity: 0.88;
+}
+
+.yc-editor-host .cm-code-block-copy-label {
+  display: inline-block;
+  flex: 1 1 auto;
+  font-family: "PingFang SC", "Source Han Sans SC", "Microsoft YaHei", "Noto Sans CJK SC", sans-serif;
+  font-size: 0;
+  line-height: 0;
+}
+
+.yc-editor-host .cm-code-block-copy-label::after {
+  content: "复制代码";
+  font-size: 13px;
+  line-height: 1;
+}
+
+.yc-editor-host .cm-code-block-copy-btn[data-copy-state="copied"] .cm-code-block-copy-label::after {
+  content: "已复制";
+}
+
+.yc-editor-host .cm-code-block-copy-btn[data-copy-state="failed"] .cm-code-block-copy-label::after {
+  content: "复制失败";
 }

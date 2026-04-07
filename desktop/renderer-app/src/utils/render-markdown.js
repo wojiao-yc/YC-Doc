@@ -20,6 +20,7 @@ import {
   replaceWikiLinksInMarkdown,
   resolveWikiLink
 } from "./wiki-link.js";
+import { renderCopyIconSvgMarkup } from "./copy-icon.js";
 import { resolveWorkspaceAssetSrc } from "./workspace-media.js";
 
 const escapeHtml = (value) =>
@@ -284,9 +285,23 @@ export const renderMarkdownToHtml = ({
     const languageClass = language ? `language-${encodeAttr(language)}` : "";
     const preClass = ` class="md-code-block${languageClass ? ` ${languageClass}` : ""}"`;
     const codeClass = languageClass ? ` class="${languageClass}"` : "";
-    const copyButton = [
-      '<button type="button" class="md-code-copy-btn term-tip-btn" data-copy-code data-tip="复制代码" aria-label="复制代码">',
+    const legacyCopyButton = [
+      '<div class="md-code-actions">',
+      '<button type="button" class="md-code-action-trigger" aria-label="代码操作">',
+      '<span class="md-code-action-trigger-dots" aria-hidden="true"></span>',
+      "</button>",
+      '<div class="md-code-action-menu" role="menu">',
+      '<button type="button" class="md-code-copy-btn" data-copy-code aria-label="复制代码" role="menuitem">',
       '<span class="md-code-copy-icon" aria-hidden="true"></span>',
+      '<span class="md-code-copy-label">复制代码</span>',
+      "</button>",
+      "</div>",
+      "</div>"
+    ].join("");
+    void legacyCopyButton;
+    const copyButton = [
+      '<button type="button" class="md-code-copy-btn" data-copy-code aria-label="\u590d\u5236\u4ee3\u7801">',
+      renderCopyIconSvgMarkup("md-code-copy-icon-svg"),
       "</button>"
     ].join("");
     return `<pre${preClass}>${copyButton}<code${codeClass}>${html}</code></pre>`;

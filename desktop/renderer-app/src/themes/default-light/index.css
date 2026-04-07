@@ -55,6 +55,7 @@
   --yc-tooltip-bg: #f2f5f8;
   --yc-tooltip-border: #d5deea;
   --yc-tooltip-text: #2f3f53;
+  --yc-editor-selection-native: rgba(155, 109, 72, 0.24);
   --yc-syntax-keyword: #805238;
   --yc-syntax-type: #456684;
   --yc-syntax-string: #3d7a57;

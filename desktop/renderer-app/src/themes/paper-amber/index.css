@@ -234,6 +234,7 @@
   --yc-table-edge-btn-color: #7b6255;
   --yc-table-edge-btn-active: #9a5f3d;
   --yc-editor-selection: rgba(159, 95, 57, 0.18);
+  --yc-editor-selection-native: rgba(159, 95, 57, 0.18);
   --yc-editor-context-line: rgba(159, 95, 57, 0.09);
   --yc-editor-search-bg: rgba(159, 95, 57, 0.16);
   --yc-editor-search-outline: rgba(159, 95, 57, 0.4);

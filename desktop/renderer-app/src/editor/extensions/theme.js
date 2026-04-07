@@ -14,9 +14,6 @@ const createBaseTheme = (dark = false) => EditorView.theme(
     ".cm-cursor, .cm-dropCursor": {
       borderLeftColor: "var(--yc-accent)"
     },
-    ".cm-selectionBackground, ::selection": {
-      backgroundColor: "var(--yc-editor-selection)"
-    },
     ".cm-gutters": {
       border: "none",
       backgroundColor: "transparent",

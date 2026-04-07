@@ -1,9 +1,8 @@
 import { history, defaultKeymap, historyKeymap, indentWithTab } from "@codemirror/commands";
 import { search, searchKeymap } from "@codemirror/search";
-import { EditorView, drawSelection, keymap } from "@codemirror/view";
+import { EditorView, keymap } from "@codemirror/view";
 
 export const coreExtensions = [
-  drawSelection(),
   history(),
   search({
     top: true

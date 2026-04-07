@@ -3,6 +3,8 @@ import { Prec, StateEffect, StateField } from "@codemirror/state";
 import katex from "katex";
 import { marked } from "marked";
 import { parseImageLine, serializeImageLine } from "../parser/parse-image.js";
+import { copyText } from "../../utils/clipboard.js";
+import { createCopyIconSvgElement } from "../../utils/copy-icon.js";
 import { resolveWorkspaceAssetSrc } from "../../utils/workspace-media.js";
 
 const HEADING_PREFIX_PATTERN = /^\s{0,3}#{1,6}[ \t]+/;
@@ -12,6 +14,7 @@ const TASK_LIST_PREFIX_PATTERN = /^(\s*)([-+*])\s+\[( |x|X)\]\s+/;
 const BULLET_LIST_PREFIX_PATTERN = /^(\s*)([-+*])\s+/;
 const ORDERED_LIST_PREFIX_PATTERN = /^(\s*)(\d+)([.)])\s+/;
 const TASK_LIST_CHECKBOX_PATTERN = /^(\s*[-+*]\s+\[)( |x|X)(\]\s+)/;
+const OPEN_CODE_FENCE_PATTERN = /^\s{0,3}(`{3,}|~{3,})(.*)$/;
 const INLINE_SYNTAX_TOKEN_TYPES = new Set([
   "em",
   "strong",
@@ -32,8 +35,7 @@ const SOURCE_VISIBLE_BLOCK_TYPES = new Set([
   "thematic_break"
 ]);
 const AUTO_SOURCE_REVEAL_BLOCK_TYPES = new Set([
-  "image",
-  "math_block"
+  "image"
 ]);
 const KEYBOARD_NAVIGABLE_SPECIAL_BLOCK_TYPES = new Set([
   "image",
@@ -147,12 +149,17 @@ const tableExpandKeyOf = (block) => {
   }
   return `table:${Math.max(0, Number(block?.from || 0))}`;
 };
+const codeBlockCopyKeyOf = (block) => {
+  if (String(block?.type || "") !== "code_block") {
+    return "";
+  }
+  return `code_block:${Math.max(0, Number(block?.from || 0))}`;
+};
 const DEFAULT_IMAGE_WIDTH = 520;
 const MIN_IMAGE_WIDTH = 160;
 const MAX_IMAGE_WIDTH = 1400;
 const SOURCE_TOGGLE_ICON_COLLAPSED = "</>";
 const SOURCE_TOGGLE_ICON_EXPANDED = ">/<";
-const sourceToggleTitle = (isExpanded) => (isExpanded ? "收起源码" : "展开源码");
 const CALLOUT_LABELS = {
   note: "NOTE",
   tip: "TIP",
@@ -224,6 +231,46 @@ const escapeHtml = (value) =>
     .replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;")
     .replace(/'/g, "&#39;");
+
+const closeFencePatternFor = (fenceToken = "") => {
+  const token = String(fenceToken || "");
+  if (!token) {
+    return /^$/;
+  }
+  const marker = token[0] === "~" ? "~" : "`";
+  return new RegExp(`^\\s{0,3}${marker}{${token.length},}\\s*$`);
+};
+
+const extractCodeBlockContent = (rawTextInput = "") => {
+  const rawText = String(rawTextInput || "");
+  if (!rawText) {
+    return "";
+  }
+
+  const lines = rawText.split("\n");
+  if (!lines.length) {
+    return "";
+  }
+
+  const openMatch = String(lines[0] || "").match(OPEN_CODE_FENCE_PATTERN);
+  if (!openMatch) {
+    return rawText;
+  }
+
+  const closePattern = closeFencePatternFor(openMatch[1]);
+  let closeLineIndex = -1;
+  for (let index = 1; index < lines.length; index += 1) {
+    if (closePattern.test(String(lines[index] || ""))) {
+      closeLineIndex = index;
+      break;
+    }
+  }
+
+  const contentLines = closeLineIndex >= 0
+    ? lines.slice(1, closeLineIndex)
+    : lines.slice(1);
+  return contentLines.join("\n");
+};
 
 const renderMathHtml = (formulaInput, displayMode = false) => {
   const formula = String(formulaInput || "").trim();
@@ -462,7 +509,7 @@ const applyTableMarkSyntax = (htmlInput) => {
 const renderTableCellInlineHtml = (cellTextInput) => {
   const source = String(cellTextInput ?? "");
   if (!source) {
-    return "";
+    return '<span class="cm-table-widget-cell-content"></span>';
   }
 
   try {
@@ -473,13 +520,13 @@ const renderTableCellInlineHtml = (cellTextInput) => {
           breaks: true
         }) || ""
       );
-      return sanitizeTableInlineHtml(applyTableMarkSyntax(parsed));
+      return `<span class="cm-table-widget-cell-content">${sanitizeTableInlineHtml(applyTableMarkSyntax(parsed))}</span>`;
     }
   } catch {
     // fall through
   }
 
-  return escapeHtml(source);
+  return `<span class="cm-table-widget-cell-content">${escapeHtml(source)}</span>`;
 };
 
 const tableDelimiterCellFromAlign = (alignInput) => {
@@ -1089,6 +1136,59 @@ class TaskCheckboxWidget extends WidgetType {
   }
 }
 
+class CodeBlockCopyWidget extends WidgetType {
+  constructor({ blockId = "" } = {}) {
+    super();
+    this.blockId = String(blockId || "");
+  }
+
+  eq(other) {
+    return other instanceof CodeBlockCopyWidget && other.blockId === this.blockId;
+  }
+
+  toDOM() {
+    const wrapper = document.createElement("span");
+    wrapper.className = "cm-code-block-copy-widget";
+
+    const trigger = document.createElement("button");
+    trigger.type = "button";
+    trigger.className = "cm-code-block-copy-trigger";
+    trigger.setAttribute("aria-label", "代码操作");
+
+    const triggerDots = document.createElement("span");
+    triggerDots.className = "cm-code-block-copy-trigger-dots";
+    triggerDots.setAttribute("aria-hidden", "true");
+    trigger.appendChild(triggerDots);
+
+    const menu = document.createElement("span");
+    menu.className = "cm-code-block-copy-menu";
+
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "cm-code-block-copy-btn";
+    button.setAttribute("data-code-block-id", this.blockId);
+    button.setAttribute("aria-label", "复制代码块");
+
+    const icon = createCopyIconSvgElement("cm-code-block-copy-icon-svg");
+    button.setAttribute("aria-label", "\u590d\u5236\u4ee3\u7801");
+
+    const label = document.createElement("span");
+    label.className = "cm-code-block-copy-label";
+    label.textContent = "复制";
+
+    button.appendChild(icon);
+    button.appendChild(label);
+    menu.appendChild(button);
+    wrapper.appendChild(trigger);
+    wrapper.appendChild(menu);
+    return wrapper;
+  }
+
+  ignoreEvent() {
+    return false;
+  }
+}
+
 const normalizeImageSrc = (src) => {
   const srcStr = String(src || "");
   if (!srcStr) {
@@ -1168,9 +1268,8 @@ class ImageWidget extends WidgetType {
 
     // Toggle source visibility for this image block.
     const btn = document.createElement("span");
-    btn.className = "cm-image-widget-btn term-tip-btn";
+    btn.className = "cm-image-widget-btn";
     btn.textContent = this.isExpanded ? SOURCE_TOGGLE_ICON_EXPANDED : SOURCE_TOGGLE_ICON_COLLAPSED;
-    btn.setAttribute("data-tip", sourceToggleTitle(this.isExpanded));
     btn.setAttribute("data-image-block-id", this.blockId);
 
     toolbar.appendChild(btn);
@@ -1217,9 +1316,8 @@ class MathBlockWidget extends WidgetType {
     }
 
     const btn = document.createElement("span");
-    btn.className = "cm-math-widget-btn term-tip-btn";
+    btn.className = "cm-math-widget-btn";
     btn.textContent = this.isExpanded ? SOURCE_TOGGLE_ICON_EXPANDED : SOURCE_TOGGLE_ICON_COLLAPSED;
-    btn.setAttribute("data-tip", sourceToggleTitle(this.isExpanded));
     btn.setAttribute("data-math-block-id", this.blockId);
 
     wrapper.appendChild(content);
@@ -1291,9 +1389,8 @@ class TableBlockWidget extends WidgetType {
 
         const colHandle = document.createElement("button");
         colHandle.type = "button";
-        colHandle.className = "cm-table-widget-col-handle term-tip-btn";
+        colHandle.className = "cm-table-widget-col-handle";
         colHandle.textContent = "";
-        colHandle.setAttribute("data-tip", "拖动移动此列");
         colHandle.setAttribute("aria-label", "拖动移动此列");
         colHandle.setAttribute("data-table-col-handle", "true");
         colHandle.setAttribute("data-table-block-id", this.blockId);
@@ -1333,9 +1430,8 @@ class TableBlockWidget extends WidgetType {
             td.classList.add("cm-table-widget-row-anchor");
             const rowHandle = document.createElement("button");
             rowHandle.type = "button";
-            rowHandle.className = "cm-table-widget-row-handle term-tip-btn";
+            rowHandle.className = "cm-table-widget-row-handle";
             rowHandle.textContent = "";
-            rowHandle.setAttribute("data-tip", "拖动移动此行");
             rowHandle.setAttribute("aria-label", "拖动移动此行");
             rowHandle.setAttribute("data-table-row-handle", "true");
             rowHandle.setAttribute("data-table-block-id", this.blockId);
@@ -1352,9 +1448,8 @@ class TableBlockWidget extends WidgetType {
 
       const addColumnBtn = document.createElement("button");
       addColumnBtn.type = "button";
-      addColumnBtn.className = "cm-table-widget-edge-btn cm-table-widget-add-col-btn term-tip-btn";
+      addColumnBtn.className = "cm-table-widget-edge-btn cm-table-widget-add-col-btn";
       addColumnBtn.textContent = "+";
-      addColumnBtn.setAttribute("data-tip", "在右侧插入一列");
       addColumnBtn.setAttribute("aria-label", "在右侧插入一列");
       addColumnBtn.setAttribute("data-table-action", "add-column-right");
       addColumnBtn.setAttribute("data-table-block-id", this.blockId);
@@ -1362,9 +1457,8 @@ class TableBlockWidget extends WidgetType {
 
       const addRowBtn = document.createElement("button");
       addRowBtn.type = "button";
-      addRowBtn.className = "cm-table-widget-edge-btn cm-table-widget-add-row-btn term-tip-btn";
+      addRowBtn.className = "cm-table-widget-edge-btn cm-table-widget-add-row-btn";
       addRowBtn.textContent = "+";
-      addRowBtn.setAttribute("data-tip", "在下方插入一行");
       addRowBtn.setAttribute("aria-label", "在下方插入一行");
       addRowBtn.setAttribute("data-table-action", "add-row-bottom");
       addRowBtn.setAttribute("data-table-block-id", this.blockId);
@@ -1377,9 +1471,8 @@ class TableBlockWidget extends WidgetType {
     }
 
     const btn = document.createElement("span");
-    btn.className = "cm-table-widget-btn term-tip-btn";
+    btn.className = "cm-table-widget-btn";
     btn.textContent = this.isExpanded ? SOURCE_TOGGLE_ICON_EXPANDED : SOURCE_TOGGLE_ICON_COLLAPSED;
-    btn.setAttribute("data-tip", sourceToggleTitle(this.isExpanded));
     btn.setAttribute("data-table-block-id", this.blockId);
 
     wrapper.appendChild(content);
@@ -2441,13 +2534,11 @@ const buildDecorations = (view, blocks, currentBlockId) => {
       if (blockType === "math_block") {
         const attrs = block?.attrs || {};
         const formula = String(attrs.formula || "").trim();
-        const widgetPos = isMathExpanded ? blockTo : blockFrom;
-        const widgetSide = isMathExpanded ? 1 : -1;
         decorations.push(
           Decoration.widget({
             widget: new MathBlockWidget({ formula, blockId: mathExpandKey, isExpanded: isMathExpanded }),
-            side: widgetSide
-          }).range(widgetPos)
+            side: -1
+          }).range(blockFrom)
         );
       }
 
@@ -2461,6 +2552,18 @@ const buildDecorations = (view, blocks, currentBlockId) => {
             side: widgetSide
           }).range(widgetPos)
         );
+      }
+
+      if (blockType === "code_block") {
+        const blockId = codeBlockCopyKeyOf({ type: blockType, from: blockFrom });
+        if (blockId) {
+          decorations.push(
+            Decoration.widget({
+              widget: new CodeBlockCopyWidget({ blockId }),
+              side: -1
+            }).range(blockFrom)
+          );
+        }
       }
 
       const inlineSegments = Array.isArray(block?.inlineSegments) ? block.inlineSegments : [];
@@ -2626,6 +2729,73 @@ const resolveImageBlockRangeById = (view, blockId) => {
     }
   }
   return null;
+};
+
+const resolveCodeBlockRangeById = (view, blockId) => {
+  const targetBlockId = String(blockId || "");
+  if (!targetBlockId) {
+    return null;
+  }
+
+  const data = view.state.field(presentationDataField);
+  const blocks = Array.isArray(data?.blocks) ? data.blocks : [];
+  const doc = view.state.doc;
+  const docLength = Number(doc.length || 0);
+  for (const block of blocks) {
+    const from = clampPos(block?.from, docLength);
+    const to = Math.max(from, clampPos(block?.to, docLength));
+    if (codeBlockCopyKeyOf({ type: block?.type, from }) === targetBlockId) {
+      return {
+        from,
+        to,
+        rawText: doc.sliceString(from, to)
+      };
+    }
+  }
+  return null;
+};
+
+const resolveMathBlockRangeById = (view, blockId) => {
+  const targetBlockId = String(blockId || "");
+  if (!targetBlockId) {
+    return null;
+  }
+
+  const data = view.state.field(presentationDataField);
+  const blocks = Array.isArray(data?.blocks) ? data.blocks : [];
+  const docLength = Number(view.state.doc.length || 0);
+  for (const block of blocks) {
+    const from = clampPos(block?.from, docLength);
+    const to = Math.max(from, clampPos(block?.to, docLength));
+    if (mathExpandKeyOf({ type: block?.type, from }) === targetBlockId) {
+      return { from, to };
+    }
+  }
+  return null;
+};
+
+const cursorOutsideRange = (docLengthInput, fromInput, toInput, direction = -1) => {
+  const docLength = Math.max(0, Number(docLengthInput || 0));
+  const from = clampPos(fromInput, docLength);
+  const to = Math.max(from, clampPos(toInput, docLength));
+
+  if (direction < 0) {
+    if (from > 0) {
+      return from - 1;
+    }
+    if (to < docLength) {
+      return to + 1;
+    }
+    return 0;
+  }
+
+  if (to < docLength) {
+    return to + 1;
+  }
+  if (from > 0) {
+    return from - 1;
+  }
+  return 0;
 };
 
 const resolveTableBlockRangeById = (view, blockId) => {
@@ -3091,6 +3261,34 @@ const blockExpandedForKeyboardNavigation = (view, block) => {
   return false;
 };
 
+const showCodeBlockCopyFeedback = (button, ok) => {
+  if (!(button instanceof HTMLElement)) {
+    return;
+  }
+
+  const label = button.querySelector(".cm-code-block-copy-label");
+  if (!(label instanceof HTMLElement)) {
+    return;
+  }
+
+  const resetTimer = Number(button.dataset.resetTimer || 0);
+  if (resetTimer) {
+    window.clearTimeout(resetTimer);
+  }
+
+  label.textContent = ok ? "已复制" : "失败";
+  button.dataset.copyState = ok ? "copied" : "failed";
+  const timer = window.setTimeout(() => {
+    if (!button.isConnected) {
+      return;
+    }
+    label.textContent = "复制";
+    delete button.dataset.copyState;
+    delete button.dataset.resetTimer;
+  }, 1400);
+  button.dataset.resetTimer = String(timer);
+};
+
 const placeCaretInEditableCell = (editableCell, placeAtEnd = false) => {
   if (!(editableCell instanceof HTMLElement) || typeof document === "undefined" || typeof window === "undefined") {
     return false;
@@ -3267,6 +3465,20 @@ const presentationMouseDownHandler = (event, view) => {
     return false;
   }
 
+  const codeCopyWidget = target.closest(".cm-code-block-copy-widget");
+  if (codeCopyWidget) {
+    event.preventDefault();
+    event.stopPropagation();
+    return true;
+  }
+
+  const codeCopyButton = target.closest(".cm-code-block-copy-btn");
+  if (codeCopyButton) {
+    event.preventDefault();
+    event.stopPropagation();
+    return true;
+  }
+
   const taskToggle = target.closest("[data-task-toggle-from]");
   if (taskToggle) {
     event.preventDefault();
@@ -3404,6 +3616,26 @@ const presentationClickHandler = (event, view) => {
     return false;
   }
 
+  const codeCopyTrigger = target.closest(".cm-code-block-copy-trigger");
+  if (codeCopyTrigger instanceof HTMLElement) {
+    event.preventDefault();
+    event.stopPropagation();
+    return true;
+  }
+
+  const codeCopyButton = target.closest(".cm-code-block-copy-btn");
+  if (codeCopyButton instanceof HTMLElement) {
+    event.preventDefault();
+    event.stopPropagation();
+    const blockId = String(codeCopyButton.getAttribute("data-code-block-id") || "");
+    const blockRange = resolveCodeBlockRangeById(view, blockId);
+    const codeText = extractCodeBlockContent(String(blockRange?.rawText || ""));
+    void copyText(codeText).then((ok) => {
+      showCodeBlockCopyFeedback(codeCopyButton, ok && Boolean(codeText));
+    });
+    return true;
+  }
+
   const taskToggle = target.closest("[data-task-toggle-from]");
   if (taskToggle) {
     event.preventDefault();
@@ -3450,9 +3682,28 @@ const presentationClickHandler = (event, view) => {
     event.stopPropagation();
     const blockId = mathBtn.getAttribute("data-math-block-id");
     if (blockId) {
-      view.dispatch({
+      const blockRange = resolveMathBlockRangeById(view, blockId);
+      const isExpanded = view.state.field(mathExpandField).has(blockId);
+      const docLength = Number(view.state.doc.length || 0);
+      const selection = (
+        isExpanded && blockRange
+          ? {
+              anchor: cursorOutsideRange(docLength, blockRange.from, blockRange.to, -1),
+              head: cursorOutsideRange(docLength, blockRange.from, blockRange.to, -1)
+            }
+          : null
+      );
+      const dispatchPayload = {
         effects: toggleMathExpandEffect.of(blockId)
-      });
+      };
+      if (selection) {
+        dispatchPayload.selection = selection;
+        dispatchPayload.scrollIntoView = true;
+      }
+      view.dispatch(dispatchPayload);
+      if (selection) {
+        view.focus();
+      }
       return true;
     }
   }

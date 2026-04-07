@@ -2,9 +2,19 @@
   outline: none;
 }
 
-.yc-editor-host .cm-selectionBackground {
-  border-radius: 4px;
-  background: var(--yc-editor-selection);
+.yc-editor-host .cm-content::selection,
+.yc-editor-host .cm-content *::selection {
+  background: var(--yc-editor-selection-native, var(--yc-editor-selection)) !important;
+  color: inherit !important;
+  -webkit-text-fill-color: currentColor;
+  text-shadow: none;
+}
+
+.yc-editor-host .cm-content::-moz-selection,
+.yc-editor-host .cm-content *::-moz-selection {
+  background: var(--yc-editor-selection-native, var(--yc-editor-selection)) !important;
+  color: inherit !important;
+  text-shadow: none;
 }
 
 .yc-editor-host .cm-cursor,
