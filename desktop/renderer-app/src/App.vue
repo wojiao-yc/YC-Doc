@@ -1237,7 +1237,7 @@
                     <button
                       v-if="canPickWorkspaceRoot"
                       type="button"
-                      class="settings-window-button is-accent"
+                      class="settings-window-button"
                       @click="handleWorkspaceFooterSwitch"
                     >
                       切换
@@ -1365,7 +1365,7 @@
                     <div class="settings-window-card-row-desc">支持 .css 或 .json 格式</div>
                   </div>
                   <div class="settings-window-card-row-right">
-                    <button type="button" class="settings-window-button is-accent" @click="triggerThemeImport">导入</button>
+                    <button type="button" class="settings-window-button" @click="triggerThemeImport">导入</button>
                     <button
                       v-if="activeImportedTheme"
                       type="button"
@@ -1409,54 +1409,63 @@
                       <input v-model="themeAccentEnabled" type="checkbox" class="settings-window-checkbox" :disabled="!isThemeAccentAdjustableThemeActive" />
                     </div>
                   </div>
-                  <div class="settings-window-card-row">
+                  <div class="settings-window-card-row settings-window-card-row-expandable" @click="themeColorExpanded = !themeColorExpanded">
                     <div class="settings-window-card-row-left">
                       <div class="settings-window-card-row-label">主题色</div>
-                      <div class="settings-window-card-row-desc">当前: {{ themeAccentHex.toUpperCase() }}</div>
+                      <div class="settings-window-card-row-desc">{{ themeAccentHex.toUpperCase() }}</div>
                     </div>
                     <div class="settings-window-card-row-right">
-                      <label class="settings-accent-swatch-shell" :aria-disabled="!themeAccentPickerEnabled">
-                        <input v-model="themeAccentHex" class="settings-accent-native" type="color" :disabled="!themeAccentPickerEnabled" />
-                        <span class="settings-accent-swatch" :style="{ background: themeAccentHex }"></span>
-                      </label>
-                      <button type="button" class="settings-window-button" :class="isDark ? 'is-dark' : ''" :disabled="!isThemeAccentAdjustableThemeActive" @click="resetThemeAccentTheme">重置</button>
+                      <span class="settings-theme-color-mini-preview" :style="{ background: themeAccentHex }"></span>
+                      <span class="settings-expand-icon" :class="{ 'is-expanded': themeColorExpanded }">
+                        <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                          <path d="M4 6L8 10L12 6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                        </svg>
+                      </span>
                     </div>
                   </div>
-                  <div class="settings-window-card-row">
-                    <div class="settings-window-card-row-left">
-                      <div class="settings-window-card-row-label">饱和度强度</div>
-                      <div class="settings-window-card-row-desc">{{ themeAccentSaturation }}%</div>
-                    </div>
-                    <div class="settings-window-card-row-right">
-                      <input
-                        v-model.number="themeAccentSaturation"
-                        class="settings-accent-range"
-                        type="range"
-                        min="65"
-                        max="145"
-                        step="1"
-                        :disabled="!themeAccentPickerEnabled"
-                      />
-                    </div>
-                  </div>
-                  <div class="settings-window-card-row">
-                    <div class="settings-window-card-row-left">
-                      <div class="settings-window-card-row-label">RGB 值</div>
-                    </div>
-                    <div class="settings-window-card-row-right">
-                      <div class="settings-accent-rgb-grid">
-                        <label class="settings-accent-channel">
-                          <span>R</span>
-                          <input v-model.number="themeAccentRed" type="number" min="0" max="255" step="1" :disabled="!themeAccentPickerEnabled" />
-                        </label>
-                        <label class="settings-accent-channel">
-                          <span>G</span>
-                          <input v-model.number="themeAccentGreen" type="number" min="0" max="255" step="1" :disabled="!themeAccentPickerEnabled" />
-                        </label>
-                        <label class="settings-accent-channel">
-                          <span>B</span>
-                          <input v-model.number="themeAccentBlue" type="number" min="0" max="255" step="1" :disabled="!themeAccentPickerEnabled" />
-                        </label>
+                  <div v-if="themeColorExpanded" class="settings-window-card-expanded" :class="isDark ? 'is-dark' : ''">
+                    <div class="settings-theme-color-editor">
+                      <div class="settings-theme-color-main">
+                        <div class="settings-theme-color-sv-picker">
+                          <div
+                            class="settings-theme-color-sv-area"
+                            :style="{ background: `linear-gradient(to right, #fff, hsl(${themeAccentHue}, 100%, 50%))` }"
+                            @mousedown="startSvDrag"
+                          >
+                            <div
+                              class="settings-theme-color-sv-cursor"
+                              :style="{ background: themeAccentHex, left: `${themeAccentSaturation}%`, top: `${100 - themeAccentLightness}%` }"
+                            ></div>
+                          </div>
+                        </div>
+                        <div class="settings-theme-color-right">
+                          <div class="settings-theme-color-inputs-section">
+                            <div class="settings-theme-color-hex-input">
+                              <span class="settings-theme-color-input-label">HEX</span>
+                              <input v-model="themeAccentHex" type="text" class="settings-theme-color-input-field" :disabled="!themeAccentPickerEnabled" />
+                            </div>
+                            <div class="settings-theme-color-rgb-inputs">
+                              <span class="settings-theme-color-input-label">RGB</span>
+                              <div class="settings-theme-color-rgb-grid">
+                                <input v-model.number="themeAccentRed" type="number" class="settings-theme-color-input-field" min="0" max="255" step="1" :disabled="!themeAccentPickerEnabled" />
+                                <input v-model.number="themeAccentGreen" type="number" class="settings-theme-color-input-field" min="0" max="255" step="1" :disabled="!themeAccentPickerEnabled" />
+                                <input v-model.number="themeAccentBlue" type="number" class="settings-theme-color-input-field" min="0" max="255" step="1" :disabled="!themeAccentPickerEnabled" />
+                              </div>
+                            </div>
+                          </div>
+                          <input
+                            v-model.number="themeAccentHue"
+                            class="settings-theme-color-hue-slider"
+                            type="range"
+                            min="0"
+                            max="360"
+                            step="1"
+                            :disabled="!themeAccentPickerEnabled"
+                          />
+                        </div>
+                      </div>
+                      <div class="settings-theme-color-actions">
+                        <button type="button" class="settings-window-button" :disabled="!isThemeAccentAdjustableThemeActive" @click="resetThemeAccentTheme">重置</button>
                       </div>
                     </div>
                   </div>
@@ -1663,6 +1672,123 @@ const themeAccentRed = ref(155);
 const themeAccentGreen = ref(109);
 const themeAccentBlue = ref(72);
 const themeAccentSaturation = ref(100);
+const themeAccentHue = ref(25);
+const themeAccentLightness = ref(50);
+const themeColorExpanded = ref(false);
+
+// Sync hue and lightness from RGB
+const syncHueFromRgb = () => {
+  const r = themeAccentRed.value / 255;
+  const g = themeAccentGreen.value / 255;
+  const b = themeAccentBlue.value / 255;
+  const max = Math.max(r, g, b);
+  const min = Math.min(r, g, b);
+  const lightness = (max + min) / 2 * 100;
+  themeAccentLightness.value = Math.round(lightness);
+
+  if (max === min) {
+    themeAccentHue.value = 0;
+    themeAccentSaturation.value = 0;
+  } else {
+    const d = max - min;
+    const s = lightness > 50 ? d / (2 - max - min) : d / (max + min);
+    themeAccentSaturation.value = Math.round(s * 100);
+
+    if (max === r) {
+      themeAccentHue.value = Math.round(((g - b) / d + (g < b ? 6 : 0)) * 60);
+    } else if (max === g) {
+      themeAccentHue.value = Math.round(((b - r) / d + 2) * 60);
+    } else {
+      themeAccentHue.value = Math.round(((r - g) / d + 4) * 60);
+    }
+  }
+};
+
+// Sync RGB from HSL
+const syncRgbFromHsl = () => {
+  const h = themeAccentHue.value;
+  const s = themeAccentSaturation.value / 100;
+  const l = themeAccentLightness.value / 100;
+  updateRgbFromHslWithoutHueSync(h, s, l);
+};
+
+const updateRgbFromHslWithoutHueSync = (h, s, l) => {
+  const c = (1 - Math.abs(2 * l - 1)) * s;
+  const x = c * (1 - Math.abs((h / 60) % 2 - 1));
+  const m = l - c / 2;
+
+  let r = 0, g = 0, b = 0;
+  if (h < 60) { r = c; g = x; b = 0; }
+  else if (h < 120) { r = x; g = c; b = 0; }
+  else if (h < 180) { r = 0; g = c; b = x; }
+  else if (h < 240) { r = 0; g = x; b = c; }
+  else if (h < 300) { r = x; g = 0; b = c; }
+  else { r = c; g = 0; b = x; }
+
+  themeAccentRed.value = Math.round((r + m) * 255);
+  themeAccentGreen.value = Math.round((g + m) * 255);
+  themeAccentBlue.value = Math.round((b + m) * 255);
+};
+
+// Watch hue/saturation/lightness changes to sync RGB
+watch([themeAccentHue, themeAccentSaturation, themeAccentLightness], () => {
+  // Clamp values
+  themeAccentHue.value = clamp(themeAccentHue.value, 0, 360);
+  themeAccentSaturation.value = clamp(themeAccentSaturation.value, 0, 100);
+  themeAccentLightness.value = clamp(themeAccentLightness.value, 10, 90);
+  syncRgbFromHsl();
+  persistThemeAccentThemePrefs();
+});
+
+// Watch hue changes separately to update RGB without re-syncing hue
+watch(themeAccentHue, () => {
+  if (!svDragging) {
+    const s = themeAccentSaturation.value / 100;
+    const l = themeAccentLightness.value / 100;
+    updateRgbFromHslWithoutHueSync(themeAccentHue.value, s, l);
+  }
+});
+
+// Watch RGB changes to sync HSL (but not during SV drag)
+watch([themeAccentRed, themeAccentGreen, themeAccentBlue], () => {
+  if (!svDragging) {
+    syncHueFromRgb();
+  }
+});
+
+// SV Picker dragging
+let svDragging = false;
+
+const startSvDrag = (event) => {
+  if (!themeAccentPickerEnabled.value) return;
+  svDragging = true;
+  updateSvFromEvent(event);
+  document.addEventListener('mousemove', updateSvFromEvent);
+  document.addEventListener('mouseup', stopSvDrag);
+};
+
+const updateSvFromEvent = (event) => {
+  if (!svDragging) return;
+  const target = event.target.closest('.settings-theme-color-sv-area');
+  if (!target) return;
+  const rect = target.getBoundingClientRect();
+  const x = Math.max(0, Math.min(1, (event.clientX - rect.left) / rect.width));
+  const y = Math.max(0, Math.min(1, (event.clientY - rect.top) / rect.height));
+  themeAccentSaturation.value = Math.round(x * 100);
+  themeAccentLightness.value = Math.round((1 - y) * 100);
+  // Update RGB directly from HSL without recalculating hue
+  const h = themeAccentHue.value;
+  const s = themeAccentSaturation.value / 100;
+  const l = themeAccentLightness.value / 100;
+  updateRgbFromHslWithoutHueSync(h, s, l);
+};
+
+const stopSvDrag = () => {
+  svDragging = false;
+  document.removeEventListener('mousemove', updateSvFromEvent);
+  document.removeEventListener('mouseup', stopSvDrag);
+  persistThemeAccentThemePrefs();
+};
 const activeImportedTheme = computed(() => (
   currentThemeDefinition.value?.kind === "imported" ? currentThemeDefinition.value : null
 ));
@@ -2513,6 +2639,7 @@ watch(
 
 onMounted(() => {
   syncFloatingThemeBridge();
+  syncHueFromRgb();
 });
 
 onBeforeUnmount(() => {
@@ -3383,6 +3510,8 @@ watch([themeAccentEnabled, themeAccentRed, themeAccentGreen, themeAccentBlue, th
   if (themeAccentSaturation.value !== nextSaturation) {
     themeAccentSaturation.value = nextSaturation;
   }
+  // Sync HSL from RGB when RGB changes
+  syncHueFromRgb();
   persistThemeAccentThemePrefs();
 });
 
