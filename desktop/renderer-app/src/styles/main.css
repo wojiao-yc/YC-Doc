@@ -1029,82 +1029,100 @@ body {
   gap: 12px;
 }
 
-.settings-window-card-row-expandable {
-  cursor: pointer;
-  transition: background 0.15s ease;
+.settings-window-card-row-theme-color {
+  align-items: flex-start;
+  padding-top: 16px;
+  padding-bottom: 6px;
 }
 
-.settings-window-card-row-expandable:hover {
-  background: var(--yc-bg-hover);
+.settings-window-card-row-theme-toggle {
+  padding-top: 4px;
+  padding-bottom: 14px;
 }
 
-.settings-expand-icon {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: var(--yc-text-muted);
-  transition: transform 0.2s ease;
-}
-
-.settings-expand-icon.is-expanded {
-  transform: rotate(180deg);
-}
-
-.settings-window-card-expanded {
-  padding: 16px 0 4px;
-  border-top: 1px solid var(--yc-border);
-  margin-top: 4px;
+.settings-window-card-row-theme-color .settings-window-card-row-left {
+  width: 100%;
 }
 
 .settings-theme-color-mini-preview {
-  width: 24px;
-  height: 24px;
+  width: 22px;
+  height: 22px;
   border-radius: 6px;
   border: 1px solid var(--yc-border-strong);
   flex-shrink: 0;
 }
 
+.settings-theme-color-eyedropper-btn {
+  margin-left: 2px;
+  flex-shrink: 0;
+}
+
+.settings-theme-color-eyedropper-btn:disabled {
+  opacity: 0.36;
+}
+
+.settings-theme-color-title-tools .settings-theme-color-eyedropper-btn .settings-theme-color-eyedropper-icon {
+  width: 15px;
+  height: 15px;
+}
+
 .settings-theme-color-editor {
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 14px;
+  width: 100%;
+}
+
+.settings-theme-color-editor.is-disabled {
+  opacity: 0.64;
 }
 
 .settings-theme-color-main {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(280px, 360px);
+  gap: 18px;
+  align-items: start;
+}
+
+.settings-theme-color-left {
+  display: grid;
+  gap: 32px;
+  align-content: start;
+}
+
+.settings-theme-color-title-row {
   display: flex;
-  gap: 16px;
+  align-items: center;
+  gap: 10px;
+}
+
+.settings-theme-color-title-tools {
+  margin-left: 8px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
 }
 
 .settings-theme-color-sv-picker {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  flex: 1;
-  max-width: 240px;
+  width: 100%;
+  max-width: 360px;
+  justify-self: end;
 }
 
 .settings-theme-color-sv-area {
   position: relative;
   width: 100%;
-  height: 160px;
-  border-radius: 8px;
+  height: 146px;
+  border-radius: 10px;
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--yc-border-strong) 65%, transparent);
   cursor: crosshair;
+  background-repeat: no-repeat;
+  background-size: 100% 100%;
 }
 
-.settings-theme-color-sv-area::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  border-radius: 8px;
-  background: linear-gradient(to right, #fff, hsl(0, 100%, 50%));
-}
-
-.settings-theme-color-sv-area::after {
-  content: '';
-  position: absolute;
-  inset: 0;
-  border-radius: 8px;
-  background: linear-gradient(to top, #000, transparent);
+.settings-theme-color-editor.is-disabled .settings-theme-color-sv-area {
+  cursor: not-allowed;
+  pointer-events: none;
 }
 
 .settings-theme-color-sv-cursor {
@@ -1117,13 +1135,6 @@ body {
   transform: translate(-50%, -50%);
   pointer-events: none;
   z-index: 10;
-}
-
-.settings-theme-color-right {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  flex: 1;
 }
 
 .settings-theme-color-hue-slider {
@@ -1162,8 +1173,8 @@ body {
 
 .settings-theme-color-inputs-section {
   display: flex;
-  gap: 12px;
-  flex: 1;
+  gap: 36px;
+  align-items: center;
 }
 
 .settings-theme-color-hex-input {
@@ -1219,10 +1230,27 @@ body {
   min-width: 0;
 }
 
-.settings-theme-color-actions {
-  display: flex;
-  justify-content: flex-end;
-  padding-top: 8px;
+@media (max-width: 1080px) {
+  .settings-theme-color-main {
+    grid-template-columns: 1fr;
+  }
+
+  .settings-theme-color-sv-picker {
+    max-width: none;
+    justify-self: stretch;
+  }
+}
+
+@media (max-width: 760px) {
+  .settings-theme-color-inputs-section {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .settings-theme-color-rgb-inputs {
+    flex-direction: column;
+    align-items: stretch;
+  }
 }
 
 .settings-window-card-text {
