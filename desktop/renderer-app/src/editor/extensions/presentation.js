@@ -767,7 +767,10 @@ const moveTableCellEditorVerticalFocus = (cellEditor, direction = 1) => {
 
   const currentVisualRowIndex = tableVisualRowIndexOf(cellIdentity);
   const maxVisualRowIndex = Math.max(0, resolveMaxTableBodyRowIndex(tableWidget) + 1);
-  const targetVisualRowIndex = clampIndex(currentVisualRowIndex + direction, 0, maxVisualRowIndex);
+  const targetVisualRowIndex = currentVisualRowIndex + (direction < 0 ? -1 : 1);
+  if (targetVisualRowIndex < 0 || targetVisualRowIndex > maxVisualRowIndex) {
+    return false;
+  }
   const textOffset = resolveTableCellSelectionTextOffset(cellEditor);
   const target = resolveTableCellEditorAt(
     tableWidget,
@@ -776,10 +779,44 @@ const moveTableCellEditorVerticalFocus = (cellEditor, direction = 1) => {
     cellIdentity.colIndex
   );
   if (!target) {
-    return focusTableCellEditorElement(cellEditor, textOffset);
+    return false;
   }
 
   return focusTableCellEditorElement(target, textOffset);
+};
+
+const moveCursorOutsideTableFromCellEditor = (cellEditor, direction = 1) => {
+  if (!(cellEditor instanceof HTMLElement)) {
+    return false;
+  }
+
+  const cellIdentity = tableCellEditorIdentityOf(cellEditor);
+  if (!cellIdentity?.blockId) {
+    return false;
+  }
+
+  const view = EditorView.findFromDOM(cellEditor);
+  if (!view) {
+    return false;
+  }
+
+  commitTableCellEdit(view, cellEditor);
+  const blockRange = resolveTableBlockRangeById(view, cellIdentity.blockId);
+  if (!blockRange) {
+    return false;
+  }
+
+  const docLength = Number(view.state.doc.length || 0);
+  const cursor = cursorOutsideRange(docLength, blockRange.from, blockRange.to, direction);
+  view.dispatch({
+    selection: {
+      anchor: cursor,
+      head: cursor
+    },
+    scrollIntoView: true
+  });
+  view.focus();
+  return true;
 };
 
 const moveArrayItem = (itemsInput, fromIndexInput, toIndexInput) => {
@@ -945,7 +982,12 @@ const bindTableCellEditorDomEvents = (cellEditor) => {
     event.stopPropagation();
     if (isPlainTableVerticalArrowEvent(event)) {
       event.preventDefault();
-      moveTableCellEditorVerticalFocus(cellEditor, event.key === "ArrowUp" ? -1 : 1);
+      const direction = event.key === "ArrowUp" ? -1 : 1;
+      if (!moveTableCellEditorVerticalFocus(cellEditor, direction)) {
+        if (!moveCursorOutsideTableFromCellEditor(cellEditor, direction)) {
+          cellEditor.blur();
+        }
+      }
       return;
     }
     if (event.key === "Enter" && !event.shiftKey && !event.altKey && !event.ctrlKey && !event.metaKey) {
@@ -3362,7 +3404,7 @@ const focusTableBlockCellEditor = (view, blockIdInput, direction = 1) => {
   }
 
   const editors = Array.from(
-    root.querySelectorAll(`[data-table-block-id="${blockId}"] [data-table-edit="true"]`)
+    root.querySelectorAll(`.cm-table-widget[data-table-block-id="${blockId}"] [data-table-edit="true"]`)
   ).filter((node) => node instanceof HTMLElement);
   if (!editors.length) {
     return false;
@@ -3393,6 +3435,39 @@ const focusTableBlockCellEditor = (view, blockIdInput, direction = 1) => {
     });
   }
   return true;
+};
+
+const resolveCollapsedTableBlockAtPos = (view, posInput) => {
+  const docLength = Number(view?.state?.doc?.length || 0);
+  const pos = clampPos(posInput, docLength);
+  const data = view?.state?.field?.(presentationDataField);
+  const blocks = Array.isArray(data?.blocks) ? data.blocks : [];
+  const expandedTableBlocks = view?.state?.field?.(tableExpandField) || new Set();
+
+  for (const block of blocks) {
+    if (String(block?.type || "") !== "table") {
+      continue;
+    }
+
+    const from = clampPos(block?.from, docLength);
+    const to = Math.max(from, clampPos(block?.to, docLength));
+    const blockId = tableExpandKeyOf({ type: "table", from });
+    if (!blockId || expandedTableBlocks.has(blockId)) {
+      continue;
+    }
+    if (pos < from || pos > to) {
+      continue;
+    }
+
+    return {
+      ...block,
+      from,
+      to,
+      blockId
+    };
+  }
+
+  return null;
 };
 
 const moveCursorIntoSpecialBlockSource = (view, block, direction = 1) => {
@@ -3531,6 +3606,31 @@ const presentationMouseDownHandler = (event, view) => {
     return true;
   }
 
+  const tableWidgetHost = target.closest(".cm-table-widget");
+  const tableSourceAnchorLine = target.closest(".cm-line.cm-block-table-source-anchor");
+  if (!tableWidgetHost && tableSourceAnchorLine instanceof Element) {
+    if (readOnly) {
+      event.preventDefault();
+      event.stopPropagation();
+      return true;
+    }
+    const posAtMouse = view.posAtCoords({
+      x: Number(event.clientX || 0),
+      y: Number(event.clientY || 0)
+    });
+    const fallbackCursorPos = Number(view.state.selection?.main?.head || 0);
+    const tableBlock = resolveCollapsedTableBlockAtPos(
+      view,
+      typeof posAtMouse === "number" ? posAtMouse : fallbackCursorPos
+    );
+    if (tableBlock?.blockId) {
+      event.preventDefault();
+      event.stopPropagation();
+      clearTableHandleSelection(view);
+      return focusTableBlockCellEditor(view, tableBlock.blockId, 1);
+    }
+  }
+
   const tableEditableCell = target.closest("[data-table-edit='true']");
   if (tableEditableCell) {
     if (readOnly) {
@@ -3638,6 +3738,7 @@ const presentationKeyDownHandler = (event, view) => {
     return false;
   }
 
+  const readOnly = isEditorReadOnly(view);
   if (readOnly) {
     event.preventDefault();
     event.stopPropagation();
@@ -3796,9 +3897,28 @@ const presentationClickHandler = (event, view) => {
     }
     const blockId = tableBtn.getAttribute("data-table-block-id");
     if (blockId) {
-      view.dispatch({
+      const blockRange = resolveTableBlockRangeById(view, blockId);
+      const isExpanded = view.state.field(tableExpandField).has(blockId);
+      const docLength = Number(view.state.doc.length || 0);
+      const selection = (
+        isExpanded && blockRange
+          ? {
+              anchor: cursorOutsideRange(docLength, blockRange.from, blockRange.to, -1),
+              head: cursorOutsideRange(docLength, blockRange.from, blockRange.to, -1)
+            }
+          : null
+      );
+      const dispatchPayload = {
         effects: toggleTableExpandEffect.of(blockId)
-      });
+      };
+      if (selection) {
+        dispatchPayload.selection = selection;
+        dispatchPayload.scrollIntoView = true;
+      }
+      view.dispatch(dispatchPayload);
+      if (selection) {
+        view.focus();
+      }
       return true;
     }
   }
