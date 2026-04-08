@@ -223,11 +223,9 @@
 }
 
 .yc-editor-host .cm-wiki-link {
-  border-radius: 4px;
-  padding: 0 0.08em;
-  text-decoration-line: underline;
-  text-decoration-thickness: 1.4px;
-  text-underline-offset: 0.16em;
+  border-radius: 0;
+  padding: 0;
+  text-decoration: none;
   box-decoration-break: clone;
   -webkit-box-decoration-break: clone;
 }
@@ -304,10 +302,27 @@
 .yc-wikilink-autocomplete-item.is-active {
   background: var(--yc-wikilink-menu-item-hover-bg);
   box-shadow: var(--yc-wikilink-menu-item-hover-shadow);
+  color: var(--yc-wikilink-menu-item-hover-text, var(--yc-wikilink-menu-text));
 }
 
-.yc-wikilink-autocomplete-item.is-warning {
+.yc-wikilink-autocomplete-item:focus,
+.yc-wikilink-autocomplete-item:focus-visible {
+  outline: none;
+}
+
+.yc-wikilink-autocomplete-item.is-warning:not(:hover):not(.is-active) {
   color: var(--yc-wikilink-missing-color);
+}
+
+.yc-wikilink-autocomplete-item:hover .yc-wikilink-autocomplete-detail,
+.yc-wikilink-autocomplete-item.is-active .yc-wikilink-autocomplete-detail {
+  color: var(--yc-wikilink-menu-item-hover-detail, var(--yc-wikilink-menu-detail));
+}
+
+.yc-wikilink-autocomplete-item:hover .yc-wikilink-autocomplete-meta,
+.yc-wikilink-autocomplete-item.is-active .yc-wikilink-autocomplete-meta {
+  background: var(--yc-wikilink-menu-item-hover-meta-bg, var(--yc-wikilink-menu-meta-bg));
+  color: var(--yc-wikilink-menu-item-hover-meta-text, var(--yc-wikilink-menu-meta-text));
 }
 
 .yc-wikilink-autocomplete-label {

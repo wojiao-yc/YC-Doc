@@ -206,7 +206,7 @@ body {
   bottom: 5px;
   width: 3px;
   border-radius: 999px;
-  background: var(--yc-editor-tab-drop-indicator, var(--yc-accent));
+  background: var(--yc-editor-tab-drop-indicator, var(--yc-text-subtle));
   box-shadow: 0 0 0 2px color-mix(in srgb, var(--yc-bg-panel) 90%, transparent);
   pointer-events: none;
 }
@@ -222,7 +222,7 @@ body {
 .editor-tab-icon {
   font-size: 10px;
   line-height: 1;
-  color: var(--yc-editor-tab-icon, var(--yc-accent));
+  color: var(--yc-editor-tab-icon, var(--yc-text-subtle));
   flex: 0 0 auto;
 }
 
@@ -2147,11 +2147,25 @@ body {
 }
 
 .yc-view-render-shell {
-  pointer-events: none;
+  pointer-events: auto;
 }
 
 .yc-view-render-shell .yc-editor-shell {
   min-height: 0;
+}
+
+.yc-view-render-shell.is-readonly-view,
+.yc-view-render-shell.is-readonly-view * {
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.yc-view-render-shell.is-readonly-view .md-code-action-trigger,
+.yc-view-render-shell.is-readonly-view .md-code-copy-btn,
+.yc-view-render-shell.is-readonly-view .wiki-link,
+.yc-view-render-shell.is-readonly-view button,
+.yc-view-render-shell.is-readonly-view a {
+  pointer-events: auto;
 }
 
 .markdown-render {
@@ -2710,13 +2724,10 @@ body {
 
 .markdown-render .wiki-link {
   color: var(--yc-wikilink-color);
-  text-decoration: underline;
-  text-decoration-thickness: 1.5px;
-  text-underline-offset: 0.18em;
-  text-decoration-color: var(--yc-wikilink-decoration);
+  text-decoration: none;
   background: var(--yc-wikilink-bg);
-  border-radius: var(--yc-preview-link-radius);
-  padding: var(--yc-preview-link-padding);
+  border-radius: 0;
+  padding: 0;
   transition: background-color 0.15s ease, color 0.15s ease;
   cursor: pointer;
 }
@@ -2727,15 +2738,11 @@ body {
 
 .markdown-render .wiki-link.is-unresolved {
   color: var(--yc-wikilink-missing-color);
-  text-decoration-style: dashed;
-  text-decoration-color: var(--yc-wikilink-missing-decoration);
   background: var(--yc-wikilink-missing-bg);
 }
 
 .markdown-render .wiki-link.is-ambiguous {
   color: var(--yc-wikilink-ambiguous-color);
-  text-decoration-style: dotted;
-  text-decoration-color: var(--yc-wikilink-ambiguous-decoration);
   background: var(--yc-wikilink-ambiguous-bg);
 }
 
@@ -3600,7 +3607,7 @@ body {
 
 .dark-ui .editor-tab.is-drop-before::before,
 .dark-ui .editor-tab.is-drop-after::after {
-  background: var(--yc-accent);
+  background: var(--yc-editor-tab-drop-indicator, var(--yc-text-subtle));
   box-shadow: 0 0 0 2px color-mix(in srgb, var(--yc-bg-panel) 90%, transparent);
 }
 

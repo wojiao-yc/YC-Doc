@@ -366,6 +366,13 @@ export const createWikiLinkAutocompleteExtension = ({
           event.stopPropagation();
           this.applySelection(index);
         });
+        button.addEventListener("mouseenter", () => {
+          if (this.selectedIndex === index) {
+            return;
+          }
+          this.selectedIndex = index;
+          this.scheduleRender();
+        });
         if (index === this.selectedIndex) {
           selectedButton = button;
         }

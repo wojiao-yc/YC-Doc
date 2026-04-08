@@ -7,7 +7,7 @@ import { resolveInlineFormattingPlaceholder } from "../utils/inline-formatting.j
 const MENU_GAP = 8;
 const SUBMENU_GAP = 2;
 const SUBMENU_OPEN_DELAY_MS = 140;
-const SUBMENU_CLOSE_DELAY_MS = 240;
+const SUBMENU_CLOSE_DELAY_MS = 640;
 const DEFAULT_LINK_URL = "https://";
 let contextMenuRuntimeOptions = {};
 const TABLE_CELL_FORMAT_COMMAND_IDS = new Set([
@@ -2146,20 +2146,6 @@ class EditorContextMenuController {
       }
       this.clearSubmenuCloseTimer();
     });
-    if (!isSubmenu) {
-      menu.addEventListener("mousemove", (event) => {
-        this.pointerInRootMenu = true;
-        if (!this.subMenuEl || !(this.activeSubmenuItemEl instanceof HTMLButtonElement)) {
-          return;
-        }
-        const hoveredItem = this.getRootMenuItemFromEventTarget(event?.target instanceof Element ? event.target : null);
-        if (hoveredItem && hoveredItem === this.activeSubmenuItemEl) {
-          return;
-        }
-        this.closeSubMenu();
-        this.clearMenuActiveState(this.rootMenuEl);
-      });
-    }
     menu.addEventListener("mouseleave", (event) => {
       const related = event?.relatedTarget;
       if (isSubmenu) {
@@ -2170,8 +2156,7 @@ class EditorContextMenuController {
         if (this.isRelatedTargetWithinActiveRootItem(related)) {
           return;
         }
-        this.closeSubMenu();
-        this.clearMenuActiveState(this.rootMenuEl);
+        this.scheduleCloseSubmenu();
         return;
       } else {
         this.pointerInRootMenu = false;
@@ -2223,9 +2208,12 @@ class EditorContextMenuController {
         button.appendChild(arrow);
 
         button.addEventListener("mouseenter", () => {
+          if (!isSubmenu && this.activeSubmenuItemEl && this.activeSubmenuItemEl !== button) {
+            this.closeSubMenu();
+          }
           const index = this.getMenuButtons(menu).findIndex((entry) => entry === button);
           this.focusMenuItem(menu, index);
-          this.openSubmenuForItem(item, button);
+          this.scheduleOpenSubmenu(item, button);
         });
         button.addEventListener("mouseleave", (event) => {
           const related = event?.relatedTarget;
@@ -2241,6 +2229,9 @@ class EditorContextMenuController {
         });
       } else {
         button.addEventListener("mouseenter", () => {
+          if (!isSubmenu && this.activeSubmenuItemEl && this.activeSubmenuItemEl !== button) {
+            this.closeSubMenu();
+          }
           const index = this.getMenuButtons(menu).findIndex((entry) => entry === button);
           this.focusMenuItem(menu, index);
           this.scheduleCloseSubmenu();

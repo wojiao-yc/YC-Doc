@@ -78,7 +78,7 @@
   --yc-syntax-comment: #7d6e63;
   --yc-syntax-meta: #945f45;
   --yc-syntax-delimiter: #7b6c62;
-  --yc-syntax-link: #4f7392;
+  --yc-syntax-link: #92864f;
   --yc-checkbox-bg: #fffdf8;
   --yc-checkbox-border: #cfb894;
   --yc-checkbox-checked-bg: var(--yc-accent-strong);
@@ -246,7 +246,7 @@
   --yc-editor-image-title: var(--yc-syntax-keyword);
   --yc-editor-meta-key: var(--yc-syntax-attribute);
   --yc-editor-meta-number: var(--yc-syntax-number);
-  --yc-editor-math-operator: var(--yc-syntax-operator);
+  --yc-editor-math-operator: var(--yc-code-syntax-operator);
   --yc-graph-root-node: #c3ab88;
   --yc-graph-arrow: #8f6f5c;
   --yc-graph-edge: rgba(143, 111, 92, 0.34);

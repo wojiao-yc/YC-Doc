@@ -58,6 +58,12 @@
   --yc-menu-muted: #94a3b8;
   --yc-menu-danger: #fda4af;
   --yc-menu-separator: #222d3b;
+  --yc-wikilink-menu-item-hover-bg: color-mix(in srgb, var(--yc-accent) 22%, transparent);
+  --yc-wikilink-menu-item-hover-text: var(--yc-accent-strong);
+  --yc-wikilink-menu-item-hover-detail: color-mix(in srgb, var(--yc-accent-strong) 78%, var(--yc-text-secondary) 22%);
+  --yc-wikilink-menu-item-hover-meta-bg: color-mix(in srgb, var(--yc-accent) 18%, transparent);
+  --yc-wikilink-menu-item-hover-meta-text: var(--yc-accent-strong);
+  --yc-wikilink-menu-hint-token: var(--yc-accent-strong);
   --yc-tooltip-bg: #121b27;
   --yc-tooltip-border: #314051;
   --yc-tooltip-text: #e2e8f0;
@@ -71,6 +77,16 @@
   --yc-syntax-meta: #c7a98a;
   --yc-syntax-delimiter: #8a99ad;
   --yc-syntax-link: #9bbde4;
+  --yc-code-syntax-keyword: #c792ea;
+  --yc-code-syntax-type: #e5c07b;
+  --yc-code-syntax-string: #98c379;
+  --yc-code-syntax-number: #f78c6c;
+  --yc-code-syntax-attribute: #56b6c2;
+  --yc-code-syntax-operator: #e06c75;
+  --yc-code-syntax-comment: #7f8ea3;
+  --yc-code-syntax-meta: #d19a66;
+  --yc-code-syntax-delimiter: #abb2bf;
+  --yc-code-syntax-link: #61afef;
   --yc-checkbox-bg: #0f172a;
   --yc-checkbox-border: #475569;
   --yc-checkbox-checked-bg: var(--yc-accent-strong);
@@ -246,7 +262,7 @@
   --yc-editor-image-title: var(--yc-syntax-keyword);
   --yc-editor-meta-key: var(--yc-syntax-attribute);
   --yc-editor-meta-number: var(--yc-syntax-number);
-  --yc-editor-math-operator: var(--yc-syntax-operator);
+  --yc-editor-math-operator: var(--yc-code-syntax-operator);
   --yc-editor-comment-link: var(--yc-syntax-link);
   --yc-editor-link-bg: rgba(205, 191, 168, 0.14);
   --yc-editor-link-resolved-bg: rgba(205, 191, 168, 0.18);

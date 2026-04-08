@@ -518,19 +518,13 @@
                 @click="handlePreviewNavClick"
               >
                 <div class="mx-auto" :style="displayStyle">
-                  <div class="yc-view-render-shell">
-                    <EditorShell
-                      ref="markdownViewRef"
-                      :model-value="documentMarkdown"
-                      :dark="isDark"
-                      :read-only="true"
-                      :presentation-blocks="semanticBlocks"
-                      :current-block-id="''"
-                      :current-rel-path="activeMarkdownRelPath"
-                      :wiki-link-files="workspaceMarkdownFiles"
-                      :wiki-link-suggestions="getWikiLinkSuggestions"
-                      :wiki-link-suggestion-select="handleWikiLinkSuggestionSelect"
-                    />
+                  <div class="yc-view-render-shell is-readonly-view">
+                    <div
+                      data-preview="1"
+                      class="markdown-render"
+                      :class="`markdown-render-${currentThemeMode}`"
+                      v-html="viewRenderedMarkdown"
+                    ></div>
                   </div>
                 </div>
               </div>
@@ -1614,7 +1608,6 @@ const mainRef = ref(null);
 const contentScrollRef = ref(null);
 const markdownEditorRef = ref(null);
 const markdownSourceRef = ref(null);
-const markdownViewRef = ref(null);
 const EMPTY_PRESENTATION_BLOCKS = Object.freeze([]);
 const fileTreeNavRef = ref(null);
 const showEditorDebugPanel = ref(false);
@@ -2252,6 +2245,21 @@ const buildThemeAccentThemeStyle = ({ enabled = false, rgb = null, saturation = 
     editorMetaKeyRgb,
     editorMetaNumberRgb
   } = palette;
+  const blockquoteColor = dark
+    ? `color-mix(in srgb, var(--yc-text-primary) 84%, ${rgbToCss(linkRgb)} 16%)`
+    : `color-mix(in srgb, var(--yc-text-secondary) 84%, ${rgbToCss(linkRgb)} 16%)`;
+  const noteBg = dark
+    ? `color-mix(in srgb, var(--yc-bg-panel-alt) 88%, ${rgbToCss(accentRgb)} 12%)`
+    : `color-mix(in srgb, var(--yc-bg-panel-alt) 94%, ${rgbToCss(accentRgb)} 6%)`;
+  const noteBorder = dark
+    ? `color-mix(in srgb, var(--yc-border-contrast) 52%, ${rgbToCss(accentStrongRgb)} 48%)`
+    : `color-mix(in srgb, var(--yc-border-contrast) 70%, ${rgbToCss(accentStrongRgb)} 30%)`;
+  const previewCalloutBg = dark
+    ? `color-mix(in srgb, var(--yc-bg-panel) 92%, ${rgbToCss(accentRgb)} 8%)`
+    : `color-mix(in srgb, var(--yc-bg-panel) 96%, ${rgbToCss(accentRgb)} 4%)`;
+  const previewCalloutHeadBg = dark
+    ? `color-mix(in srgb, var(--yc-bg-subtle-hover) 76%, ${rgbToCss(accentRgb)} 24%)`
+    : `color-mix(in srgb, var(--yc-bg-subtle-hover) 88%, ${rgbToCss(accentRgb)} 12%)`;
   return {
     "--yc-accent": rgbToCss(accentRgb),
     "--yc-accent-strong": rgbToCss(accentStrongRgb),
@@ -2305,6 +2313,12 @@ const buildThemeAccentThemeStyle = ({ enabled = false, rgb = null, saturation = 
     "--yc-wikilink-color": rgbToCss(linkRgb),
     "--yc-wikilink-bg": "transparent",
     "--yc-wikilink-hover-bg": "transparent",
+    "--yc-wikilink-menu-item-hover-bg": rgbToCss(accentRgb, dark ? 0.22 : 0.16),
+    "--yc-wikilink-menu-item-hover-text": rgbToCss(accentStrongRgb),
+    "--yc-wikilink-menu-item-hover-detail": rgbToCss(accentStrongRgb),
+    "--yc-wikilink-menu-item-hover-meta-bg": rgbToCss(accentRgb, dark ? 0.18 : 0.14),
+    "--yc-wikilink-menu-item-hover-meta-text": rgbToCss(accentStrongRgb),
+    "--yc-wikilink-menu-hint-token": rgbToCss(accentStrongRgb),
     "--yc-wikilink-source-delim": rgbToCss(linkRgb),
     "--yc-wikilink-resolved-color": rgbToCss(linkRgb),
     "--yc-wikilink-resolved-bg": "transparent",
@@ -2313,6 +2327,18 @@ const buildThemeAccentThemeStyle = ({ enabled = false, rgb = null, saturation = 
     "--yc-mode-switch-active-bg": dark ? "#353840" : "#edf2f7",
     "--yc-mode-switch-active-border": dark ? "#4c5160" : "#dbe4ec",
     "--yc-mode-switch-active-text": "var(--yc-text-primary)",
+    "--yc-blockquote-accent": rgbToCss(accentStrongRgb),
+    "--yc-blockquote-border": rgbToCss(accentStrongRgb),
+    "--yc-blockquote-color": blockquoteColor,
+    "--yc-callout-note-bg": noteBg,
+    "--yc-callout-note-border": noteBorder,
+    "--yc-callout-note-title": rgbToCss(accentStrongRgb),
+    "--yc-callout-note-body": blockquoteColor,
+    "--yc-preview-callout-border": noteBorder,
+    "--yc-preview-callout-bg": previewCalloutBg,
+    "--yc-preview-callout-head-border": noteBorder,
+    "--yc-preview-callout-head-bg": previewCalloutHeadBg,
+    "--yc-preview-callout-head-color": rgbToCss(accentStrongRgb),
     "--yc-table-highlight-color": rgbToCss(accentStrongRgb),
     "--yc-table-highlight-bg": rgbToCss(accentRgb, dark ? 0.16 : 0.1),
     "--yc-table-highlight-bg-strong": rgbToCss(accentRgb, dark ? 0.26 : 0.16),
@@ -2690,6 +2716,38 @@ const renderedMarkdown = computed(() => {
   }
 });
 
+const viewModeMarkdown = computed(() => {
+  if (typeof serializeStepsToMarkdown !== "function") {
+    return String(documentMarkdown.value || activeStep.value?.content || "");
+  }
+  const currentStep = activeStep.value && typeof activeStep.value === "object"
+    ? {
+        ...activeStep.value,
+        title: String(activeStep.value.title || ""),
+        subtitle: String(activeStep.value.subtitle || ""),
+        content: String(activeStep.value.content || "")
+      }
+    : null;
+  if (!currentStep) {
+    return String(documentMarkdown.value || "");
+  }
+  return serializeStepsToMarkdown([currentStep]);
+});
+
+const viewRenderedMarkdown = computed(() => {
+  try {
+    return renderMarkdownToHtml({
+      markdown: viewModeMarkdown.value,
+      currentRelPath: activeMarkdownRelPath.value,
+      markdownFiles: workspaceMarkdownFiles.value,
+      workspaceRootPath: storageRootPath.value,
+      renderMathFormula
+    });
+  } catch {
+    return "";
+  }
+});
+
 async function focusStepInEditMode(index) {
   const safeIndex = clamp(Number(index) || 0, 0, Math.max(0, steps.value.length - 1));
   const targetId = steps.value[safeIndex]?.id;
@@ -2751,7 +2809,11 @@ const {
   focusStepInEditMode
 });
 
-const isActiveMarkdownEmpty = computed(() => !String(documentMarkdown.value || "").trim());
+const isActiveMarkdownEmpty = computed(() =>
+  !String(documentMarkdown.value || "")
+    .replace(/[\s\u200B-\u200D\uFEFF]+/g, "")
+    .trim()
+);
 
 const handleEditorSelectionChange = (selection) => {
   editorSelection.value = {
@@ -8158,7 +8220,7 @@ watch([currentId, mode, terminalMaximized, terminalOpen, terminalPanelHeight], (
   });
 });
 
-watch(renderedMarkdown, () => {
+watch(viewRenderedMarkdown, () => {
   nextTick(() => {
     refreshContentProgress();
     if (pendingPreviewHeadingSlug.value) {
