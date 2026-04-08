@@ -52,12 +52,12 @@
   --yc-menu-text: #0f172a;
   --yc-menu-muted: #59697d;
   --yc-menu-separator: #dbe4ec;
-  --yc-wikilink-menu-item-hover-bg: color-mix(in srgb, var(--yc-accent) 18%, transparent);
-  --yc-wikilink-menu-item-hover-text: var(--yc-accent-strong);
-  --yc-wikilink-menu-item-hover-detail: color-mix(in srgb, var(--yc-accent-strong) 74%, var(--yc-text-secondary) 26%);
-  --yc-wikilink-menu-item-hover-meta-bg: color-mix(in srgb, var(--yc-accent) 16%, transparent);
-  --yc-wikilink-menu-item-hover-meta-text: var(--yc-accent-strong);
-  --yc-wikilink-menu-hint-token: var(--yc-accent-strong);
+  --yc-wikilink-menu-item-hover-bg: color-mix(in srgb, var(--yc-link) 18%, transparent);
+  --yc-wikilink-menu-item-hover-text: var(--yc-link-hover);
+  --yc-wikilink-menu-item-hover-detail: color-mix(in srgb, var(--yc-link-hover) 74%, var(--yc-text-secondary) 26%);
+  --yc-wikilink-menu-item-hover-meta-bg: color-mix(in srgb, var(--yc-link) 16%, transparent);
+  --yc-wikilink-menu-item-hover-meta-text: var(--yc-link-hover);
+  --yc-wikilink-menu-hint-token: var(--yc-wikilink-color);
   --yc-tooltip-bg: #f2f5f8;
   --yc-tooltip-border: #d5deea;
   --yc-tooltip-text: #2f3f53;
