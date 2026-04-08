@@ -128,6 +128,30 @@ const normalizePresentationData = (input = {}) => ({
 });
 
 const clampPos = (value, length) => Math.max(0, Math.min(Number(length || 0), Number(value || 0)));
+const resolveInlineWidgetMountOutsideHiddenBlock = (docLengthInput, fromInput, toInput) => {
+  const docLength = Math.max(0, Number(docLengthInput || 0));
+  const from = clampPos(fromInput, docLength);
+  const to = Math.max(from, clampPos(toInput, docLength));
+
+  if (to < docLength) {
+    return {
+      pos: clampPos(to + 1, docLength),
+      side: -1
+    };
+  }
+
+  if (from > 0) {
+    return {
+      pos: clampPos(from - 1, docLength),
+      side: 1
+    };
+  }
+
+  return {
+    pos: from,
+    side: -1
+  };
+};
 const blockIdentityOf = (block) => {
   const explicitId = String(block?.id || "");
   if (explicitId) {
@@ -2611,10 +2635,12 @@ const buildDecorations = (view, blocks, currentBlockId) => {
         );
         const isImageSourceAnchorLine = hideImageSourceLines && lineNumber === lineRange.fromLine;
         const isImageSourceHiddenLine = hideImageSourceLines && !isImageSourceAnchorLine;
-        const isMathSourceAnchorLine = hideMathSourceLines && lineNumber === lineRange.fromLine;
-        const isMathSourceHiddenLine = hideMathSourceLines && !isMathSourceAnchorLine;
-        const isTableSourceAnchorLine = hideTableSourceLines && lineNumber === lineRange.fromLine;
-        const isTableSourceHiddenLine = hideTableSourceLines && !isTableSourceAnchorLine;
+        // For collapsed math/table blocks we hide every source line and mount widgets outside
+        // source range, so no anchor line should keep vertical space.
+        const isMathSourceAnchorLine = false;
+        const isMathSourceHiddenLine = hideMathSourceLines;
+        const isTableSourceAnchorLine = false;
+        const isTableSourceHiddenLine = hideTableSourceLines;
         const className = [
           baseClass,
           isImageSourceAnchorLine ? "cm-block-image-source-anchor" : "",
@@ -2700,18 +2726,30 @@ const buildDecorations = (view, blocks, currentBlockId) => {
       if (blockType === "math_block") {
         const attrs = block?.attrs || {};
         const formula = String(attrs.formula || "").trim();
+        let widgetPos = blockFrom;
+        let widgetSide = -1;
+        if (hideMathSourceLines) {
+          const mount = resolveInlineWidgetMountOutsideHiddenBlock(docLength, blockFrom, blockTo);
+          widgetPos = mount.pos;
+          widgetSide = mount.side;
+        }
         decorations.push(
           Decoration.widget({
             widget: new MathBlockWidget({ formula, blockId: mathExpandKey, isExpanded: isMathExpanded }),
-            side: -1
-          }).range(blockFrom)
+            side: widgetSide
+          }).range(widgetPos)
         );
       }
 
       if (blockType === "table") {
         const rawText = String(block?.rawText || "");
-        const widgetPos = isTableExpanded ? blockTo : blockFrom;
-        const widgetSide = isTableExpanded ? 1 : -1;
+        let widgetPos = isTableExpanded ? blockTo : blockFrom;
+        let widgetSide = isTableExpanded ? 1 : -1;
+        if (hideTableSourceLines) {
+          const mount = resolveInlineWidgetMountOutsideHiddenBlock(docLength, blockFrom, blockTo);
+          widgetPos = mount.pos;
+          widgetSide = mount.side;
+        }
         decorations.push(
           Decoration.widget({
             widget: new TableBlockWidget({
