@@ -43,10 +43,11 @@ const KEYBOARD_NAVIGABLE_SPECIAL_BLOCK_TYPES = new Set([
   "table"
 ]);
 
-const isEditorReadOnly = (view) => Boolean(
-  view?.state?.facet?.(EditorState.readOnly)
-  || view?.state?.readOnly
+const isEditorStateReadOnly = (state) => Boolean(
+  state?.facet?.(EditorState.readOnly)
+  || state?.readOnly
 );
+const isEditorReadOnly = (view) => isEditorStateReadOnly(view?.state);
 
 let presentationRuntimeOptions = {
   getCurrentRelPath: null,
@@ -804,6 +805,7 @@ const moveCursorOutsideTableFromCellEditor = (cellEditor, direction = 1) => {
   if (!blockRange) {
     return false;
   }
+  cellEditor.setAttribute(TABLE_CELL_SKIP_FOCUSOUT_COMMIT_ATTR, "1");
 
   const text = markdownFromTableCellEditor(cellEditor);
   setTableCellEditorSourceText(cellEditor, text);
@@ -830,14 +832,19 @@ const moveCursorOutsideTableFromCellEditor = (cellEditor, direction = 1) => {
     }
   }
 
-  cellEditor.setAttribute(TABLE_CELL_SKIP_FOCUSOUT_COMMIT_ATTR, "1");
+  try {
+    cellEditor.blur();
+  } catch {
+    // ignore
+  }
   const docLength = Number(view.state.doc.length || 0);
-  const cursor = cursorOutsideRange(
+  const cursorRaw = cursorOutsideRange(
     docLength,
     blockRange.from,
     clampPos(persistedBlockTo, docLength),
     direction
   );
+  const cursor = resolveNearestVisibleCursorPos(view, cursorRaw, direction);
   view.dispatch({
     selection: {
       anchor: cursor,
@@ -1480,11 +1487,12 @@ class MathBlockWidget extends WidgetType {
 }
 
 class TableBlockWidget extends WidgetType {
-  constructor({ rawText = "", blockId = "", isExpanded = false } = {}) {
+  constructor({ rawText = "", blockId = "", isExpanded = false, readOnly = false } = {}) {
     super();
     this.rawText = String(rawText || "");
     this.blockId = String(blockId || "");
     this.isExpanded = Boolean(isExpanded);
+    this.readOnly = Boolean(readOnly);
   }
 
   eq(other) {
@@ -1493,6 +1501,7 @@ class TableBlockWidget extends WidgetType {
       && other.rawText === this.rawText
       && other.blockId === this.blockId
       && other.isExpanded === this.isExpanded
+      && other.readOnly === this.readOnly
     );
   }
 
@@ -1511,6 +1520,7 @@ class TableBlockWidget extends WidgetType {
       fallback.textContent = "Invalid markdown table";
       content.appendChild(fallback);
     } else {
+      const editable = !this.readOnly;
       const tableEl = document.createElement("table");
       tableEl.className = "cm-table-widget-table";
 
@@ -1525,15 +1535,17 @@ class TableBlockWidget extends WidgetType {
 
         const cellEditor = document.createElement("span");
         cellEditor.className = "cm-table-widget-cell-editor";
-        cellEditor.contentEditable = "true";
+        cellEditor.contentEditable = editable ? "true" : "false";
         cellEditor.spellcheck = false;
-        cellEditor.tabIndex = 0;
+        cellEditor.tabIndex = editable ? 0 : -1;
         cellEditor.setAttribute("data-table-edit", "true");
         cellEditor.setAttribute("data-table-block-id", this.blockId);
         cellEditor.setAttribute("data-table-section", "header");
         cellEditor.setAttribute("data-table-col-index", String(index));
         renderTableCellEditorFromSource(cellEditor, cellText);
-        bindTableCellEditorDomEvents(cellEditor);
+        if (editable) {
+          bindTableCellEditorDomEvents(cellEditor);
+        }
         th.appendChild(cellEditor);
 
         const colHandle = document.createElement("button");
@@ -1563,16 +1575,18 @@ class TableBlockWidget extends WidgetType {
 
           const cellEditor = document.createElement("span");
           cellEditor.className = "cm-table-widget-cell-editor";
-          cellEditor.contentEditable = "true";
+          cellEditor.contentEditable = editable ? "true" : "false";
           cellEditor.spellcheck = false;
-          cellEditor.tabIndex = 0;
+          cellEditor.tabIndex = editable ? 0 : -1;
           cellEditor.setAttribute("data-table-edit", "true");
           cellEditor.setAttribute("data-table-block-id", this.blockId);
           cellEditor.setAttribute("data-table-section", "body");
           cellEditor.setAttribute("data-table-row-index", String(rowIndex));
           cellEditor.setAttribute("data-table-col-index", String(index));
           renderTableCellEditorFromSource(cellEditor, cellText);
-          bindTableCellEditorDomEvents(cellEditor);
+          if (editable) {
+            bindTableCellEditorDomEvents(cellEditor);
+          }
           td.appendChild(cellEditor);
 
           if (index === 0) {
@@ -2700,7 +2714,12 @@ const buildDecorations = (view, blocks, currentBlockId) => {
         const widgetSide = isTableExpanded ? 1 : -1;
         decorations.push(
           Decoration.widget({
-            widget: new TableBlockWidget({ rawText, blockId: tableExpandKey, isExpanded: isTableExpanded }),
+            widget: new TableBlockWidget({
+              rawText,
+              blockId: tableExpandKey,
+              isExpanded: isTableExpanded,
+              readOnly
+            }),
             side: widgetSide
           }).range(widgetPos)
         );
@@ -2791,6 +2810,7 @@ class BlockPresentationPlugin {
     const blocksChanged = nextBlocks !== this.blocks;
     const currentChanged = nextCurrentBlockId !== this.currentBlockId;
     const selectionChanged = update.selectionSet;
+    const readOnlyChanged = isEditorStateReadOnly(update.startState) !== isEditorStateReadOnly(update.state);
     const contextHighlightChanged = updateHasEffect(update, setContextHighlightBlockEffect);
     const imageExpandChanged = updateHasEffect(update, toggleImageExpandEffect);
     const imageWidthChanged = updateHasEffect(update, setImageWidthEffect);
@@ -2804,6 +2824,7 @@ class BlockPresentationPlugin {
         this.decorations = buildDecorations(update.view, this.blocks, this.currentBlockId);
       } else if (
         selectionChanged
+        || readOnlyChanged
         || contextHighlightChanged
         || imageExpandChanged
         || imageWidthChanged
@@ -2948,6 +2969,51 @@ const cursorOutsideRange = (docLengthInput, fromInput, toInput, direction = -1) 
     return from - 1;
   }
   return 0;
+};
+
+const hasVisibleCursorAtPos = (view, posInput) => {
+  const pos = clampPos(posInput, Number(view?.state?.doc?.length || 0));
+  if (!view || typeof view.coordsAtPos !== "function") {
+    return true;
+  }
+  try {
+    return Boolean(view.coordsAtPos(pos));
+  } catch {
+    return false;
+  }
+};
+
+const resolveNearestVisibleCursorPos = (view, posInput, direction = 1) => {
+  const docLength = Number(view?.state?.doc?.length || 0);
+  const start = clampPos(posInput, docLength);
+  if (hasVisibleCursorAtPos(view, start)) {
+    return start;
+  }
+
+  const step = direction < 0 ? -1 : 1;
+  let forward = start;
+  for (let index = 0; index < 256; index += 1) {
+    forward += step;
+    if (forward < 0 || forward > docLength) {
+      break;
+    }
+    if (hasVisibleCursorAtPos(view, forward)) {
+      return forward;
+    }
+  }
+
+  let backward = start;
+  for (let index = 0; index < 256; index += 1) {
+    backward -= step;
+    if (backward < 0 || backward > docLength) {
+      break;
+    }
+    if (hasVisibleCursorAtPos(view, backward)) {
+      return backward;
+    }
+  }
+
+  return start;
 };
 
 const resolveTableBlockRangeById = (view, blockId) => {
@@ -3721,7 +3787,8 @@ const presentationMouseDownHandler = (event, view) => {
     );
     if (tableBlock) {
       const docLength = Number(view.state.doc.length || 0);
-      const cursor = cursorOutsideRange(docLength, tableBlock.from, tableBlock.to, 1);
+      const cursorRaw = cursorOutsideRange(docLength, tableBlock.from, tableBlock.to, 1);
+      const cursor = resolveNearestVisibleCursorPos(view, cursorRaw, 1);
       view.dispatch({
         selection: {
           anchor: cursor,
@@ -3983,8 +4050,16 @@ const presentationClickHandler = (event, view) => {
       const selection = (
         isExpanded && blockRange
           ? {
-              anchor: cursorOutsideRange(docLength, blockRange.from, blockRange.to, -1),
-              head: cursorOutsideRange(docLength, blockRange.from, blockRange.to, -1)
+              anchor: resolveNearestVisibleCursorPos(
+                view,
+                cursorOutsideRange(docLength, blockRange.from, blockRange.to, -1),
+                -1
+              ),
+              head: resolveNearestVisibleCursorPos(
+                view,
+                cursorOutsideRange(docLength, blockRange.from, blockRange.to, -1),
+                -1
+              )
             }
           : null
       );
@@ -4018,8 +4093,16 @@ const presentationClickHandler = (event, view) => {
       const selection = (
         isExpanded && blockRange
           ? {
-              anchor: cursorOutsideRange(docLength, blockRange.from, blockRange.to, -1),
-              head: cursorOutsideRange(docLength, blockRange.from, blockRange.to, -1)
+              anchor: resolveNearestVisibleCursorPos(
+                view,
+                cursorOutsideRange(docLength, blockRange.from, blockRange.to, -1),
+                -1
+              ),
+              head: resolveNearestVisibleCursorPos(
+                view,
+                cursorOutsideRange(docLength, blockRange.from, blockRange.to, -1),
+                -1
+              )
             }
           : null
       );
