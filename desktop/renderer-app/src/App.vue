@@ -385,8 +385,8 @@
             <button
               type="button"
               class="term-window-btn term-tip-btn file-sidebar-tool-btn workspace-footer-tool-btn"
-              data-tip="工作区设置"
-              aria-label="工作区设置"
+              :data-tip="localeText('工作区设置', 'Workspace Settings')"
+              :aria-label="localeText('工作区设置', 'Workspace Settings')"
               @click.stop="openSettingsWindow('general')"
             >
               <AppIcon name="settings" class="chrome-icon file-sidebar-icon workspace-footer-icon" />
@@ -1104,7 +1104,7 @@
             @click="setWorkspaceMode('source')"
           >
             <AppIcon name="code" class="mode-switch-icon" />
-            <span class="mode-switch-label">源码</span>
+            <span class="mode-switch-label">{{ localeText("源码", "Source") }}</span>
           </button>
           <span class="mode-switch-divider" aria-hidden="true"></span>
           <button
@@ -1114,7 +1114,7 @@
             @click="setWorkspaceMode('preview')"
           >
             <AppIcon name="eye" class="mode-switch-icon" />
-            <span class="mode-switch-label">预览</span>
+            <span class="mode-switch-label">{{ localeText("预览", "Preview") }}</span>
           </button>
           <span class="mode-switch-divider" aria-hidden="true"></span>
           <button
@@ -1125,7 +1125,7 @@
             @click="setWorkspaceMode('view')"
           >
             <AppIcon name="whiteboard" class="mode-switch-icon" />
-            <span class="mode-switch-label">展示</span>
+            <span class="mode-switch-label">{{ localeText("展示", "Present") }}</span>
           </button>
         </div>
       </div>
@@ -1179,9 +1179,9 @@
         @mousedown.stop
       >
         <aside class="settings-window-sidebar" :class="isDark ? 'is-dark' : ''">
-          <div class="settings-window-sidebar-title">设置</div>
+          <div class="settings-window-sidebar-title">{{ localeText("设置", "Settings") }}</div>
           <button
-            v-for="section in SETTINGS_SECTIONS"
+            v-for="section in settingsSections"
             :key="section.id"
             type="button"
             class="settings-window-nav-item"
@@ -1201,7 +1201,7 @@
             type="button"
             class="settings-window-close"
             :class="isDark ? 'is-dark' : ''"
-            aria-label="关闭设置"
+            :aria-label="localeText('关闭设置', 'Close Settings')"
             @click="closeSettingsWindow"
           >
             <AppIcon name="close" class="settings-window-close-icon" />
@@ -1211,26 +1211,26 @@
             <template v-if="settingsWindow.section === 'general'">
               <div class="settings-window-card" :class="isDark ? 'is-dark' : ''">
                 <div class="settings-window-card-header">
-                  <div class="settings-window-card-title">工作区</div>
-                  <div class="settings-window-card-desc">当前工作区名称和存储位置</div>
+                  <div class="settings-window-card-title">{{ localeText("工作区", "Workspace") }}</div>
+                  <div class="settings-window-card-desc">{{ localeText("当前工作区名称和存储位置", "Current workspace name and storage location") }}</div>
                 </div>
                 <div class="settings-window-card-row">
                   <div class="settings-window-card-row-left">
-                    <div class="settings-window-card-row-label">工作区名称</div>
+                    <div class="settings-window-card-row-label">{{ localeText("工作区名称", "Workspace Name") }}</div>
                     <div class="settings-window-card-row-desc">{{ workspaceDisplayName }}</div>
                   </div>
                   <div class="settings-window-card-row-right"></div>
                 </div>
                 <div class="settings-window-card-row">
                   <div class="settings-window-card-row-left">
-                    <div class="settings-window-card-row-label">存储统计</div>
+                    <div class="settings-window-card-row-label">{{ localeText("存储统计", "Storage Stats") }}</div>
                     <div class="settings-window-card-row-desc">{{ storageStats }}</div>
                   </div>
                   <div class="settings-window-card-row-right"></div>
                 </div>
                 <div class="settings-window-card-row">
                   <div class="settings-window-card-row-left">
-                    <div class="settings-window-card-row-label">存储位置</div>
+                    <div class="settings-window-card-row-label">{{ localeText("存储位置", "Storage Location") }}</div>
                     <div class="settings-window-card-row-desc">{{ storageLocationText }}</div>
                   </div>
                   <div class="settings-window-card-row-right">
@@ -1240,7 +1240,7 @@
                       class="settings-window-button"
                       @click="handleWorkspaceFooterSwitch"
                     >
-                      切换
+                      {{ localeText("切换", "Switch") }}
                     </button>
                     <button
                       v-if="canOpenWorkspaceRoot"
@@ -1249,7 +1249,7 @@
                       :class="isDark ? 'is-dark' : ''"
                       @click="handleWorkspaceFooterOpenDir"
                     >
-                      打开
+                      {{ localeText("打开", "Open") }}
                     </button>
                     <button
                       v-if="canExportCurrentDocumentPdf"
@@ -1258,8 +1258,24 @@
                       :class="isDark ? 'is-dark' : ''"
                       @click="handleExportCurrentDocumentPdf"
                     >
-                      导出 PDF
+                      {{ localeText("导出 PDF", "Export PDF") }}
                     </button>
+                  </div>
+                </div>
+                <div class="settings-window-card-row">
+                  <div class="settings-window-card-row-left">
+                    <div class="settings-window-card-row-label">{{ localeText("语言", "Language") }}</div>
+                    <div class="settings-window-card-row-desc">{{ localeText("切换应用界面语言", "Switch app interface language") }}</div>
+                  </div>
+                  <div class="settings-window-card-row-right">
+                    <select
+                      v-model="appLanguage"
+                      class="settings-window-select"
+                      :aria-label="localeText('应用语言', 'Application Language')"
+                    >
+                      <option value="zh-CN">简体中文</option>
+                      <option value="en-US">English</option>
+                    </select>
                   </div>
                 </div>
               </div>
@@ -1330,7 +1346,7 @@
                 </div>
                 <div class="settings-window-card-row">
                   <div class="settings-window-card-row-left">
-                    <div class="settings-window-card-row-label">收起原始步骤栏</div>
+                    <div class="settings-window-card-row-label">{{ localeText("收起步骤栏", "Collapse Steps Sidebar") }}</div>
                   </div>
                   <div class="settings-window-card-row-right">
                     <input v-model="collapseStepsSidebarInView" type="checkbox" class="settings-window-checkbox" />
@@ -1663,6 +1679,7 @@ const mode = ref("preview");
 const gestureNavigationEnabled = ref(false);
 const collapseHeaderInView = ref(false);
 const collapseStepsSidebarInView = ref(false);
+const appLanguage = ref("zh-CN");
 const availableThemes = computed(() => buildThemeCatalog(importedThemes.value));
 const currentThemeDefinition = computed(() => resolveThemeDefinition(activeThemeId.value, importedThemes.value));
 const currentThemeMode = computed(() => resolveThemeMode(activeThemeId.value, importedThemes.value));
@@ -2235,6 +2252,7 @@ const TERMINAL_MAX_SNAP_GAP = 20;
 const GESTURE_NAV_STORAGE_KEY = "yc-doc.gesture-nav.v1";
 const VIEW_HEADER_COLLAPSE_STORAGE_KEY = "yc-doc.view-header-collapse.v1";
 const VIEW_STEPS_SIDEBAR_COLLAPSE_STORAGE_KEY = "yc-doc.view-steps-sidebar-collapse.v1";
+const APP_LANGUAGE_STORAGE_KEY = "yc-doc.app-language.v1";
 const STORAGE_TREE_STORAGE_KEY = "yc-doc.storage-tree.v1";
 const STORAGE_EXPANDED_STORAGE_KEY = "yc-doc.storage-expanded.v1";
 const STORAGE_SELECTED_STORAGE_KEY = "yc-doc.storage-selected.v1";
@@ -2249,12 +2267,30 @@ const CUSTOM_THEME_STYLE_ID = "yc-doc-custom-theme-style";
 const LEGACY_THEME_COLOR_THEME_ID = "theme-color";
 const DEFAULT_DARK_THEME_ID = "default-dark";
 const ACCENT_CUSTOMIZABLE_THEME_IDS = new Set([DEFAULT_THEME_ID, DEFAULT_DARK_THEME_ID]);
-const SETTINGS_SECTIONS = Object.freeze([
-  { id: "general", label: "通用", icon: "settings" },
-  { id: "editor", label: "编辑器", icon: "tool" },
-  { id: "view", label: "展示模式", icon: "image" },
-  { id: "appearance", label: "外观", icon: "apps" }
+const normalizeAppLanguage = (languageInput = "") => {
+  const normalized = String(languageInput || "").trim().toLowerCase();
+  if (normalized.startsWith("en")) {
+    return "en-US";
+  }
+  return "zh-CN";
+};
+const isEnglishLanguage = computed(() => normalizeAppLanguage(appLanguage.value) === "en-US");
+const localeText = (zhTextInput = "", enTextInput = "") => {
+  const zhText = String(zhTextInput || enTextInput || "");
+  const enText = String(enTextInput || zhTextInput || "");
+  return isEnglishLanguage.value ? enText : zhText;
+};
+const SETTINGS_SECTION_CONFIG = Object.freeze([
+  { id: "general", labelZh: "通用", labelEn: "General", icon: "settings" },
+  { id: "editor", labelZh: "编辑器", labelEn: "Editor", icon: "tool" },
+  { id: "view", labelZh: "展示模式", labelEn: "Presentation", icon: "image" },
+  { id: "appearance", labelZh: "外观", labelEn: "Appearance", icon: "apps" }
 ]);
+const settingsSections = computed(() => SETTINGS_SECTION_CONFIG.map((section) => ({
+  id: section.id,
+  icon: section.icon,
+  label: localeText(section.labelZh, section.labelEn)
+})));
 
 const normalizeLegacyThemeSelection = (themeIdInput = DEFAULT_THEME_ID, legacyModeInput = "dark") => {
   const themeId = String(themeIdInput || "").trim() || DEFAULT_THEME_ID;
@@ -3518,6 +3554,11 @@ if (typeof window !== "undefined") {
     gestureNavigationEnabled.value = localStorage.getItem(GESTURE_NAV_STORAGE_KEY) === "1";
     collapseHeaderInView.value = localStorage.getItem(VIEW_HEADER_COLLAPSE_STORAGE_KEY) === "1";
     collapseStepsSidebarInView.value = localStorage.getItem(VIEW_STEPS_SIDEBAR_COLLAPSE_STORAGE_KEY) === "1";
+    appLanguage.value = normalizeAppLanguage(
+      localStorage.getItem(APP_LANGUAGE_STORAGE_KEY)
+      || (typeof navigator !== "undefined" ? navigator.language : "")
+      || "zh-CN"
+    );
     if (!isDesktopStorage) {
       const rawTree = localStorage.getItem(STORAGE_TREE_STORAGE_KEY);
       const parsedTree = rawTree ? JSON.parse(rawTree) : null;
@@ -3544,6 +3585,7 @@ if (typeof window !== "undefined") {
     gestureNavigationEnabled.value = false;
     collapseHeaderInView.value = false;
     collapseStepsSidebarInView.value = false;
+    appLanguage.value = "zh-CN";
     storageTree.value = null;
     storageFolderExpandedMap.value = { [STORAGE_ROOT_ID]: true };
     selectedStorageNodeId.value = STORAGE_ROOT_ID;
@@ -5426,11 +5468,11 @@ const toggleWorkspaceFooterPanel = (panel) => {
 };
 
 const currentSettingsSectionLabel = computed(() =>
-  SETTINGS_SECTIONS.find((section) => section.id === settingsWindow.value.section)?.label || "设置"
+  settingsSections.value.find((section) => section.id === settingsWindow.value.section)?.label || localeText("设置", "Settings")
 );
 
 const openSettingsWindow = (sectionInput = "general") => {
-  const nextSection = SETTINGS_SECTIONS.some((section) => section.id === sectionInput)
+  const nextSection = SETTINGS_SECTION_CONFIG.some((section) => section.id === sectionInput)
     ? sectionInput
     : "general";
   closeWorkspaceFooterPanel();
@@ -8553,6 +8595,25 @@ watch(collapseStepsSidebarInView, (enabled) => {
     // ignore storage failure
   }
 });
+
+watch(appLanguage, (nextLanguage) => {
+  const normalized = normalizeAppLanguage(nextLanguage);
+  if (normalized !== appLanguage.value) {
+    appLanguage.value = normalized;
+    return;
+  }
+  if (typeof document !== "undefined") {
+    document.documentElement.lang = normalized;
+  }
+  if (typeof window === "undefined") {
+    return;
+  }
+  try {
+    localStorage.setItem(APP_LANGUAGE_STORAGE_KEY, normalized);
+  } catch {
+    // ignore storage failure
+  }
+}, { immediate: true });
 
 watch(storageTree, () => {
   ensureSelectedStorageNodeValid();

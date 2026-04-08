@@ -15,6 +15,8 @@ const BULLET_LIST_PREFIX_PATTERN = /^(\s*)([-+*])\s+/;
 const ORDERED_LIST_PREFIX_PATTERN = /^(\s*)(\d+)([.)])\s+/;
 const TASK_LIST_CHECKBOX_PATTERN = /^(\s*[-+*]\s+\[)( |x|X)(\]\s+)/;
 const OPEN_CODE_FENCE_PATTERN = /^\s{0,3}(`{3,}|~{3,})(.*)$/;
+const SINGLE_LINE_MATH_BLOCK_PATTERN = /^\s{0,3}\$\$(.+?)\$\$\s*$/;
+const OPEN_MATH_FENCE_PATTERN = /^\s{0,3}\$\$\s*$/;
 const INLINE_SYNTAX_TOKEN_TYPES = new Set([
   "em",
   "strong",
@@ -2366,6 +2368,44 @@ const addMathSourceSyntaxDecorationsForBlock = (decorations, doc, fromInput, toI
   }
 };
 
+const addMathSourceSyntaxDecorationsWithoutBlocks = (decorations, doc, docLength) => {
+  const totalLines = Number(doc?.lines || 0);
+  if (totalLines <= 0 || docLength <= 0) {
+    return;
+  }
+
+  let lineNumber = 1;
+  while (lineNumber <= totalLines) {
+    const line = doc.line(lineNumber);
+    const lineText = doc.sliceString(line.from, line.to);
+
+    if (SINGLE_LINE_MATH_BLOCK_PATTERN.test(lineText)) {
+      addMathSourceSyntaxDecorationsForBlock(decorations, doc, line.from, line.to, docLength);
+      lineNumber += 1;
+      continue;
+    }
+
+    if (!OPEN_MATH_FENCE_PATTERN.test(lineText)) {
+      lineNumber += 1;
+      continue;
+    }
+
+    const blockFrom = line.from;
+    let blockEndLine = lineNumber;
+    for (let cursor = lineNumber + 1; cursor <= totalLines; cursor += 1) {
+      blockEndLine = cursor;
+      const nextLine = doc.line(cursor);
+      const nextText = doc.sliceString(nextLine.from, nextLine.to);
+      if (OPEN_MATH_FENCE_PATTERN.test(nextText)) {
+        break;
+      }
+    }
+    const blockTo = doc.line(blockEndLine).to;
+    addMathSourceSyntaxDecorationsForBlock(decorations, doc, blockFrom, blockTo, docLength);
+    lineNumber = blockEndLine + 1;
+  }
+};
+
 export const setPresentationDataEffect = StateEffect.define();
 
 // Toggle hidden-source preview for image/math/table blocks.
@@ -2813,6 +2853,9 @@ const buildDecorations = (view, blocks, currentBlockId) => {
       // Ignore a single-block render error to keep the editor alive.
       console.error("[yc-editor] block presentation error", error, block);
     }
+  }
+  if (!Array.isArray(blocks) || blocks.length === 0) {
+    addMathSourceSyntaxDecorationsWithoutBlocks(decorations, doc, docLength);
   }
   try {
     return Decoration.set(decorations, true);
