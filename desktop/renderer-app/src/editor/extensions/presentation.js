@@ -791,7 +791,7 @@ const moveCursorOutsideTableFromCellEditor = (cellEditor, direction = 1) => {
   }
 
   const cellIdentity = tableCellEditorIdentityOf(cellEditor);
-  if (!cellIdentity?.blockId) {
+  if (!cellIdentity?.blockId || !Number.isFinite(cellIdentity.colIndex)) {
     return false;
   }
 
@@ -800,14 +800,44 @@ const moveCursorOutsideTableFromCellEditor = (cellEditor, direction = 1) => {
     return false;
   }
 
-  commitTableCellEdit(view, cellEditor);
   const blockRange = resolveTableBlockRangeById(view, cellIdentity.blockId);
   if (!blockRange) {
     return false;
   }
 
+  const text = markdownFromTableCellEditor(cellEditor);
+  setTableCellEditorSourceText(cellEditor, text);
+  let persistedBlockTo = blockRange.to;
+  const model = parseMarkdownTableModel(blockRange.rawText);
+  if (model) {
+    const nextModel = updateTableCellByPosition(model, {
+      section: cellIdentity.section,
+      rowIndex: cellIdentity.section === "body" ? cellIdentity.rowIndex : 0,
+      colIndex: cellIdentity.colIndex,
+      text
+    });
+    const nextRaw = serializeMarkdownTableModel(nextModel);
+    if (nextRaw && nextRaw !== blockRange.rawText) {
+      view.dispatch({
+        changes: {
+          from: blockRange.from,
+          to: blockRange.to,
+          insert: nextRaw
+        },
+        userEvent: "input"
+      });
+      persistedBlockTo = blockRange.from + nextRaw.length;
+    }
+  }
+
+  cellEditor.setAttribute(TABLE_CELL_SKIP_FOCUSOUT_COMMIT_ATTR, "1");
   const docLength = Number(view.state.doc.length || 0);
-  const cursor = cursorOutsideRange(docLength, blockRange.from, blockRange.to, direction);
+  const cursor = cursorOutsideRange(
+    docLength,
+    blockRange.from,
+    clampPos(persistedBlockTo, docLength),
+    direction
+  );
   view.dispatch({
     selection: {
       anchor: cursor,
@@ -917,6 +947,57 @@ const normalizeTableCellEditorText = (textInput) =>
     .replace(/\u00A0/g, " ")
     .replace(/\r?\n/g, " ");
 
+const TABLE_CELL_SOURCE_ATTR = "data-table-source-text";
+const TABLE_CELL_SOURCE_MODE_ATTR = "data-table-source-mode";
+const TABLE_CELL_SKIP_FOCUSOUT_COMMIT_ATTR = "data-table-skip-focusout-commit";
+
+const tableCellEditorInSourceMode = (cellEditor) =>
+  cellEditor instanceof HTMLElement
+  && String(cellEditor.getAttribute(TABLE_CELL_SOURCE_MODE_ATTR) || "") === "1";
+
+const setTableCellEditorSourceText = (cellEditor, textInput = "") => {
+  if (!(cellEditor instanceof HTMLElement)) {
+    return "";
+  }
+  const sourceText = normalizeTableCellEditorText(textInput);
+  cellEditor.setAttribute(TABLE_CELL_SOURCE_ATTR, sourceText);
+  return sourceText;
+};
+
+const tableCellEditorSourceTextOf = (cellEditor) => {
+  if (!(cellEditor instanceof HTMLElement)) {
+    return "";
+  }
+  const sourceAttr = cellEditor.getAttribute(TABLE_CELL_SOURCE_ATTR);
+  if (typeof sourceAttr === "string") {
+    return normalizeTableCellEditorText(sourceAttr);
+  }
+  return normalizeTableCellEditorText(cellEditor.textContent || "");
+};
+
+const renderTableCellEditorFromSource = (cellEditor, sourceInput = "") => {
+  if (!(cellEditor instanceof HTMLElement)) {
+    return false;
+  }
+  const sourceText = setTableCellEditorSourceText(cellEditor, sourceInput);
+  cellEditor.innerHTML = renderTableCellInlineHtml(sourceText);
+  cellEditor.setAttribute(TABLE_CELL_SOURCE_MODE_ATTR, "0");
+  return true;
+};
+
+const enterTableCellEditorSourceMode = (cellEditor) => {
+  if (!(cellEditor instanceof HTMLElement) || tableCellEditorInSourceMode(cellEditor)) {
+    return false;
+  }
+
+  const textOffset = resolveTableCellSelectionTextOffset(cellEditor);
+  const sourceText = tableCellEditorSourceTextOf(cellEditor);
+  cellEditor.textContent = sourceText;
+  cellEditor.setAttribute(TABLE_CELL_SOURCE_MODE_ATTR, "1");
+  placeCaretAtTextOffsetInTableCell(cellEditor, textOffset);
+  return true;
+};
+
 const updateTableCellByPosition = (
   modelInput,
   {
@@ -977,6 +1058,10 @@ const bindTableCellEditorDomEvents = (cellEditor) => {
       event.preventDefault();
     }
     stopBubble(event);
+  });
+  cellEditor.addEventListener("focus", (event) => {
+    stopBubble(event);
+    enterTableCellEditorSourceMode(cellEditor);
   });
   cellEditor.addEventListener("keydown", (event) => {
     event.stopPropagation();
@@ -1073,6 +1158,9 @@ const tableInlineNodesToMarkdown = (nodesInput = []) => {
 const markdownFromTableCellEditor = (cellEditor) => {
   if (!(cellEditor instanceof HTMLElement)) {
     return "";
+  }
+  if (tableCellEditorInSourceMode(cellEditor)) {
+    return normalizeTableCellEditorText(cellEditor.textContent || "");
   }
   if (typeof Node === "undefined") {
     return normalizeTableCellEditorText(cellEditor.textContent || "");
@@ -1444,7 +1532,7 @@ class TableBlockWidget extends WidgetType {
         cellEditor.setAttribute("data-table-block-id", this.blockId);
         cellEditor.setAttribute("data-table-section", "header");
         cellEditor.setAttribute("data-table-col-index", String(index));
-        cellEditor.innerHTML = renderTableCellInlineHtml(cellText);
+        renderTableCellEditorFromSource(cellEditor, cellText);
         bindTableCellEditorDomEvents(cellEditor);
         th.appendChild(cellEditor);
 
@@ -1483,7 +1571,7 @@ class TableBlockWidget extends WidgetType {
           cellEditor.setAttribute("data-table-section", "body");
           cellEditor.setAttribute("data-table-row-index", String(rowIndex));
           cellEditor.setAttribute("data-table-col-index", String(index));
-          cellEditor.innerHTML = renderTableCellInlineHtml(cellText);
+          renderTableCellEditorFromSource(cellEditor, cellText);
           bindTableCellEditorDomEvents(cellEditor);
           td.appendChild(cellEditor);
 
@@ -3196,7 +3284,7 @@ const handleTableAction = (view, blockId, actionInput) => {
   return false;
 };
 
-const commitTableCellEdit = (view, editableCell) => {
+const commitTableCellEdit = (view, editableCell, textInput = null) => {
   if (!(editableCell instanceof HTMLElement)) {
     return false;
   }
@@ -3205,7 +3293,10 @@ const commitTableCellEdit = (view, editableCell) => {
   const section = String(editableCell.getAttribute("data-table-section") || "body").toLowerCase();
   const rowIndex = Number(editableCell.getAttribute("data-table-row-index"));
   const colIndex = Number(editableCell.getAttribute("data-table-col-index"));
-  const text = markdownFromTableCellEditor(editableCell);
+  const text = typeof textInput === "string"
+    ? normalizeTableCellEditorText(textInput)
+    : markdownFromTableCellEditor(editableCell);
+  setTableCellEditorSourceText(editableCell, text);
   if (!blockId || !Number.isFinite(colIndex)) {
     return false;
   }
@@ -3539,6 +3630,10 @@ const resolveKeyboardNavigableSpecialBlock = (view, direction = 1) => {
 };
 
 const runSpecialBlockVerticalNavigation = (view, direction = 1) => {
+  if (isEditorReadOnly(view)) {
+    return false;
+  }
+
   const block = resolveKeyboardNavigableSpecialBlock(view, direction);
   if (!block) {
     return false;
@@ -3609,9 +3704,10 @@ const presentationMouseDownHandler = (event, view) => {
   const tableWidgetHost = target.closest(".cm-table-widget");
   const tableSourceAnchorLine = target.closest(".cm-line.cm-block-table-source-anchor");
   if (!tableWidgetHost && tableSourceAnchorLine instanceof Element) {
+    event.preventDefault();
+    event.stopPropagation();
+    clearTableHandleSelection(view);
     if (readOnly) {
-      event.preventDefault();
-      event.stopPropagation();
       return true;
     }
     const posAtMouse = view.posAtCoords({
@@ -3623,12 +3719,19 @@ const presentationMouseDownHandler = (event, view) => {
       view,
       typeof posAtMouse === "number" ? posAtMouse : fallbackCursorPos
     );
-    if (tableBlock?.blockId) {
-      event.preventDefault();
-      event.stopPropagation();
-      clearTableHandleSelection(view);
-      return focusTableBlockCellEditor(view, tableBlock.blockId, 1);
+    if (tableBlock) {
+      const docLength = Number(view.state.doc.length || 0);
+      const cursor = cursorOutsideRange(docLength, tableBlock.from, tableBlock.to, 1);
+      view.dispatch({
+        selection: {
+          anchor: cursor,
+          head: cursor
+        },
+        scrollIntoView: true
+      });
+      view.focus();
     }
+    return true;
   }
 
   const tableEditableCell = target.closest("[data-table-edit='true']");
@@ -3773,7 +3876,19 @@ const presentationFocusOutHandler = (event, view) => {
     return false;
   }
 
-  commitTableCellEdit(view, tableEditableCell);
+  if (String(tableEditableCell.getAttribute(TABLE_CELL_SKIP_FOCUSOUT_COMMIT_ATTR) || "") === "1") {
+    tableEditableCell.removeAttribute(TABLE_CELL_SKIP_FOCUSOUT_COMMIT_ATTR);
+    if (tableEditableCell.isConnected) {
+      renderTableCellEditorFromSource(tableEditableCell, tableCellEditorSourceTextOf(tableEditableCell));
+    }
+    return false;
+  }
+
+  const text = markdownFromTableCellEditor(tableEditableCell);
+  commitTableCellEdit(view, tableEditableCell, text);
+  if (tableEditableCell.isConnected) {
+    renderTableCellEditorFromSource(tableEditableCell, text);
+  }
   return false;
 };
 
