@@ -1,4 +1,4 @@
-import { Compartment } from "@codemirror/state";
+import { Compartment, EditorState } from "@codemirror/state";
 import { openSearchPanel } from "@codemirror/search";
 import { EditorView } from "@codemirror/view";
 import { createEditorState } from "./create-state.js";
@@ -16,6 +16,7 @@ export const createMarkdownEditor = ({
   parent,
   doc = "",
   dark = false,
+  readOnly = false,
   onChange = null,
   onSelectionChange = null,
   onWikiLinkActivate = null,
@@ -26,6 +27,7 @@ export const createMarkdownEditor = ({
   getWikiLinkSuggestions = () => []
 }) => {
   const themeCompartment = new Compartment();
+  const editableCompartment = new Compartment();
   const wikiLinkEventConfig = createWikiLinkEventExtensions({
     getCurrentRelPath: getWikiLinkCurrentRelPath,
     getMarkdownFiles: getWikiLinkMarkdownFiles,
@@ -60,6 +62,10 @@ export const createMarkdownEditor = ({
       ...wikiLinkEventConfig.extensions,
       wikiLinkAutocompleteExtension,
       ...contextMenuExtensions,
+      editableCompartment.of([
+        EditorState.readOnly.of(Boolean(readOnly)),
+        EditorView.editable.of(!readOnly)
+      ]),
       themeCompartment.of(createEditorThemeExtension(Boolean(dark))),
       updateListener
     ]
@@ -103,6 +109,15 @@ export const createMarkdownEditor = ({
   const setDark = (nextDark) => {
     view.dispatch({
       effects: themeCompartment.reconfigure(createEditorThemeExtension(Boolean(nextDark)))
+    });
+  };
+
+  const setReadOnly = (nextReadOnly) => {
+    view.dispatch({
+      effects: editableCompartment.reconfigure([
+        EditorState.readOnly.of(Boolean(nextReadOnly)),
+        EditorView.editable.of(!nextReadOnly)
+      ])
     });
   };
 
@@ -244,6 +259,7 @@ export const createMarkdownEditor = ({
     getDoc,
     setDoc,
     setDark,
+    setReadOnly,
     setPresentationData,
     setCursor,
     describeTextInsertAtCoords,

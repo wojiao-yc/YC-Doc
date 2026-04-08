@@ -518,12 +518,20 @@
                 @click="handlePreviewNavClick"
               >
                 <div class="mx-auto" :style="displayStyle">
-                  <div
-                    data-preview="1"
-                    class="markdown-render"
-                    :class="isDark ? 'markdown-render-dark' : 'markdown-render-light'"
-                    v-html="renderedMarkdown"
-                  ></div>
+                  <div class="yc-view-render-shell">
+                    <EditorShell
+                      ref="markdownViewRef"
+                      :model-value="documentMarkdown"
+                      :dark="isDark"
+                      :read-only="true"
+                      :presentation-blocks="semanticBlocks"
+                      :current-block-id="''"
+                      :current-rel-path="activeMarkdownRelPath"
+                      :wiki-link-files="workspaceMarkdownFiles"
+                      :wiki-link-suggestions="getWikiLinkSuggestions"
+                      :wiki-link-suggestion-select="handleWikiLinkSuggestionSelect"
+                    />
+                  </div>
                 </div>
               </div>
 
@@ -1018,7 +1026,8 @@
           </div>
           <div
             v-if="!visibleEditorHeadingOutline.length && !isInspectorSidebarCollapsed"
-            class="inspector-empty-card rounded-xl border mx-4 mt-4 px-3 py-4 text-xs leading-5"
+            class="inspector-empty-card mx-4 mt-4 px-3 py-4 text-xs leading-5"
+            :class="isActiveMarkdownEmpty ? 'is-plain-empty' : 'rounded-xl border'"
           >
             当前文档还没有可用标题，写入 `#` 到 `######` 标题后会显示在这里。
           </div>
@@ -1233,6 +1242,15 @@
                   >
                     打开当前目录
                   </button>
+                  <button
+                    v-if="canExportCurrentDocumentPdf"
+                    type="button"
+                    class="settings-window-button"
+                    :class="isDark ? 'is-dark' : ''"
+                    @click="handleExportCurrentDocumentPdf"
+                  >
+                    导出为 PDF
+                  </button>
                 </div>
               </div>
             </template>
@@ -1283,70 +1301,8 @@
 
             <template v-else-if="settingsWindow.section === 'appearance'">
               <div class="settings-window-card" :class="isDark ? 'is-dark' : ''">
-                <div class="settings-window-card-title">主题色主题</div>
-                <div class="settings-window-card-text">这是一个单独的主题。只有切换到“主题色主题”时，下面的主题色设置才会生效；其它主题保持自己的原始配色，不会被这里覆盖。</div>
-                <label class="settings-window-toggle-row" :class="isDark ? 'is-dark' : ''">
-                  <span>启用自定义主题色</span>
-                  <input v-model="themeAccentEnabled" type="checkbox" class="settings-window-checkbox" />
-                </label>
-                <div v-if="!isThemeColorThemeActive" class="settings-window-note">
-                  当前主题不是“主题色主题”，下面的颜色设置暂时不会应用。
-                  <button type="button" class="settings-window-link" @click="applyThemeSelection(THEME_COLOR_THEME_ID)">切换到主题色主题</button>
-                </div>
-                <div class="settings-accent-panel" :class="themeAccentControlsEnabled ? '' : 'is-disabled'">
-                  <div class="settings-accent-picker-row">
-                    <label class="settings-accent-swatch-shell" :aria-disabled="!themeAccentEnabled">
-                      <input v-model="themeAccentHex" class="settings-accent-native" type="color" :disabled="!themeAccentControlsEnabled" />
-                      <span class="settings-accent-swatch" :style="{ background: themeAccentHex }"></span>
-                    </label>
-                    <div class="settings-accent-meta">
-                      <div class="settings-accent-label">当前主题色</div>
-                      <div class="settings-accent-value">{{ themeAccentHex.toUpperCase() }}</div>
-                    </div>
-                    <button type="button" class="settings-window-button" :class="isDark ? 'is-dark' : ''" @click="resetThemeAccentTheme">重置</button>
-                  </div>
-
-                  <label class="settings-accent-range-group">
-                    <div class="settings-accent-range-header">
-                      <span>饱和度强度</span>
-                      <span>{{ themeAccentSaturation }}%</span>
-                    </div>
-                    <input
-                      v-model.number="themeAccentSaturation"
-                      class="settings-accent-range"
-                      type="range"
-                      min="65"
-                      max="145"
-                      step="1"
-                      :disabled="!themeAccentControlsEnabled"
-                    />
-                    <div class="settings-accent-range-captions">
-                      <span>柔和</span>
-                      <span>{{ themeAccentPresetLabel }}</span>
-                      <span>鲜明</span>
-                    </div>
-                  </label>
-
-                  <div class="settings-accent-rgb-grid">
-                    <label class="settings-accent-channel">
-                      <span>R</span>
-                      <input v-model.number="themeAccentRed" type="number" min="0" max="255" step="1" :disabled="!themeAccentControlsEnabled" />
-                    </label>
-                    <label class="settings-accent-channel">
-                      <span>G</span>
-                      <input v-model.number="themeAccentGreen" type="number" min="0" max="255" step="1" :disabled="!themeAccentControlsEnabled" />
-                    </label>
-                    <label class="settings-accent-channel">
-                      <span>B</span>
-                      <input v-model.number="themeAccentBlue" type="number" min="0" max="255" step="1" :disabled="!themeAccentControlsEnabled" />
-                    </label>
-                  </div>
-                </div>
-              </div>
-
-              <div class="settings-window-card" :class="isDark ? 'is-dark' : ''">
                 <div class="settings-window-card-title">主题</div>
-                <div class="settings-window-card-text">内置主题会自动从 `src/themes/*/meta.js` 发现，样式文件也会自动加载。新增主题只需要新建目录、写 `index.css` 和 `meta.js`。你仍然可以在这里切换不同主题；“主题色主题”是其中一个可自定义强调色的独立主题，其它主题不会被上面的颜色设置覆盖。</div>
+                <div class="settings-window-card-text">内置主题会自动从 `src/themes/*/meta.js` 发现，样式文件也会自动加载。新增主题只需要新建目录、写 `index.css` 和 `meta.js`。默认浅色和默认深色共用下面这组主题色设置；其它主题保持自己的原始配色，不会被这里覆盖。</div>
                 <div class="settings-theme-grid">
                   <button
                     v-for="theme in availableThemes"
@@ -1380,6 +1336,70 @@
                   <button type="button" class="settings-window-link" @click="setImportedThemeMode(activeImportedTheme.id, 'dark')">深色</button>
                 </div>
                 <div class="settings-window-note">支持导入 `.css` 或 `.json`。JSON 可使用 `name`、`mode`、`css`/`cssText`、`xtermTheme` 字段。</div>
+              </div>
+
+              <div class="settings-window-card" :class="isDark ? 'is-dark' : ''">
+                <div class="settings-window-card-title">默认主题主题色</div>
+                <div class="settings-window-card-text">这组设置直接作用在 `Default Light` 和 `Default Dark` 上。浅色或深色由上面的主题切换决定，不再单独保留“主题色主题”。代码块和数学块语法高亮仍保持独立。</div>
+                <div v-if="!isThemeAccentAdjustableThemeActive" class="settings-window-note">
+                  当前主题不支持自定义主题色。请在上方切换到 `Default Light` 或 `Default Dark` 后再调整。
+                </div>
+                <div class="settings-accent-panel" :class="isThemeAccentAdjustableThemeActive ? '' : 'is-disabled'">
+                  <div class="settings-accent-toolbar">
+                    <label class="settings-window-toggle-row" :class="isDark ? 'is-dark' : ''">
+                      <span>启用自定义主题色</span>
+                      <input v-model="themeAccentEnabled" type="checkbox" class="settings-window-checkbox" :disabled="!isThemeAccentAdjustableThemeActive" />
+                    </label>
+                    <button type="button" class="settings-window-button" :class="isDark ? 'is-dark' : ''" :disabled="!isThemeAccentAdjustableThemeActive" @click="resetThemeAccentTheme">重置</button>
+                  </div>
+
+                  <div class="settings-accent-picker-row">
+                    <label class="settings-accent-swatch-shell" :aria-disabled="!themeAccentPickerEnabled">
+                      <input v-model="themeAccentHex" class="settings-accent-native" type="color" :disabled="!themeAccentPickerEnabled" />
+                      <span class="settings-accent-swatch" :style="{ background: themeAccentHex }"></span>
+                    </label>
+                    <div class="settings-accent-meta">
+                      <div class="settings-accent-label">当前主题色</div>
+                      <div class="settings-accent-value">{{ themeAccentHex.toUpperCase() }}</div>
+                    </div>
+                  </div>
+
+                  <label class="settings-accent-range-group">
+                    <div class="settings-accent-range-header">
+                      <span>饱和度强度</span>
+                      <span>{{ themeAccentSaturation }}%</span>
+                    </div>
+                    <input
+                      v-model.number="themeAccentSaturation"
+                      class="settings-accent-range"
+                      type="range"
+                      min="65"
+                      max="145"
+                      step="1"
+                      :disabled="!themeAccentPickerEnabled"
+                    />
+                    <div class="settings-accent-range-captions">
+                      <span>柔和</span>
+                      <span>{{ themeAccentPresetLabel }}</span>
+                      <span>鲜明</span>
+                    </div>
+                  </label>
+
+                  <div class="settings-accent-rgb-grid">
+                    <label class="settings-accent-channel">
+                      <span>R</span>
+                      <input v-model.number="themeAccentRed" type="number" min="0" max="255" step="1" :disabled="!themeAccentPickerEnabled" />
+                    </label>
+                    <label class="settings-accent-channel">
+                      <span>G</span>
+                      <input v-model.number="themeAccentGreen" type="number" min="0" max="255" step="1" :disabled="!themeAccentPickerEnabled" />
+                    </label>
+                    <label class="settings-accent-channel">
+                      <span>B</span>
+                      <input v-model.number="themeAccentBlue" type="number" min="0" max="255" step="1" :disabled="!themeAccentPickerEnabled" />
+                    </label>
+                  </div>
+                </div>
               </div>
             </template>
           </div>
@@ -1457,6 +1477,7 @@ import {
   DEFAULT_THEME_ID,
   buildThemeCatalog,
   fallbackThemeIdForMode,
+  normalizeThemeMode,
   normalizeImportedThemeDefinition,
   resolveThemeDefinition,
   resolveThemeMode,
@@ -1593,6 +1614,7 @@ const mainRef = ref(null);
 const contentScrollRef = ref(null);
 const markdownEditorRef = ref(null);
 const markdownSourceRef = ref(null);
+const markdownViewRef = ref(null);
 const EMPTY_PRESENTATION_BLOCKS = Object.freeze([]);
 const fileTreeNavRef = ref(null);
 const showEditorDebugPanel = ref(false);
@@ -1902,6 +1924,7 @@ const isDesktopStorage = Boolean(
 );
 const canPickWorkspaceRoot = Boolean(desktopDataBridge?.pickWorkspaceRoot);
 const canOpenWorkspaceRoot = Boolean(desktopDataBridge?.openWorkspaceDir);
+const canExportPdf = Boolean(desktopWindowBridge?.exportPdf);
 const canWorkspaceFileIO = Boolean(
   desktopDataBridge?.readWorkspaceFile
   && desktopDataBridge?.writeWorkspaceFile
@@ -1973,13 +1996,22 @@ const LEGACY_THEME_PREFS_STORAGE_KEY = "yc-doc.theme-prefs.v1";
 const THEME_ACCENT_THEME_STORAGE_KEY = "yc-doc.theme-accent-theme.v1";
 const WIKI_LINK_INDEX_DEBOUNCE_MS = 220;
 const CUSTOM_THEME_STYLE_ID = "yc-doc-custom-theme-style";
-const THEME_COLOR_THEME_ID = "theme-color";
+const LEGACY_THEME_COLOR_THEME_ID = "theme-color";
+const DEFAULT_DARK_THEME_ID = "default-dark";
+const ACCENT_CUSTOMIZABLE_THEME_IDS = new Set([DEFAULT_THEME_ID, DEFAULT_DARK_THEME_ID]);
 const SETTINGS_SECTIONS = Object.freeze([
   { id: "general", label: "通用", icon: "settings" },
   { id: "editor", label: "编辑器", icon: "tool" },
   { id: "view", label: "展示模式", icon: "image" },
   { id: "appearance", label: "外观", icon: "apps" }
 ]);
+
+const normalizeLegacyThemeSelection = (themeIdInput = DEFAULT_THEME_ID, legacyModeInput = "dark") => {
+  const themeId = String(themeIdInput || "").trim() || DEFAULT_THEME_ID;
+  return themeId === LEGACY_THEME_COLOR_THEME_ID
+    ? fallbackThemeIdForMode(legacyModeInput)
+    : themeId;
+};
 
 const { toast, showToast } = useToast();
 const clampByte = (value, fallback = 0) => {
@@ -2131,8 +2163,15 @@ const themeAccentPresetLabel = computed(() => {
   return "标准";
 });
 
-const isThemeColorThemeActive = computed(() => activeThemeId.value === THEME_COLOR_THEME_ID);
-const themeAccentControlsEnabled = computed(() => themeAccentEnabled.value && isThemeColorThemeActive.value);
+const isThemeAccentAdjustableThemeActive = computed(() => ACCENT_CUSTOMIZABLE_THEME_IDS.has(activeThemeId.value));
+const isThemeAccentOverrideActive = computed(() => themeAccentEnabled.value && isThemeAccentAdjustableThemeActive.value);
+const themeAccentPickerEnabled = computed(() => isThemeAccentOverrideActive.value);
+const effectiveThemeAccentRgb = computed(() => ({
+  r: themeAccentRed.value,
+  g: themeAccentGreen.value,
+  b: themeAccentBlue.value
+}));
+const effectiveThemeAccentSaturation = computed(() => themeAccentSaturation.value);
 
 const buildThemeAccentPalette = ({ rgb = null, saturation = 100, dark = false } = {}) => {
   if (!rgb) {
@@ -2224,10 +2263,12 @@ const buildThemeAccentThemeStyle = ({ enabled = false, rgb = null, saturation = 
     "--yc-link-hover": rgbToCss(linkHoverRgb),
     "--yc-link-soft": rgbToCss(linkRgb, dark ? 0.18 : 0.1),
     "--yc-link-decoration": rgbToCss(linkRgb, dark ? 0.7 : 0.5),
-    "--yc-bg-active": rgbToCss(accentRgb, dark ? 0.2 : 0.14),
-    "--yc-bg-selected": rgbToCss(accentRgb, dark ? 0.16 : 0.12),
+    "--yc-bg-active": rgbToCss(accentRgb, dark ? 0.16 : 0.1),
+    "--yc-bg-selected": rgbToCss(accentRgb, dark ? 0.12 : 0.08),
     "--yc-bg-drop-target": rgbToCss(accentRgb, dark ? 0.18 : 0.14),
     "--yc-bg-drop-shadow": rgbToCss(accentStrongRgb, dark ? 0.34 : 0.24),
+    "--yc-editor-selection": rgbToCss(accentRgb, dark ? 0.22 : 0.16),
+    "--yc-editor-selection-native": rgbToCss(accentRgb, dark ? 0.24 : 0.18),
     "--yc-preview-selection": rgbToCss(accentRgb, dark ? 0.18 : 0.14),
     "--yc-input-selection-bg": rgbToCss(accentRgb, dark ? 0.28 : 0.22),
     "--yc-input-selection-text": accentContrast,
@@ -2236,22 +2277,9 @@ const buildThemeAccentThemeStyle = ({ enabled = false, rgb = null, saturation = 
       : `color-mix(in srgb, var(--yc-bg-panel) 86%, ${rgbToCss(accentRgb, 0.08)} 14%)`,
     "--yc-input-focus-border": rgbToCss(accentRgb, dark ? 0.46 : 0.34),
     "--yc-input-focus-ring": `0 0 0 2px ${rgbToCss(accentRgb, dark ? 0.18 : 0.14)}`,
-    "--yc-sidebar-button-hover-bg": rgbToCss(accentRgb, dark ? 0.14 : 0.1),
-    "--yc-sidebar-button-hover-border": rgbToCss(accentRgb, dark ? 0.22 : 0.16),
-    "--yc-sidebar-button-hover-text": dark ? "#f8f3ff" : rgbToCss(accentStrongRgb),
-    "--yc-sidebar-button-active-bg": rgbToCss(accentRgb, dark ? 0.18 : 0.14),
-    "--yc-sidebar-button-active-border": rgbToCss(accentRgb, dark ? 0.28 : 0.22),
-    "--yc-sidebar-button-active-text": dark ? "#efe7ff" : rgbToCss(accentStrongRgb),
-    "--yc-chrome-sidebar-toggle-bg": rgbToCss(accentRgb, dark ? 0.2 : 0.14),
-    "--yc-chrome-sidebar-toggle-border": rgbToCss(accentRgb, dark ? 0.3 : 0.22),
-    "--yc-chrome-sidebar-toggle-text": dark ? "#efe7ff" : rgbToCss(accentStrongRgb),
-    "--yc-chrome-sidebar-toggle-hover-bg": rgbToCss(accentRgb, dark ? 0.26 : 0.18),
-    "--yc-chrome-sidebar-toggle-hover-border": rgbToCss(accentStrongRgb, dark ? 0.4 : 0.28),
-    "--yc-chrome-sidebar-toggle-hover-text": dark ? "#ffffff" : rgbToCss(accentStrongRgb),
     "--yc-editor-markdown-prefix": rgbToCss(accentStrongRgb),
-    "--yc-preview-marker-color": rgbToCss(accentStrongRgb),
     "--yc-annotation-color": rgbToCss(linkRgb),
-    "--yc-annotation-bg": rgbToCss(linkRgb, dark ? 0.16 : 0.12),
+    "--yc-annotation-bg": rgbToCss(linkRgb, dark ? 0.14 : 0.1),
     "--yc-editor-inline-comment": rgbToCss(linkRgb),
     "--yc-editor-inline-comment-bg": rgbToCss(linkRgb, dark ? 0.12 : 0.08),
     "--yc-editor-inline-comment-shadow": rgbToCss(linkRgb, dark ? 0.18 : 0.12),
@@ -2274,12 +2302,25 @@ const buildThemeAccentThemeStyle = ({ enabled = false, rgb = null, saturation = 
     "--yc-editor-comment-link": rgbToCss(linkRgb),
     "--yc-editor-link-bg": rgbToCss(linkRgb, dark ? 0.14 : 0.1),
     "--yc-editor-link-resolved-bg": rgbToCss(linkRgb, dark ? 0.18 : 0.12),
-    "--yc-blockquote-accent": rgbToCss(accentRgb),
+    "--yc-wikilink-color": rgbToCss(linkRgb),
+    "--yc-wikilink-bg": "transparent",
+    "--yc-wikilink-hover-bg": "transparent",
+    "--yc-wikilink-source-delim": rgbToCss(linkRgb),
+    "--yc-wikilink-resolved-color": rgbToCss(linkRgb),
+    "--yc-wikilink-resolved-bg": "transparent",
+    "--yc-wikilink-missing-bg": "transparent",
+    "--yc-wikilink-ambiguous-bg": "transparent",
+    "--yc-mode-switch-active-bg": dark ? "#353840" : "#edf2f7",
+    "--yc-mode-switch-active-border": dark ? "#4c5160" : "#dbe4ec",
+    "--yc-mode-switch-active-text": "var(--yc-text-primary)",
     "--yc-table-highlight-color": rgbToCss(accentStrongRgb),
     "--yc-table-highlight-bg": rgbToCss(accentRgb, dark ? 0.16 : 0.1),
     "--yc-table-highlight-bg-strong": rgbToCss(accentRgb, dark ? 0.26 : 0.16),
     "--yc-table-handle-active": rgbToCss(accentStrongRgb),
     "--yc-table-edge-btn-active": rgbToCss(accentStrongRgb),
+    "--yc-file-tree-search-highlight-bg": rgbToCss(accentRgb, dark ? 0.18 : 0.12),
+    "--yc-file-tree-search-highlight-shadow": `inset 0 -1px 0 ${rgbToCss(accentStrongRgb, dark ? 0.72 : 0.54)}`,
+    "--yc-file-tree-search-highlight-text": dark ? "#f3e8ff" : rgbToCss(accentStrongRgb),
     "--yc-graph-root-node": rgbToCss(accentRgb, dark ? 0.56 : 0.62),
     "--yc-graph-node-fill": rgbToCss(accentRgb, dark ? 0.56 : 0.62),
     "--yc-graph-node-hover": rgbToCss(accentRgb),
@@ -2292,16 +2333,12 @@ const buildThemeAccentThemeStyle = ({ enabled = false, rgb = null, saturation = 
 
 const resolvedXtermTheme = computed(() => {
   const baseTheme = resolveXtermTheme(activeThemeId.value, importedThemes.value);
-  if (!themeAccentControlsEnabled.value) {
+  if (!isThemeAccentOverrideActive.value) {
     return baseTheme;
   }
   const palette = buildThemeAccentPalette({
-    rgb: {
-      r: themeAccentRed.value,
-      g: themeAccentGreen.value,
-      b: themeAccentBlue.value
-    },
-    saturation: themeAccentSaturation.value,
+    rgb: effectiveThemeAccentRgb.value,
+    saturation: effectiveThemeAccentSaturation.value,
     dark: currentThemeMode.value === "dark"
   });
   if (!palette) {
@@ -2318,15 +2355,81 @@ const resolvedXtermTheme = computed(() => {
 });
 
 const appThemeInlineStyle = computed(() => buildThemeAccentThemeStyle({
-  enabled: themeAccentControlsEnabled.value,
-  rgb: {
-    r: themeAccentRed.value,
-    g: themeAccentGreen.value,
-    b: themeAccentBlue.value
-  },
-  saturation: themeAccentSaturation.value,
+  enabled: isThemeAccentOverrideActive.value,
+  rgb: effectiveThemeAccentRgb.value,
+  saturation: effectiveThemeAccentSaturation.value,
   dark: currentThemeMode.value === "dark"
 }));
+
+const bridgedFloatingThemeVars = new Set();
+
+const clearFloatingThemeBridge = () => {
+  if (typeof document === "undefined" || !document.body) {
+    return;
+  }
+  const body = document.body;
+  for (const name of bridgedFloatingThemeVars) {
+    body.style.removeProperty(name);
+  }
+  bridgedFloatingThemeVars.clear();
+  delete body.dataset.theme;
+  delete body.dataset.themeMode;
+  body.classList.remove("dark-ui");
+};
+
+const syncFloatingThemeBridge = () => {
+  if (typeof window === "undefined" || typeof document === "undefined" || !document.body) {
+    return;
+  }
+  const appRoot = document.getElementById("app");
+  if (!appRoot) {
+    return;
+  }
+  const computedStyle = window.getComputedStyle(appRoot);
+  const nextNames = new Set();
+  for (let index = 0; index < computedStyle.length; index += 1) {
+    const propertyName = computedStyle.item(index);
+    if (!propertyName || !propertyName.startsWith("--yc-")) {
+      continue;
+    }
+    const value = computedStyle.getPropertyValue(propertyName);
+    if (!value) {
+      continue;
+    }
+    document.body.style.setProperty(propertyName, value);
+    nextNames.add(propertyName);
+  }
+  for (const propertyName of bridgedFloatingThemeVars) {
+    if (!nextNames.has(propertyName)) {
+      document.body.style.removeProperty(propertyName);
+    }
+  }
+  bridgedFloatingThemeVars.clear();
+  nextNames.forEach((propertyName) => bridgedFloatingThemeVars.add(propertyName));
+  document.body.dataset.theme = String(activeThemeId.value || "");
+  document.body.dataset.themeMode = String(currentThemeMode.value || "light");
+  document.body.classList.toggle("dark-ui", currentThemeMode.value === "dark");
+};
+
+watch(
+  [activeThemeId, currentThemeMode, appThemeInlineStyle],
+  () => {
+    nextTick(syncFloatingThemeBridge);
+  },
+  {
+    immediate: true,
+    deep: true,
+    flush: "post"
+  }
+);
+
+onMounted(() => {
+  syncFloatingThemeBridge();
+});
+
+onBeforeUnmount(() => {
+  clearFloatingThemeBridge();
+});
 
 const persistThemeAccentThemePrefs = () => {
   if (typeof window === "undefined") {
@@ -2347,7 +2450,7 @@ const persistThemeAccentThemePrefs = () => {
 
 const resetThemeAccentTheme = () => {
   themeAccentEnabled.value = false;
-  applyThemeAccentRgb({ r: 138, g: 92, b: 245 });
+  applyThemeAccentRgb({ r: 155, g: 109, b: 72 });
   themeAccentSaturation.value = 100;
   persistThemeAccentThemePrefs();
 };
@@ -2472,6 +2575,13 @@ const getActiveMarkdownEditorApi = () => (
     : markdownEditorRef.value
 );
 
+const canExportCurrentDocumentPdf = computed(() => Boolean(
+  canExportPdf
+  && activeMarkdownRelPath.value
+  && !isImagePreviewTabActive.value
+  && !isWorkspaceGraphTabActive.value
+));
+
 const focusMarkdownPosition = (posInput = 0) => {
   const markdown = String(documentMarkdown.value || "");
   const targetPos = clamp(Number(posInput || 0), 0, markdown.length);
@@ -2566,10 +2676,7 @@ const cycleChromeStatsMetric = () => {
 };
 
 const renderedMarkdown = computed(() => {
-  if (isEditMode.value) {
-    return "";
-  }
-  const content = String(activeStep.value?.content || "");
+  const content = String(documentMarkdown.value || activeStep.value?.content || "");
   try {
     return renderMarkdownToHtml({
       markdown: content,
@@ -2643,6 +2750,8 @@ const {
   showToast,
   focusStepInEditMode
 });
+
+const isActiveMarkdownEmpty = computed(() => !String(documentMarkdown.value || "").trim());
 
 const handleEditorSelectionChange = (selection) => {
   editorSelection.value = {
@@ -3060,6 +3169,21 @@ const applyThemePreference = () => {
 
 if (typeof window !== "undefined") {
   try {
+    let legacyThemeAccentBaseMode = "dark";
+    const rawThemeAccentThemePrefs = localStorage.getItem(THEME_ACCENT_THEME_STORAGE_KEY);
+    if (rawThemeAccentThemePrefs) {
+      const parsedThemeAccentThemePrefs = JSON.parse(rawThemeAccentThemePrefs);
+      themeAccentEnabled.value = parsedThemeAccentThemePrefs?.enabled === true;
+      legacyThemeAccentBaseMode = normalizeThemeMode(parsedThemeAccentThemePrefs?.baseMode || "dark");
+      applyThemeAccentRgb({
+        r: parsedThemeAccentThemePrefs?.r,
+        g: parsedThemeAccentThemePrefs?.g,
+        b: parsedThemeAccentThemePrefs?.b
+      });
+      themeAccentSaturation.value = clamp(Number(parsedThemeAccentThemePrefs?.saturation) || 100, 65, 145);
+    } else {
+      applyThemeAccentRgb({ r: 155, g: 109, b: 72 });
+    }
     const rawThemePrefs = localStorage.getItem(THEME_PREFS_STORAGE_KEY) || localStorage.getItem(LEGACY_THEME_PREFS_STORAGE_KEY);
     if (rawThemePrefs) {
       const parsedThemePrefs = JSON.parse(rawThemePrefs);
@@ -3069,7 +3193,7 @@ if (typeof window !== "undefined") {
       importedThemes.value = nextImportedThemes
         .map((theme) => normalizeImportedThemeDefinition(theme))
         .filter(Boolean);
-      activeThemeId.value = String(parsedThemePrefs?.activeThemeId || DEFAULT_THEME_ID).trim() || DEFAULT_THEME_ID;
+      activeThemeId.value = normalizeLegacyThemeSelection(parsedThemePrefs?.activeThemeId || DEFAULT_THEME_ID, legacyThemeAccentBaseMode);
       if (!buildThemeCatalog(importedThemes.value).some((theme) => theme?.id === activeThemeId.value)) {
         activeThemeId.value = DEFAULT_THEME_ID;
       }
@@ -3079,19 +3203,6 @@ if (typeof window !== "undefined") {
       ) {
         activeThemeId.value = DEFAULT_THEME_ID;
       }
-    }
-    const rawThemeAccentThemePrefs = localStorage.getItem(THEME_ACCENT_THEME_STORAGE_KEY);
-    if (rawThemeAccentThemePrefs) {
-      const parsedThemeAccentThemePrefs = JSON.parse(rawThemeAccentThemePrefs);
-      themeAccentEnabled.value = parsedThemeAccentThemePrefs?.enabled === true;
-      applyThemeAccentRgb({
-        r: parsedThemeAccentThemePrefs?.r,
-        g: parsedThemeAccentThemePrefs?.g,
-        b: parsedThemeAccentThemePrefs?.b
-      });
-      themeAccentSaturation.value = clamp(Number(parsedThemeAccentThemePrefs?.saturation) || 100, 65, 145);
-    } else {
-      applyThemeAccentRgb({ r: 138, g: 92, b: 245 });
     }
     gestureNavigationEnabled.value = localStorage.getItem(GESTURE_NAV_STORAGE_KEY) === "1";
     collapseHeaderInView.value = localStorage.getItem(VIEW_HEADER_COLLAPSE_STORAGE_KEY) === "1";
@@ -3136,9 +3247,9 @@ if (typeof window !== "undefined") {
 applyThemePreference();
 
 watch([themeAccentEnabled, themeAccentRed, themeAccentGreen, themeAccentBlue, themeAccentSaturation], () => {
-  const nextRed = clampByte(themeAccentRed.value, 138);
-  const nextGreen = clampByte(themeAccentGreen.value, 92);
-  const nextBlue = clampByte(themeAccentBlue.value, 245);
+  const nextRed = clampByte(themeAccentRed.value, 155);
+  const nextGreen = clampByte(themeAccentGreen.value, 109);
+  const nextBlue = clampByte(themeAccentBlue.value, 72);
   const nextSaturation = clamp(Number(themeAccentSaturation.value) || 100, 65, 145);
   if (themeAccentRed.value !== nextRed) {
     themeAccentRed.value = nextRed;
@@ -5027,7 +5138,7 @@ const closeSettingsWindow = () => {
 };
 
 const applyThemeSelection = (themeIdInput = DEFAULT_THEME_ID) => {
-  const themeId = String(themeIdInput || "").trim() || DEFAULT_THEME_ID;
+  const themeId = normalizeLegacyThemeSelection(themeIdInput, currentThemeMode.value);
   const nextTheme = resolveThemeDefinition(themeId, importedThemes.value);
   activeThemeId.value = nextTheme?.id || DEFAULT_THEME_ID;
   applyThemePreference();
@@ -7140,6 +7251,10 @@ const insertMarkdownIntoEditorAtPoint = (markdown, xInput = null, yInput = null)
     editorApi.insertMarkdownAtPoint(markdown, x, y);
     return true;
   }
+  if (typeof editorApi?.focusPosition === "function") {
+    const anchor = Number(editorSelection.value?.head ?? editorSelection.value?.anchor ?? 0);
+    editorApi.focusPosition(anchor);
+  }
   editorApi?.insertMarkdown?.(markdown);
   return true;
 };
@@ -8286,6 +8401,140 @@ const handleEditorContextSettingCommand = async (commandIdInput = "") => {
 
 const handleWorkspaceFooterEditorSetting = async (commandIdInput = "") => {
   await handleEditorContextSettingCommand(commandIdInput);
+};
+
+const buildPdfExportCss = () => {
+  if (typeof window === "undefined") {
+    return "";
+  }
+  const root = document.getElementById("app") || document.documentElement;
+  const styles = window.getComputedStyle(root);
+  const readVar = (name, fallback = "") => String(styles.getPropertyValue(name) || fallback).trim() || fallback;
+  return `
+    :root {
+      color-scheme: ${currentThemeMode.value};
+      --pdf-bg: ${readVar("--yc-bg-panel", "#ffffff")};
+      --pdf-text: ${readVar("--yc-text-secondary", "#334155")};
+      --pdf-heading: ${readVar("--yc-heading-color", readVar("--yc-text-primary", "#0f172a"))};
+      --pdf-link: ${readVar("--yc-link", "#46617f")};
+      --pdf-link-decoration: ${readVar("--yc-link-decoration", "rgba(70, 97, 127, 0.46)")};
+      --pdf-code-bg: ${readVar("--yc-preview-code-inline-bg", "#f3f6fa")};
+      --pdf-code-color: ${readVar("--yc-preview-code-inline-color", "#0f172a")};
+      --pdf-table-wrap-border: ${readVar("--yc-preview-table-wrap-border", "#dbe4ec")};
+      --pdf-table-wrap-bg: ${readVar("--yc-preview-table-wrap-bg", "#ffffff")};
+      --pdf-table-cell-border: ${readVar("--yc-preview-table-cell-border", "#dbe4ec")};
+      --pdf-table-head-bg: ${readVar("--yc-preview-table-head-bg", "#f3f6fa")};
+      --pdf-table-head-color: ${readVar("--yc-preview-table-head-color", "#0f172a")};
+      --pdf-blockquote-border: ${readVar("--yc-blockquote-border", readVar("--yc-blockquote-accent", "#94a3b8"))};
+      --pdf-blockquote-color: ${readVar("--yc-blockquote-color", "#334155")};
+      --pdf-mark-bg: ${readVar("--yc-mark-bg", "rgba(255, 221, 51, 0.78)")};
+      --pdf-mark-shadow: ${readVar("--yc-mark-shadow", "rgba(234, 179, 8, 0.42)")};
+      --pdf-annotation: ${readVar("--yc-annotation-color", readVar("--yc-link", "#46617f"))};
+      --pdf-annotation-bg: ${readVar("--yc-annotation-bg", "rgba(70, 97, 127, 0.1)")};
+      --pdf-wikilink: ${readVar("--yc-wikilink-color", readVar("--yc-link", "#46617f"))};
+      --pdf-wikilink-decoration: ${readVar("--yc-wikilink-decoration", readVar("--yc-link-decoration", "rgba(70, 97, 127, 0.46)"))};
+    }
+    body {
+      background: var(--pdf-bg);
+      color: var(--pdf-text);
+      font-family: ${readVar("--yc-font-body", "\"PingFang SC\", \"Microsoft YaHei\", sans-serif")};
+      font-size: ${readVar("--yc-preview-font-size", "14px")};
+      line-height: ${readVar("--yc-preview-line-height", "1.8")};
+      padding: 32px 40px 40px;
+    }
+    .markdown-render { color: var(--pdf-text); }
+    .markdown-render h1, .markdown-render h2, .markdown-render h3, .markdown-render h4, .markdown-render h5, .markdown-render h6 {
+      color: var(--pdf-heading);
+      font-family: ${readVar("--yc-font-heading", "\"PingFang SC\", \"Microsoft YaHei\", sans-serif")};
+    }
+    .markdown-render a,
+    .markdown-render .wiki-link {
+      color: var(--pdf-wikilink);
+      text-decoration: underline;
+      text-decoration-color: var(--pdf-wikilink-decoration);
+      background: transparent;
+    }
+    .markdown-render code {
+      background: var(--pdf-code-bg);
+      color: var(--pdf-code-color);
+      border-radius: ${readVar("--yc-preview-code-inline-radius", "6px")};
+      padding: ${readVar("--yc-preview-code-inline-padding", "0.1em 0.35em")};
+    }
+    .markdown-render pre {
+      overflow: hidden;
+      border-radius: ${readVar("--yc-preview-code-block-radius", "10px")};
+    }
+    .markdown-render .md-table-wrap {
+      border: 1px solid var(--pdf-table-wrap-border);
+      border-radius: 12px;
+      background: var(--pdf-table-wrap-bg);
+      overflow: hidden;
+    }
+    .markdown-render .md-table-wrap table { width: 100%; border-collapse: collapse; }
+    .markdown-render .md-table-wrap th,
+    .markdown-render .md-table-wrap td {
+      border-right: 1px solid var(--pdf-table-cell-border);
+      border-bottom: 1px solid var(--pdf-table-cell-border);
+      padding: 0.52rem 0.68rem;
+      text-align: left;
+      vertical-align: top;
+    }
+    .markdown-render .md-table-wrap th {
+      background: var(--pdf-table-head-bg);
+      color: var(--pdf-table-head-color);
+    }
+    .markdown-render blockquote {
+      border-left: 3px solid var(--pdf-blockquote-border);
+      color: var(--pdf-blockquote-color);
+      padding-left: 0.92rem;
+      margin-left: 0;
+    }
+    .markdown-render mark {
+      background: var(--pdf-mark-bg);
+      box-shadow: inset 0 0 0 1px var(--pdf-mark-shadow);
+      border-radius: 4px;
+      padding: 0 0.12em;
+    }
+    .markdown-render sup, .markdown-render sub, .markdown-render sup a, .markdown-render sub a {
+      color: var(--pdf-annotation);
+    }
+    .markdown-render sup a, .markdown-render sub a {
+      background: var(--pdf-annotation-bg);
+      text-decoration: none;
+      border-radius: 999px;
+      padding: 0 0.28em;
+    }
+    img { max-width: 100%; height: auto; break-inside: avoid; }
+    @page { margin: 16mm 14mm; }
+  `;
+};
+
+const handleExportCurrentDocumentPdf = async () => {
+  if (!canExportCurrentDocumentPdf.value || !desktopWindowBridge?.exportPdf) {
+    showToast("当前环境不支持导出 PDF");
+    return;
+  }
+  const relPath = normalizeRelPath(activeMarkdownRelPath.value);
+  if (!relPath) {
+    showToast("请先打开一个 Markdown 文件");
+    return;
+  }
+  try {
+    const result = await desktopWindowBridge.exportPdf({
+      title: stripMarkdownExtension(basenameOfRelPath(relPath) || "document"),
+      html: `<div class="markdown-render markdown-render-${currentThemeMode.value}">${renderedMarkdown.value}</div>`,
+      cssText: buildPdfExportCss()
+    });
+    if (result?.ok) {
+      showToast(`已导出 PDF: ${String(result.filePath || "")}`);
+      return;
+    }
+    if (!result?.canceled) {
+      showToast(`导出 PDF 失败: ${String(result?.error || "unknown_error")}`);
+    }
+  } catch (error) {
+    showToast(`导出 PDF 失败: ${String(error?.message || error || "unknown_error")}`);
+  }
 };
 
 setContextMenuRuntimeOptions({

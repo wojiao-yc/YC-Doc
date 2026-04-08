@@ -395,6 +395,18 @@
   -webkit-user-select: text;
 }
 
+.yc-editor-host .cm-table-widget-cell-editor::selection,
+.yc-editor-host .cm-table-widget-cell-editor *::selection {
+  background: var(--yc-editor-selection-native, var(--yc-editor-selection));
+  color: inherit;
+}
+
+.yc-editor-host .cm-table-widget-cell-editor::-moz-selection,
+.yc-editor-host .cm-table-widget-cell-editor *::-moz-selection {
+  background: var(--yc-editor-selection-native, var(--yc-editor-selection));
+  color: inherit;
+}
+
 .yc-editor-host .cm-table-widget-table th[data-table-align="left"],
 .yc-editor-host .cm-table-widget-table td[data-table-align="left"] {
   text-align: left;

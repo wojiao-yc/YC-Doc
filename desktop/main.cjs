@@ -766,6 +766,76 @@ ipcMain.handle("desktop:window:open-external", async (_event, payload = {}) => {
   }
 });
 
+ipcMain.handle("desktop:window:export-pdf", async (_event, payload = {}) => {
+  const parentWindow = mainWindow && !mainWindow.isDestroyed() ? mainWindow : undefined;
+  const rawTitle = String(payload?.title || "document").trim() || "document";
+  const suggestedName = `${rawTitle.replace(/[<>:\"/\\|?*\u0000-\u001F]+/g, "-").trim() || "document"}.pdf`;
+  const html = String(payload?.html || "").trim();
+  const cssText = String(payload?.cssText || "").trim();
+  if (!html) {
+    return { ok: false, error: "empty_export_html" };
+  }
+
+  let printWindow = null;
+  try {
+    const saveResult = await dialog.showSaveDialog(parentWindow, {
+      title: "导出为 PDF",
+      defaultPath: path.join(app.getPath("documents"), suggestedName),
+      filters: [{ name: "PDF", extensions: ["pdf"] }]
+    });
+    if (saveResult.canceled || !saveResult.filePath) {
+      return { ok: false, canceled: true };
+    }
+
+    printWindow = new BrowserWindow({
+      show: false,
+      width: 1280,
+      height: 900,
+      backgroundColor: "#ffffff",
+      webPreferences: {
+        sandbox: false
+      }
+    });
+
+    const documentHtml = `<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>${rawTitle}</title>
+    <style>
+      html, body { margin: 0; padding: 0; }
+      body { font-family: "PingFang SC", "Microsoft YaHei", "Noto Sans CJK SC", sans-serif; }
+      ${cssText}
+    </style>
+  </head>
+  <body>
+    ${html}
+  </body>
+</html>`;
+
+    await printWindow.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(documentHtml)}`);
+    const pdfBuffer = await printWindow.webContents.printToPDF({
+      printBackground: true,
+      preferCSSPageSize: true,
+      margins: { top: 0, bottom: 0, left: 0, right: 0 }
+    });
+    fs.writeFileSync(saveResult.filePath, pdfBuffer);
+    return {
+      ok: true,
+      filePath: saveResult.filePath
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      error: String(error?.message || error || "export_pdf_failed")
+    };
+  } finally {
+    if (printWindow && !printWindow.isDestroyed()) {
+      printWindow.close();
+    }
+  }
+});
+
 ipcMain.handle("desktop:data:get-steps-path", async () => ({
   ok: true,
   path: getStepsDataPath()

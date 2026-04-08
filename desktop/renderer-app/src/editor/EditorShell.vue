@@ -1,5 +1,5 @@
 <template>
-  <div ref="shellRef" class="yc-editor-shell" :class="dark ? 'is-dark' : 'is-light'">
+  <div ref="shellRef" class="yc-editor-shell" :class="[dark ? 'is-dark' : 'is-light', readOnly ? 'is-readonly' : '']">
     <div ref="editorHostRef" class="yc-editor-host"></div>
     <div v-if="dropCaretStyle" class="yc-editor-drop-caret" :style="dropCaretStyle"></div>
   </div>
@@ -11,6 +11,10 @@ import { createMarkdownEditor } from "./core/create-editor";
 
 const props = defineProps({
   dark: {
+    type: Boolean,
+    default: false
+  },
+  readOnly: {
     type: Boolean,
     default: false
   },
@@ -127,6 +131,7 @@ onMounted(() => {
     parent: host,
     doc: props.modelValue,
     dark: props.dark,
+    readOnly: props.readOnly,
     onSelectionChange: (selection) => {
       emit("selection-change", selection);
     },
@@ -177,6 +182,16 @@ watch(
   () => props.dark,
   (nextDark) => {
     editorApi?.setDark(nextDark);
+  }
+);
+
+watch(
+  () => props.readOnly,
+  (nextReadOnly) => {
+    editorApi?.setReadOnly?.(nextReadOnly);
+    if (nextReadOnly) {
+      dropCaretStyle.value = null;
+    }
   }
 );
 

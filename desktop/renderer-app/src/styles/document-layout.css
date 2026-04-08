@@ -29,6 +29,19 @@
   min-height: inherit;
 }
 
+.yc-editor-shell.is-readonly .yc-editor-host,
+.yc-editor-shell.is-readonly .yc-editor-host * {
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.yc-editor-shell.is-readonly .yc-editor-host .cm-cursor,
+.yc-editor-shell.is-readonly .yc-editor-host .cm-dropCursor,
+.yc-editor-shell.is-readonly .yc-editor-host .cm-selectionBackground,
+.yc-editor-shell.is-readonly .yc-editor-host .cm-selectionLayer {
+  display: none !important;
+}
+
 .yc-editor-drop-caret {
   position: absolute;
   width: 2px;

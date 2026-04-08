@@ -45,7 +45,7 @@
   justify-content: flex-end;
   min-width: 1rem;
   margin-right: 0.3rem;
-  color: var(--yc-text-muted);
+  color: var(--yc-preview-marker-color, var(--yc-editor-markdown-prefix));
   font-variant-numeric: tabular-nums;
   user-select: none;
   pointer-events: none;
