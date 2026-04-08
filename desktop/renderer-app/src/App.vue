@@ -1197,108 +1197,154 @@
         </aside>
 
         <section class="settings-window-content" :class="isDark ? 'is-dark' : ''">
-          <div class="settings-window-header">
-            <div>
-              <div class="settings-window-eyebrow">工作区设置</div>
-              <h2 class="settings-window-title">{{ currentSettingsSectionLabel }}</h2>
-            </div>
-            <button
-              type="button"
-              class="settings-window-close"
-              :class="isDark ? 'is-dark' : ''"
-              aria-label="关闭设置"
-              @click="closeSettingsWindow"
-            >
-              <AppIcon name="close" class="settings-window-close-icon" />
-            </button>
-          </div>
+          <button
+            type="button"
+            class="settings-window-close"
+            :class="isDark ? 'is-dark' : ''"
+            aria-label="关闭设置"
+            @click="closeSettingsWindow"
+          >
+            <AppIcon name="close" class="settings-window-close-icon" />
+          </button>
 
           <div class="settings-window-scroll">
             <template v-if="settingsWindow.section === 'general'">
               <div class="settings-window-card" :class="isDark ? 'is-dark' : ''">
-                <div class="settings-window-card-title">工作区</div>
-                <div class="settings-window-card-text">当前工作区名称 {{ workspaceDisplayName }}</div>
-                <div class="settings-window-card-text">{{ storageStats }}</div>
-                <div class="settings-window-path">{{ storageLocationText }}</div>
-                <div class="settings-window-actions">
-                  <button
-                    v-if="canPickWorkspaceRoot"
-                    type="button"
-                    class="settings-window-button is-accent"
-                    @click="handleWorkspaceFooterSwitch"
-                  >
-                    切换工作区
-                  </button>
-                  <button
-                    v-if="canOpenWorkspaceRoot"
-                    type="button"
-                    class="settings-window-button"
-                    :class="isDark ? 'is-dark' : ''"
-                    @click="handleWorkspaceFooterOpenDir"
-                  >
-                    打开当前目录
-                  </button>
-                  <button
-                    v-if="canExportCurrentDocumentPdf"
-                    type="button"
-                    class="settings-window-button"
-                    :class="isDark ? 'is-dark' : ''"
-                    @click="handleExportCurrentDocumentPdf"
-                  >
-                    导出为 PDF
-                  </button>
+                <div class="settings-window-card-header">
+                  <div class="settings-window-card-title">工作区</div>
+                  <div class="settings-window-card-desc">当前工作区名称和存储位置</div>
+                </div>
+                <div class="settings-window-card-row">
+                  <div class="settings-window-card-row-left">
+                    <div class="settings-window-card-row-label">工作区名称</div>
+                    <div class="settings-window-card-row-desc">{{ workspaceDisplayName }}</div>
+                  </div>
+                  <div class="settings-window-card-row-right"></div>
+                </div>
+                <div class="settings-window-card-row">
+                  <div class="settings-window-card-row-left">
+                    <div class="settings-window-card-row-label">存储统计</div>
+                    <div class="settings-window-card-row-desc">{{ storageStats }}</div>
+                  </div>
+                  <div class="settings-window-card-row-right"></div>
+                </div>
+                <div class="settings-window-card-row">
+                  <div class="settings-window-card-row-left">
+                    <div class="settings-window-card-row-label">存储位置</div>
+                    <div class="settings-window-card-row-desc">{{ storageLocationText }}</div>
+                  </div>
+                  <div class="settings-window-card-row-right">
+                    <button
+                      v-if="canPickWorkspaceRoot"
+                      type="button"
+                      class="settings-window-button is-accent"
+                      @click="handleWorkspaceFooterSwitch"
+                    >
+                      切换
+                    </button>
+                    <button
+                      v-if="canOpenWorkspaceRoot"
+                      type="button"
+                      class="settings-window-button"
+                      :class="isDark ? 'is-dark' : ''"
+                      @click="handleWorkspaceFooterOpenDir"
+                    >
+                      打开
+                    </button>
+                    <button
+                      v-if="canExportCurrentDocumentPdf"
+                      type="button"
+                      class="settings-window-button"
+                      :class="isDark ? 'is-dark' : ''"
+                      @click="handleExportCurrentDocumentPdf"
+                    >
+                      导出 PDF
+                    </button>
+                  </div>
                 </div>
               </div>
             </template>
 
             <template v-else-if="settingsWindow.section === 'editor'">
               <div class="settings-window-card" :class="isDark ? 'is-dark' : ''">
-                <div class="settings-window-card-title">编辑区布局</div>
-                <div class="settings-window-card-text">当前编辑区宽度 {{ displayWidth }}px</div>
-                <div class="settings-window-actions">
-                  <button type="button" class="settings-window-button" :class="isDark ? 'is-dark' : ''" @click="handleWorkspaceFooterEditorSetting('editor-width-narrower')">收窄</button>
-                  <button type="button" class="settings-window-button" :class="isDark ? 'is-dark' : ''" @click="handleWorkspaceFooterEditorSetting('editor-width-wider')">放宽</button>
-                  <button type="button" class="settings-window-button" :class="isDark ? 'is-dark' : ''" @click="handleWorkspaceFooterEditorSetting('editor-width-reset')">重置</button>
+                <div class="settings-window-card-header">
+                  <div class="settings-window-card-title">编辑区布局</div>
+                  <div class="settings-window-card-desc">调整编辑器宽度</div>
+                </div>
+                <div class="settings-window-card-row">
+                  <div class="settings-window-card-row-left">
+                    <div class="settings-window-card-row-label">编辑区宽度</div>
+                    <div class="settings-window-card-row-desc">当前宽度 {{ displayWidth }}px</div>
+                  </div>
+                  <div class="settings-window-card-row-right">
+                    <button type="button" class="settings-window-button" :class="isDark ? 'is-dark' : ''" @click="handleWorkspaceFooterEditorSetting('editor-width-narrower')">收窄</button>
+                    <button type="button" class="settings-window-button" :class="isDark ? 'is-dark' : ''" @click="handleWorkspaceFooterEditorSetting('editor-width-wider')">放宽</button>
+                    <button type="button" class="settings-window-button" :class="isDark ? 'is-dark' : ''" @click="handleWorkspaceFooterEditorSetting('editor-width-reset')">重置</button>
+                  </div>
                 </div>
               </div>
+
               <div class="settings-window-card" :class="isDark ? 'is-dark' : ''">
-                <div class="settings-window-card-title">调试面板</div>
-                <div class="settings-window-card-text">编辑器底部调试信息面板。</div>
-                <label class="settings-window-toggle-row" :class="isDark ? 'is-dark' : ''">
-                  <span>{{ showEditorDebugPanel ? '已开启' : '已关闭' }}</span>
-                  <input
-                    :checked="showEditorDebugPanel"
-                    type="checkbox"
-                    class="settings-window-checkbox"
-                    @change="handleWorkspaceFooterEditorSetting('editor-debug-toggle')"
-                  />
-                </label>
+                <div class="settings-window-card-header">
+                  <div class="settings-window-card-title">调试面板</div>
+                  <div class="settings-window-card-desc">编辑器底部调试信息面板</div>
+                </div>
+                <div class="settings-window-card-row">
+                  <div class="settings-window-card-row-left">
+                    <div class="settings-window-card-row-label">调试面板</div>
+                    <div class="settings-window-card-row-desc">{{ showEditorDebugPanel ? '已开启' : '已关闭' }}</div>
+                  </div>
+                  <div class="settings-window-card-row-right">
+                    <input
+                      :checked="showEditorDebugPanel"
+                      type="checkbox"
+                      class="settings-window-checkbox"
+                      @change="handleWorkspaceFooterEditorSetting('editor-debug-toggle')"
+                    />
+                  </div>
+                </div>
               </div>
             </template>
 
             <template v-else-if="settingsWindow.section === 'view'">
               <div class="settings-window-card" :class="isDark ? 'is-dark' : ''">
-                <div class="settings-window-card-title">展示模式</div>
-                <div class="settings-window-card-text">控制阅读态的翻页和界面折叠。</div>
-                <label class="settings-window-toggle-row" :class="isDark ? 'is-dark' : ''">
-                  <span>翻页模式</span>
-                  <input v-model="gestureNavigationEnabled" type="checkbox" class="settings-window-checkbox" />
-                </label>
-                <label class="settings-window-toggle-row" :class="isDark ? 'is-dark' : ''">
-                  <span>展示模式收起顶栏</span>
-                  <input v-model="collapseHeaderInView" type="checkbox" class="settings-window-checkbox" />
-                </label>
-                <label class="settings-window-toggle-row" :class="isDark ? 'is-dark' : ''">
-                  <span>展示模式收起原始步骤栏</span>
-                  <input v-model="collapseStepsSidebarInView" type="checkbox" class="settings-window-checkbox" />
-                </label>
+                <div class="settings-window-card-header">
+                  <div class="settings-window-card-title">展示模式</div>
+                  <div class="settings-window-card-desc">阅读态的翻页和界面折叠</div>
+                </div>
+                <div class="settings-window-card-row">
+                  <div class="settings-window-card-row-left">
+                    <div class="settings-window-card-row-label">翻页模式</div>
+                  </div>
+                  <div class="settings-window-card-row-right">
+                    <input v-model="gestureNavigationEnabled" type="checkbox" class="settings-window-checkbox" />
+                  </div>
+                </div>
+                <div class="settings-window-card-row">
+                  <div class="settings-window-card-row-left">
+                    <div class="settings-window-card-row-label">收起顶栏</div>
+                  </div>
+                  <div class="settings-window-card-row-right">
+                    <input v-model="collapseHeaderInView" type="checkbox" class="settings-window-checkbox" />
+                  </div>
+                </div>
+                <div class="settings-window-card-row">
+                  <div class="settings-window-card-row-left">
+                    <div class="settings-window-card-row-label">收起原始步骤栏</div>
+                  </div>
+                  <div class="settings-window-card-row-right">
+                    <input v-model="collapseStepsSidebarInView" type="checkbox" class="settings-window-checkbox" />
+                  </div>
+                </div>
               </div>
             </template>
 
             <template v-else-if="settingsWindow.section === 'appearance'">
               <div class="settings-window-card" :class="isDark ? 'is-dark' : ''">
-                <div class="settings-window-card-title">主题</div>
-                <div class="settings-window-card-text">内置主题会自动从 `src/themes/*/meta.js` 发现，样式文件也会自动加载。新增主题只需要新建目录、写 `index.css` 和 `meta.js`。默认浅色和默认深色共用下面这组主题色设置；其它主题保持自己的原始配色，不会被这里覆盖。</div>
+                <div class="settings-window-card-header">
+                  <div class="settings-window-card-title">主题</div>
+                  <div class="settings-window-card-desc">选择应用的主题风格</div>
+                </div>
                 <div class="settings-theme-grid">
                   <button
                     v-for="theme in availableThemes"
@@ -1313,89 +1359,108 @@
                     <span class="settings-theme-meta">{{ theme.metaLabel }}</span>
                   </button>
                 </div>
-                <div class="settings-window-actions">
-                  <button type="button" class="settings-window-button is-accent" @click="triggerThemeImport">导入主题</button>
-                  <button
-                    v-if="activeImportedTheme"
-                    type="button"
-                    class="settings-window-button"
-                    :class="isDark ? 'is-dark' : ''"
-                    @click="removeImportedTheme(activeImportedTheme.id)"
-                  >
-                    移除当前导入主题
-                  </button>
+                <div class="settings-window-card-row">
+                  <div class="settings-window-card-row-left">
+                    <div class="settings-window-card-row-label">导入主题</div>
+                    <div class="settings-window-card-row-desc">支持 .css 或 .json 格式</div>
+                  </div>
+                  <div class="settings-window-card-row-right">
+                    <button type="button" class="settings-window-button is-accent" @click="triggerThemeImport">导入</button>
+                    <button
+                      v-if="activeImportedTheme"
+                      type="button"
+                      class="settings-window-button"
+                      :class="isDark ? 'is-dark' : ''"
+                      @click="removeImportedTheme(activeImportedTheme.id)"
+                    >
+                      移除
+                    </button>
+                  </div>
                 </div>
-                <div v-if="activeImportedTheme" class="settings-window-note">
-                  当前导入主题基础模式：
-                  <button type="button" class="settings-window-link" @click="setImportedThemeMode(activeImportedTheme.id, 'light')">浅色</button>
-                  /
-                  <button type="button" class="settings-window-link" @click="setImportedThemeMode(activeImportedTheme.id, 'dark')">深色</button>
+                <div v-if="activeImportedTheme" class="settings-window-card-row">
+                  <div class="settings-window-card-row-left">
+                    <div class="settings-window-card-row-label">导入主题基础模式</div>
+                  </div>
+                  <div class="settings-window-card-row-right">
+                    <button type="button" class="settings-window-button" :class="isDark ? 'is-dark' : ''" @click="setImportedThemeMode(activeImportedTheme.id, 'light')">浅色</button>
+                    <button type="button" class="settings-window-button" :class="isDark ? 'is-dark' : ''" @click="setImportedThemeMode(activeImportedTheme.id, 'dark')">深色</button>
+                  </div>
                 </div>
-                <div class="settings-window-note">支持导入 `.css` 或 `.json`。JSON 可使用 `name`、`mode`、`css`/`cssText`、`xtermTheme` 字段。</div>
               </div>
 
               <div class="settings-window-card" :class="isDark ? 'is-dark' : ''">
-                <div class="settings-window-card-title">默认主题主题色</div>
-                <div class="settings-window-card-text">这组设置直接作用在 `Default Light` 和 `Default Dark` 上。浅色或深色由上面的主题切换决定，不再单独保留“主题色主题”。代码块和数学块语法高亮仍保持独立。</div>
-                <div v-if="!isThemeAccentAdjustableThemeActive" class="settings-window-note">
-                  当前主题不支持自定义主题色。请在上方切换到 `Default Light` 或 `Default Dark` 后再调整。
+                <div class="settings-window-card-header">
+                  <div class="settings-window-card-title">默认主题色</div>
+                  <div class="settings-window-card-desc">自定义 Default Light 和 Default Dark 的主题色</div>
                 </div>
-                <div class="settings-accent-panel" :class="isThemeAccentAdjustableThemeActive ? '' : 'is-disabled'">
-                  <div class="settings-accent-toolbar">
-                    <label class="settings-window-toggle-row" :class="isDark ? 'is-dark' : ''">
-                      <span>启用自定义主题色</span>
+                <div v-if="!isThemeAccentAdjustableThemeActive" class="settings-window-card-row">
+                  <div class="settings-window-card-row-left">
+                    <div class="settings-window-card-row-label">提示</div>
+                    <div class="settings-window-card-row-desc">当前主题不支持自定义主题色，请切换到 Default Light 或 Default Dark</div>
+                  </div>
+                  <div class="settings-window-card-row-right"></div>
+                </div>
+                <template v-else>
+                  <div class="settings-window-card-row">
+                    <div class="settings-window-card-row-left">
+                      <div class="settings-window-card-row-label">启用自定义主题色</div>
+                    </div>
+                    <div class="settings-window-card-row-right">
                       <input v-model="themeAccentEnabled" type="checkbox" class="settings-window-checkbox" :disabled="!isThemeAccentAdjustableThemeActive" />
-                    </label>
-                    <button type="button" class="settings-window-button" :class="isDark ? 'is-dark' : ''" :disabled="!isThemeAccentAdjustableThemeActive" @click="resetThemeAccentTheme">重置</button>
-                  </div>
-
-                  <div class="settings-accent-picker-row">
-                    <label class="settings-accent-swatch-shell" :aria-disabled="!themeAccentPickerEnabled">
-                      <input v-model="themeAccentHex" class="settings-accent-native" type="color" :disabled="!themeAccentPickerEnabled" />
-                      <span class="settings-accent-swatch" :style="{ background: themeAccentHex }"></span>
-                    </label>
-                    <div class="settings-accent-meta">
-                      <div class="settings-accent-label">当前主题色</div>
-                      <div class="settings-accent-value">{{ themeAccentHex.toUpperCase() }}</div>
                     </div>
                   </div>
-
-                  <label class="settings-accent-range-group">
-                    <div class="settings-accent-range-header">
-                      <span>饱和度强度</span>
-                      <span>{{ themeAccentSaturation }}%</span>
+                  <div class="settings-window-card-row">
+                    <div class="settings-window-card-row-left">
+                      <div class="settings-window-card-row-label">主题色</div>
+                      <div class="settings-window-card-row-desc">当前: {{ themeAccentHex.toUpperCase() }}</div>
                     </div>
-                    <input
-                      v-model.number="themeAccentSaturation"
-                      class="settings-accent-range"
-                      type="range"
-                      min="65"
-                      max="145"
-                      step="1"
-                      :disabled="!themeAccentPickerEnabled"
-                    />
-                    <div class="settings-accent-range-captions">
-                      <span>柔和</span>
-                      <span>{{ themeAccentPresetLabel }}</span>
-                      <span>鲜明</span>
+                    <div class="settings-window-card-row-right">
+                      <label class="settings-accent-swatch-shell" :aria-disabled="!themeAccentPickerEnabled">
+                        <input v-model="themeAccentHex" class="settings-accent-native" type="color" :disabled="!themeAccentPickerEnabled" />
+                        <span class="settings-accent-swatch" :style="{ background: themeAccentHex }"></span>
+                      </label>
+                      <button type="button" class="settings-window-button" :class="isDark ? 'is-dark' : ''" :disabled="!isThemeAccentAdjustableThemeActive" @click="resetThemeAccentTheme">重置</button>
                     </div>
-                  </label>
-
-                  <div class="settings-accent-rgb-grid">
-                    <label class="settings-accent-channel">
-                      <span>R</span>
-                      <input v-model.number="themeAccentRed" type="number" min="0" max="255" step="1" :disabled="!themeAccentPickerEnabled" />
-                    </label>
-                    <label class="settings-accent-channel">
-                      <span>G</span>
-                      <input v-model.number="themeAccentGreen" type="number" min="0" max="255" step="1" :disabled="!themeAccentPickerEnabled" />
-                    </label>
-                    <label class="settings-accent-channel">
-                      <span>B</span>
-                      <input v-model.number="themeAccentBlue" type="number" min="0" max="255" step="1" :disabled="!themeAccentPickerEnabled" />
-                    </label>
                   </div>
-                </div>
+                  <div class="settings-window-card-row">
+                    <div class="settings-window-card-row-left">
+                      <div class="settings-window-card-row-label">饱和度强度</div>
+                      <div class="settings-window-card-row-desc">{{ themeAccentSaturation }}%</div>
+                    </div>
+                    <div class="settings-window-card-row-right">
+                      <input
+                        v-model.number="themeAccentSaturation"
+                        class="settings-accent-range"
+                        type="range"
+                        min="65"
+                        max="145"
+                        step="1"
+                        :disabled="!themeAccentPickerEnabled"
+                      />
+                    </div>
+                  </div>
+                  <div class="settings-window-card-row">
+                    <div class="settings-window-card-row-left">
+                      <div class="settings-window-card-row-label">RGB 值</div>
+                    </div>
+                    <div class="settings-window-card-row-right">
+                      <div class="settings-accent-rgb-grid">
+                        <label class="settings-accent-channel">
+                          <span>R</span>
+                          <input v-model.number="themeAccentRed" type="number" min="0" max="255" step="1" :disabled="!themeAccentPickerEnabled" />
+                        </label>
+                        <label class="settings-accent-channel">
+                          <span>G</span>
+                          <input v-model.number="themeAccentGreen" type="number" min="0" max="255" step="1" :disabled="!themeAccentPickerEnabled" />
+                        </label>
+                        <label class="settings-accent-channel">
+                          <span>B</span>
+                          <input v-model.number="themeAccentBlue" type="number" min="0" max="255" step="1" :disabled="!themeAccentPickerEnabled" />
+                        </label>
+                      </div>
+                    </div>
+                  </div>
+                </template>
               </div>
             </template>
           </div>
@@ -5884,7 +5949,7 @@ const confirmStorageNodeDeletion = async (node) => {
   if (typeof window === "undefined" || typeof window.confirm !== "function") {
     return true;
   }
-  return window.confirm(`确认删除${targetLabel}“${nodeName}”吗？`);
+  return window.confirm(`确认删除${targetLabel}"${nodeName}"吗？`);
 };
 
 const renameStorageNode = async (nodeId, nextName) => {
