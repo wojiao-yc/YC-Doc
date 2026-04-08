@@ -24,8 +24,8 @@
         <button
           type="button"
           class="term-window-btn term-tip-btn chrome-sidebar-toggle-btn"
-          :data-tip="isFileSidebarHidden ? '展开左边栏' : '收起左边栏'"
-          :aria-label="isFileSidebarHidden ? '展开左边栏' : '收起左边栏'"
+          :data-tip="isFileSidebarHidden ? localeText('展开左边栏', 'Expand Left Sidebar') : localeText('收起左边栏', 'Collapse Left Sidebar')"
+          :aria-label="isFileSidebarHidden ? localeText('展开左边栏', 'Expand Left Sidebar') : localeText('收起左边栏', 'Collapse Left Sidebar')"
           @click="toggleFileSidebarCollapse"
         >
           <AppIcon name="panel-left" :collapsed="isFileSidebarHidden" class="chrome-icon" />
@@ -89,8 +89,8 @@
         <button
           type="button"
           class="term-window-btn term-tip-btn chrome-sidebar-toggle-btn"
-          :data-tip="isSidebarHidden ? '展开右边栏' : '收起右边栏'"
-          :aria-label="isSidebarHidden ? '展开右边栏' : '收起右边栏'"
+          :data-tip="isSidebarHidden ? localeText('展开右边栏', 'Expand Right Sidebar') : localeText('收起右边栏', 'Collapse Right Sidebar')"
+          :aria-label="isSidebarHidden ? localeText('展开右边栏', 'Expand Right Sidebar') : localeText('收起右边栏', 'Collapse Right Sidebar')"
           @click="toggleSidebarCollapse"
         >
           <AppIcon name="panel-right" :collapsed="isSidebarHidden" class="chrome-icon" />
@@ -98,8 +98,8 @@
         <button
           type="button"
           class="term-window-btn term-tip-btn"
-          data-tip="最小化"
-          aria-label="最小化"
+          :data-tip="localeText('最小化', 'Minimize')"
+          :aria-label="localeText('最小化', 'Minimize')"
           @click="handleWindowMinimize"
         >
           <AppIcon name="minimize" class="chrome-icon" />
@@ -107,8 +107,8 @@
         <button
           type="button"
           class="term-window-btn term-tip-btn"
-          :data-tip="windowIsMaximized ? '还原' : '最大化'"
-          :aria-label="windowIsMaximized ? '还原' : '最大化'"
+          :data-tip="windowIsMaximized ? localeText('还原', 'Restore') : localeText('最大化', 'Maximize')"
+          :aria-label="windowIsMaximized ? localeText('还原', 'Restore') : localeText('最大化', 'Maximize')"
           @click="handleWindowToggleMaximize"
         >
           <AppIcon :name="windowIsMaximized ? 'restore' : 'maximize'" class="chrome-icon" />
@@ -116,8 +116,8 @@
         <button
           type="button"
           class="term-window-btn term-window-btn-close term-tip-btn"
-          data-tip="关闭"
-          aria-label="关闭"
+          :data-tip="localeText('关闭', 'Close')"
+          :aria-label="localeText('关闭', 'Close')"
           @click="handleWindowClose"
         >
           <AppIcon name="close" class="chrome-icon" />
@@ -145,8 +145,8 @@
           <button
             type="button"
             class="term-window-btn term-tip-btn file-sidebar-tool-btn"
-            data-tip="新建文件"
-            aria-label="新建文件"
+            :data-tip="localeText('新建文件', 'New File')"
+            :aria-label="localeText('新建文件', 'New File')"
             @click="createStorageFile"
           >
             <AppIcon name="new-file" class="chrome-icon file-sidebar-icon" />
@@ -154,8 +154,8 @@
           <button
             type="button"
             class="term-window-btn term-tip-btn file-sidebar-tool-btn"
-            data-tip="新建文件夹"
-            aria-label="新建文件夹"
+            :data-tip="localeText('新建文件夹', 'New Folder')"
+            :aria-label="localeText('新建文件夹', 'New Folder')"
             @click="createStorageFolder"
           >
             <AppIcon name="new-folder" class="chrome-icon file-sidebar-icon" />
@@ -199,8 +199,8 @@
           <button
             type="button"
             class="term-window-btn term-tip-btn file-sidebar-tool-btn"
-            :data-tip="allStorageFoldersExpanded ? '全部收起' : '全部展开'"
-            :aria-label="allStorageFoldersExpanded ? '全部收起' : '全部展开'"
+            :data-tip="allStorageFoldersExpanded ? localeText('全部收起', 'Collapse All') : localeText('全部展开', 'Expand All')"
+            :aria-label="allStorageFoldersExpanded ? localeText('全部收起', 'Collapse All') : localeText('全部展开', 'Expand All')"
             :disabled="!hasStorageFolders"
             @click="toggleAllStorageFolders"
           >
@@ -209,8 +209,8 @@
           <button
             type="button"
             class="term-window-btn term-tip-btn file-sidebar-tool-btn"
-            data-tip="关系图谱"
-            aria-label="关系图谱"
+            :data-tip="localeText('关系图谱', 'Graph View')"
+            :aria-label="localeText('关系图谱', 'Graph View')"
             @click="openWorkspaceGraph"
           >
             <AppIcon name="graph" class="chrome-icon file-sidebar-icon" />
@@ -223,7 +223,7 @@
             v-model="storageSearchQuery"
             type="search"
             class="file-tree-search-input"
-            placeholder="搜索 Workshop..."
+            :placeholder="localeText('搜索 Workshop...', 'Search Workshop...')"
             spellcheck="false"
           />
         </label>
@@ -317,14 +317,14 @@
                   class="file-tree-search-more"
                   @click.stop="expandStorageSearchMatches(item.id)"
                 >
-                  还有 {{ item.searchOverflowCount }} 处匹配
+                  {{ localeText(`还有 ${item.searchOverflowCount} 处匹配`, `+${item.searchOverflowCount} more matches`) }}
                 </span>
                 <span
                   v-else-if="storageSearchMatchDisplayLimit(item.id) > STORAGE_SEARCH_MATCH_BATCH && item.searchMatchCount > STORAGE_SEARCH_MATCH_BATCH"
                   class="file-tree-search-more"
                   @click.stop="collapseStorageSearchMatches(item.id)"
                 >
-                  收起匹配
+                  {{ localeText('收起匹配', 'Collapse Matches') }}
                 </span>
               </span>
             </span>
@@ -355,8 +355,8 @@
             <button
               type="button"
               class="term-window-btn term-tip-btn file-sidebar-tool-btn workspace-footer-tool-btn"
-              data-tip="工作区信息"
-              aria-label="工作区信息"
+              :data-tip="localeText('工作区信息', 'Workspace Info')"
+              :aria-label="localeText('工作区信息', 'Workspace Info')"
               @click.stop="toggleWorkspaceFooterPanel('info')"
             >
               <AppIcon name="info" class="chrome-icon file-sidebar-icon workspace-footer-icon" />
@@ -366,14 +366,14 @@
               class="workspace-footer-popover"
               :class="isDark ? 'is-dark' : ''"
             >
-              <div class="workspace-footer-popover-title">工作区信息</div>
+              <div class="workspace-footer-popover-title">{{ localeText('工作区信息', 'Workspace Info') }}</div>
               <div class="workspace-footer-info-list">
                 <div class="workspace-footer-info-row">
-                  <span class="workspace-footer-info-label">名称</span>
+                  <span class="workspace-footer-info-label">{{ localeText('名称', 'Name') }}</span>
                   <span class="workspace-footer-info-value">{{ workspaceDisplayName }}</span>
                 </div>
                 <div class="workspace-footer-info-row">
-                  <span class="workspace-footer-info-label">统计</span>
+                  <span class="workspace-footer-info-label">{{ localeText('统计', 'Stats') }}</span>
                   <span class="workspace-footer-info-value">{{ storageStats }}</span>
                 </div>
               </div>
@@ -417,10 +417,10 @@
       <div class="px-4 py-3 border-b themed-divider">
         <div class="flex items-center justify-between gap-3">
           <h2 class="inspector-header-title text-sm font-semibold tracking-tight truncate">
-            目录表
+            {{ localeText('目录表', 'Table of Contents') }}
           </h2>
           <span class="inspector-header-subtitle shrink-0 text-xs">
-            第 {{ currentStepIndex + 1 }} / {{ steps.length }} 页
+            {{ localeText(`第 ${currentStepIndex + 1} / ${steps.length} 页`, `Page ${currentStepIndex + 1} / ${steps.length}`) }}
           </span>
         </div>
 
@@ -472,7 +472,7 @@
           </span>
         </div>
         <div class="flex items-center gap-2 sm:gap-3 flex-nowrap shrink-0">
-          <span class="header-meta-page">第 {{ currentStepIndex + 1 }} / {{ steps.length }} 页</span>
+          <span class="header-meta-page">{{ localeText(`第 ${currentStepIndex + 1} / ${steps.length} 页`, `Page ${currentStepIndex + 1} / ${steps.length}`) }}</span>
         </div>
       </header>
 
@@ -577,7 +577,7 @@
                       v-else
                       class="text-sm opacity-70"
                     >
-                      无法预览当前图片
+                      {{ localeText('无法预览当前图片', 'Cannot preview current image') }}
                     </div>
                   </div>
                 </div>
@@ -701,14 +701,14 @@
             :disabled="isFirstStep"
             class="themed-secondary-btn px-8 py-2 rounded-full text-sm disabled:opacity-30"
           >
-            ← 上一章
+            {{ localeText('← 上一章', '← Previous') }}
           </button>
           <button
             @click="next"
             :disabled="isLastStep"
             class="themed-accent-btn px-8 py-2 rounded-full text-sm font-medium disabled:opacity-30"
           >
-            {{ isLastStep ? '已完成' : '下一章 →' }}
+            {{ isLastStep ? localeText('已完成', 'Completed') : localeText('下一章 →', 'Next →') }}
           </button>
         </div>
       </footer>
@@ -728,8 +728,8 @@
               <button
                 type="button"
                 class="term-icon-btn term-tip-btn"
-                data-tip="新建终端"
-                aria-label="新建终端"
+                :data-tip="localeText('新建终端', 'New Terminal')"
+                :aria-label="localeText('新建终端', 'New Terminal')"
                 @mousedown.stop
                 @click="createDesktopTerminal"
               >
@@ -761,7 +761,7 @@
                 @mousedown.stop
                 @click="openTerminalPanel('terminal')"
               >
-                终端
+                {{ localeText('终端', 'Terminal') }}
               </button>
               <button
                 type="button"
@@ -780,8 +780,8 @@
               v-if="isDesktopPty"
               type="button"
               class="term-icon-btn term-tip-btn"
-              :data-tip="desktopSplit ? '关闭分屏' : '分屏终端'"
-              :aria-label="desktopSplit ? '关闭分屏' : '分屏终端'"
+              :data-tip="desktopSplit ? localeText('关闭分屏', 'Close Split') : localeText('分屏终端', 'Split Terminal')"
+              :aria-label="desktopSplit ? localeText('关闭分屏', 'Close Split') : localeText('分屏终端', 'Split Terminal')"
               @mousedown.stop
               @click="toggleDesktopSplit"
             >
@@ -803,8 +803,8 @@
             <button
               type="button"
               class="term-icon-btn term-tip-btn"
-              data-tip="终止终端"
-              aria-label="终止终端"
+              :data-tip="localeText('终止终端', 'Kill Terminal')"
+              :aria-label="localeText('终止终端', 'Kill Terminal')"
               @mousedown.stop
               @click="terminateCurrentTerminal"
             >
@@ -866,16 +866,16 @@
               </div>
             </div>
             <div v-else ref="terminalViewportRef" class="term-screen flex-1 min-h-0 overflow-y-auto">
-              <div v-if="!termLog.length" class="term-line term-muted">终端已就绪，输入命令后按 Enter 执行。</div>
+              <div v-if="!termLog.length" class="term-line term-muted">{{ localeText('终端已就绪，输入命令后按 Enter 执行。', 'Terminal ready. Enter command and press Enter to execute.') }}</div>
               <div v-for="(line, idx) in termLog" :key="idx" class="term-line">{{ line }}</div>
-              <div v-if="isRunning" class="term-line term-running">[running] 命令执行中...</div>
+              <div v-if="isRunning" class="term-line term-running">[running] {{ localeText('命令执行中...', 'Executing command...') }}</div>
               <div class="term-line term-entry-line">
                 <span class="term-prompt">{{ terminalPrompt }}</span>
                 <input
                   v-model="cmdInput"
                   type="text"
                   class="term-inline-input"
-                  placeholder="输入命令并回车..."
+                  :placeholder="localeText('输入命令并回车...', 'Enter command and press Enter...')"
                   autocomplete="off"
                   spellcheck="false"
                   @keydown="onTerminalInputKeydown"
@@ -909,14 +909,14 @@
             </div>
 
             <div class="runner-actions">
-              <button type="button" class="runner-btn" @click="pingBridge(false)">检查连接</button>
+              <button type="button" class="runner-btn" @click="pingBridge(false)">{{ localeText('检查连接', 'Check Connection') }}</button>
               <span class="runner-status" :class="bridgeOk ? 'is-ok' : 'is-off'">
-                <i></i>{{ bridgeOk ? "Local Runner 已连接" : "Local Runner 未连接" }}
+                <i></i>{{ bridgeOk ? localeText('Local Runner 已连接', 'Local Runner Connected') : localeText('Local Runner 未连接', 'Local Runner Disconnected') }}
               </span>
             </div>
           </div>
           <div v-else class="runner-panel flex-1 min-h-0 overflow-y-auto p-5">
-            <div class="runner-status is-ok"><i></i>桌面版已接入 PTY，无需 Local Runner。</div>
+            <div class="runner-status is-ok"><i></i>{{ localeText('桌面版已接入 PTY，无需 Local Runner。', 'Desktop version has PTY connected, no Local Runner needed.') }}</div>
           </div>
         </div>
       </section>
@@ -951,7 +951,7 @@
         <template v-if="isEditMode">
           <div :class="isInspectorSidebarCollapsed ? 'flex items-center justify-center w-full' : 'flex items-center min-w-0'">
             <h2 class="inspector-header-title text-sm font-semibold tracking-tight truncate">
-              {{ isInspectorSidebarCollapsed ? "目录" : "目录表" }}
+              {{ isInspectorSidebarCollapsed ? localeText('目录', 'Contents') : localeText('目录表', 'Table of Contents') }}
             </h2>
           </div>
         </template>
@@ -963,10 +963,10 @@
               </div>
               <div v-if="!isInspectorSidebarCollapsed" class="min-w-0">
                 <h2 class="inspector-header-title text-sm font-semibold tracking-tight truncate">
-                  步骤栏
+                  {{ localeText('步骤栏', 'Steps') }}
                 </h2>
                 <p class="inspector-header-subtitle text-xs mt-0.5">
-                  {{ `第 ${currentStepIndex + 1} / ${steps.length} 步` }}
+                  {{ localeText(`第 ${currentStepIndex + 1} / ${steps.length} 步`, `Step ${currentStepIndex + 1} / ${steps.length}`) }}
                 </p>
               </div>
             </div>
@@ -1015,7 +1015,7 @@
                 :class="'flex min-h-[30px] items-center is-single-line'"
               >
                 <div class="w-full min-w-0 px-1 py-0.5 text-sm font-medium truncate">
-                  {{ heading.title || "标题" }}
+                  {{ heading.title || localeText('标题', 'Untitled') }}
                 </div>
               </div>
             </div>
@@ -1042,7 +1042,7 @@
         >
           <div class="min-w-0">
             <div class="inspector-section-title text-sm font-semibold truncate">
-              反向链接
+              {{ localeText('反向链接', 'Backlinks') }}
             </div>
           </div>
           <div class="flex items-center gap-2 shrink-0">
@@ -1087,7 +1087,7 @@
           v-else-if="backlinksExpanded"
           class="inspector-empty-card px-2 py-3 text-xs leading-5"
         >
-          当前还没有其它文档链接到这篇笔记。
+          {{ localeText('当前还没有其它文档链接到这篇笔记。', 'No other documents link to this note yet.') }}
         </div>
       </section>
 
@@ -1143,27 +1143,27 @@
     >
       <button type="button" class="term-context-item" role="menuitem" @click="openStorageRenameDialog(storageNodeMenu.nodeId)">
         <AppIcon name="rename" class="storage-context-icon" />
-        <span>重命名</span>
+        <span>{{ localeText('重命名', 'Rename') }}</span>
       </button>
       <button type="button" class="term-context-item" role="menuitem" @click="copyStorageNode(storageNodeMenu.nodeId, 'cut')">
         <AppIcon name="scissor" class="storage-context-icon" />
-        <span>剪切</span>
+        <span>{{ localeText('剪切', 'Cut') }}</span>
       </button>
       <button type="button" class="term-context-item" role="menuitem" @click="copyStorageNode(storageNodeMenu.nodeId, 'copy')">
         <AppIcon name="copy" class="storage-context-icon" />
-        <span>复制</span>
+        <span>{{ localeText('复制', 'Copy') }}</span>
       </button>
       <button type="button" class="term-context-item" role="menuitem" :disabled="!canPasteIntoStorageNode(storageNodeMenu.nodeId)" @click="pasteIntoStorageNode(storageNodeMenu.nodeId)">
         <AppIcon name="paste" class="storage-context-icon" />
-        <span>粘贴</span>
+        <span>{{ localeText('粘贴', 'Paste') }}</span>
       </button>
       <button type="button" class="term-context-item" role="menuitem" :disabled="!canRevealStorageNode(storageNodeMenu.nodeId)" @click="revealStorageNodeInExplorer(storageNodeMenu.nodeId)">
         <AppIcon name="open-folder" class="storage-context-icon" />
-        <span>在文件夹中显示</span>
+        <span>{{ localeText('在文件夹中显示', 'Show in Folder') }}</span>
       </button>
       <button type="button" class="term-context-item is-danger" role="menuitem" @click="deleteStorageNode(storageNodeMenu.nodeId)">
         <AppIcon name="delete" class="storage-context-icon" />
-        <span>删除</span>
+        <span>{{ localeText('删除', 'Delete') }}</span>
       </button>
     </div>
 
@@ -1284,31 +1284,31 @@
             <template v-else-if="settingsWindow.section === 'editor'">
               <div class="settings-window-card" :class="isDark ? 'is-dark' : ''">
                 <div class="settings-window-card-header">
-                  <div class="settings-window-card-title">编辑区布局</div>
-                  <div class="settings-window-card-desc">调整编辑器宽度</div>
+                  <div class="settings-window-card-title">{{ localeText('编辑区布局', 'Editor Layout') }}</div>
+                  <div class="settings-window-card-desc">{{ localeText('调整编辑器宽度', 'Adjust editor width') }}</div>
                 </div>
                 <div class="settings-window-card-row">
                   <div class="settings-window-card-row-left">
-                    <div class="settings-window-card-row-label">编辑区宽度</div>
-                    <div class="settings-window-card-row-desc">当前宽度 {{ displayWidth }}px</div>
+                    <div class="settings-window-card-row-label">{{ localeText('编辑区宽度', 'Editor Width') }}</div>
+                    <div class="settings-window-card-row-desc">{{ localeText(`当前宽度 ${displayWidth}px`, `Current width: ${displayWidth}px`) }}</div>
                   </div>
                   <div class="settings-window-card-row-right">
-                    <button type="button" class="settings-window-button" :class="isDark ? 'is-dark' : ''" @click="handleWorkspaceFooterEditorSetting('editor-width-narrower')">收窄</button>
-                    <button type="button" class="settings-window-button" :class="isDark ? 'is-dark' : ''" @click="handleWorkspaceFooterEditorSetting('editor-width-wider')">放宽</button>
-                    <button type="button" class="settings-window-button" :class="isDark ? 'is-dark' : ''" @click="handleWorkspaceFooterEditorSetting('editor-width-reset')">重置</button>
+                    <button type="button" class="settings-window-button" :class="isDark ? 'is-dark' : ''" @click="handleWorkspaceFooterEditorSetting('editor-width-narrower')">{{ localeText('收窄', 'Narrower') }}</button>
+                    <button type="button" class="settings-window-button" :class="isDark ? 'is-dark' : ''" @click="handleWorkspaceFooterEditorSetting('editor-width-wider')">{{ localeText('放宽', 'Wider') }}</button>
+                    <button type="button" class="settings-window-button" :class="isDark ? 'is-dark' : ''" @click="handleWorkspaceFooterEditorSetting('editor-width-reset')">{{ localeText('重置', 'Reset') }}</button>
                   </div>
                 </div>
               </div>
 
               <div class="settings-window-card" :class="isDark ? 'is-dark' : ''">
                 <div class="settings-window-card-header">
-                  <div class="settings-window-card-title">调试面板</div>
-                  <div class="settings-window-card-desc">编辑器底部调试信息面板</div>
+                  <div class="settings-window-card-title">{{ localeText('调试面板', 'Debug Panel') }}</div>
+                  <div class="settings-window-card-desc">{{ localeText('编辑器底部调试信息面板', 'Editor bottom debug info panel') }}</div>
                 </div>
                 <div class="settings-window-card-row">
                   <div class="settings-window-card-row-left">
-                    <div class="settings-window-card-row-label">调试面板</div>
-                    <div class="settings-window-card-row-desc">{{ showEditorDebugPanel ? '已开启' : '已关闭' }}</div>
+                    <div class="settings-window-card-row-label">{{ localeText('调试面板', 'Debug Panel') }}</div>
+                    <div class="settings-window-card-row-desc">{{ showEditorDebugPanel ? localeText('已开启', 'Enabled') : localeText('已关闭', 'Disabled') }}</div>
                   </div>
                   <div class="settings-window-card-row-right">
                     <input
@@ -1325,12 +1325,12 @@
             <template v-else-if="settingsWindow.section === 'view'">
               <div class="settings-window-card" :class="isDark ? 'is-dark' : ''">
                 <div class="settings-window-card-header">
-                  <div class="settings-window-card-title">展示模式</div>
-                  <div class="settings-window-card-desc">阅读态的翻页和界面折叠</div>
+                  <div class="settings-window-card-title">{{ localeText('展示模式', 'Presentation Mode') }}</div>
+                  <div class="settings-window-card-desc">{{ localeText('阅读态的翻页和界面折叠', 'Paging and UI collapse in reading mode') }}</div>
                 </div>
                 <div class="settings-window-card-row">
                   <div class="settings-window-card-row-left">
-                    <div class="settings-window-card-row-label">翻页模式</div>
+                    <div class="settings-window-card-row-label">{{ localeText('翻页模式', 'Gesture Navigation') }}</div>
                   </div>
                   <div class="settings-window-card-row-right">
                     <input v-model="gestureNavigationEnabled" type="checkbox" class="settings-window-checkbox" />
@@ -1338,7 +1338,7 @@
                 </div>
                 <div class="settings-window-card-row">
                   <div class="settings-window-card-row-left">
-                    <div class="settings-window-card-row-label">收起顶栏</div>
+                    <div class="settings-window-card-row-label">{{ localeText('收起顶栏', 'Collapse Header') }}</div>
                   </div>
                   <div class="settings-window-card-row-right">
                     <input v-model="collapseHeaderInView" type="checkbox" class="settings-window-checkbox" />
@@ -1358,8 +1358,8 @@
             <template v-else-if="settingsWindow.section === 'appearance'">
               <div class="settings-window-card" :class="isDark ? 'is-dark' : ''">
                 <div class="settings-window-card-header">
-                  <div class="settings-window-card-title">主题</div>
-                  <div class="settings-window-card-desc">选择应用的主题风格</div>
+                  <div class="settings-window-card-title">{{ localeText('主题', 'Theme') }}</div>
+                  <div class="settings-window-card-desc">{{ localeText('选择应用的主题风格', 'Choose app theme style') }}</div>
                 </div>
                 <div class="settings-theme-grid">
                   <button
@@ -1377,11 +1377,11 @@
                 </div>
                 <div class="settings-window-card-row">
                   <div class="settings-window-card-row-left">
-                    <div class="settings-window-card-row-label">导入主题</div>
-                    <div class="settings-window-card-row-desc">支持 .css 或 .json 格式</div>
+                    <div class="settings-window-card-row-label">{{ localeText('导入主题', 'Import Theme') }}</div>
+                    <div class="settings-window-card-row-desc">{{ localeText('支持 .css 或 .json 格式', 'Supports .css or .json format') }}</div>
                   </div>
                   <div class="settings-window-card-row-right">
-                    <button type="button" class="settings-window-button" @click="triggerThemeImport">导入</button>
+                    <button type="button" class="settings-window-button" @click="triggerThemeImport">{{ localeText('导入', 'Import') }}</button>
                     <button
                       v-if="activeImportedTheme"
                       type="button"
@@ -1389,17 +1389,17 @@
                       :class="isDark ? 'is-dark' : ''"
                       @click="removeImportedTheme(activeImportedTheme.id)"
                     >
-                      移除
+                      {{ localeText('移除', 'Remove') }}
                     </button>
                   </div>
                 </div>
                 <div v-if="activeImportedTheme" class="settings-window-card-row">
                   <div class="settings-window-card-row-left">
-                    <div class="settings-window-card-row-label">导入主题基础模式</div>
+                    <div class="settings-window-card-row-label">{{ localeText('导入主题基础模式', 'Imported Theme Base Mode') }}</div>
                   </div>
                   <div class="settings-window-card-row-right">
-                    <button type="button" class="settings-window-button" :class="isDark ? 'is-dark' : ''" @click="setImportedThemeMode(activeImportedTheme.id, 'light')">浅色</button>
-                    <button type="button" class="settings-window-button" :class="isDark ? 'is-dark' : ''" @click="setImportedThemeMode(activeImportedTheme.id, 'dark')">深色</button>
+                    <button type="button" class="settings-window-button" :class="isDark ? 'is-dark' : ''" @click="setImportedThemeMode(activeImportedTheme.id, 'light')">{{ localeText('浅色', 'Light') }}</button>
+                    <button type="button" class="settings-window-button" :class="isDark ? 'is-dark' : ''" @click="setImportedThemeMode(activeImportedTheme.id, 'dark')">{{ localeText('深色', 'Dark') }}</button>
                   </div>
                 </div>
               </div>
@@ -1407,18 +1407,18 @@
               <div class="settings-window-card" :class="isDark ? 'is-dark' : ''">
                 <div v-if="!isThemeAccentAdjustableThemeActive" class="settings-window-card-row">
                   <div class="settings-window-card-row-left">
-                    <div class="settings-window-card-row-label">提示</div>
-                    <div class="settings-window-card-row-desc">当前主题不支持自定义主题色，请切换到 Default Light 或 Default Dark</div>
+                    <div class="settings-window-card-row-label">{{ localeText('提示', 'Hint') }}</div>
+                    <div class="settings-window-card-row-desc">{{ localeText('当前主题不支持自定义主题色，请切换到 Default Light 或 Default Dark', 'Current theme does not support custom accent color, please switch to Default Light or Default Dark') }}</div>
                   </div>
                   <div class="settings-window-card-row-right"></div>
                 </div>
                 <template v-else>
                   <div class="settings-window-card-row settings-window-card-row-theme-toggle">
                     <div class="settings-window-card-row-left">
-                      <div class="settings-window-card-title">自定义主题色</div>
+                      <div class="settings-window-card-title">{{ localeText('自定义主题色', 'Custom Accent Color') }}</div>
                     </div>
                     <div class="settings-window-card-row-right">
-                      <button type="button" class="settings-window-button" :disabled="!isThemeAccentAdjustableThemeActive" @click="resetThemeAccentTheme">重置</button>
+                      <button type="button" class="settings-window-button" :disabled="!isThemeAccentAdjustableThemeActive" @click="resetThemeAccentTheme">{{ localeText('重置', 'Reset') }}</button>
                       <input v-model="themeAccentEnabled" type="checkbox" class="settings-window-checkbox" :disabled="!isThemeAccentAdjustableThemeActive" />
                     </div>
                   </div>
@@ -1428,16 +1428,16 @@
                         <div class="settings-theme-color-main">
                           <div class="settings-theme-color-left">
                             <div class="settings-theme-color-title-row">
-                              <span class="settings-window-card-row-label">主题色</span>
+                              <span class="settings-window-card-row-label">{{ localeText('主题色', 'Accent Color') }}</span>
                               <div class="settings-theme-color-title-tools">
                                 <span class="settings-theme-color-mini-preview" :style="{ background: themeAccentHex }"></span>
                                 <button
                                   type="button"
                                   class="term-window-btn term-tip-btn file-sidebar-tool-btn settings-theme-color-eyedropper-btn"
                                   :disabled="!themeAccentPickerEnabled || !themeAccentEyeDropperSupported"
-                                  data-tip="吸管取色"
-                                  aria-label="吸管取色"
-                                  :title="themeAccentEyeDropperSupported ? '吸管取色' : '当前环境不支持吸管取色'"
+                                  :data-tip="localeText('吸管取色', 'Eye Dropper')"
+                                  :aria-label="localeText('吸管取色', 'Eye Dropper')"
+                                  :title="themeAccentEyeDropperSupported ? localeText('吸管取色', 'Eye Dropper') : localeText('当前环境不支持吸管取色', 'Eye dropper not supported in current environment')"
                                   @click="handleThemeAccentEyeDropperPick"
                                 >
                                   <AppIcon name="eyedropper" class="chrome-icon settings-theme-color-eyedropper-icon" />
@@ -1503,7 +1503,7 @@
 
     <div v-if="desktopRenameDialog.open" class="term-rename-mask" @mousedown.self="cancelDesktopRenameDialog">
       <div class="term-rename-card" @mousedown.stop>
-        <div class="term-rename-title">重命名终端</div>
+        <div class="term-rename-title">{{ localeText('重命名终端', 'Rename Terminal') }}</div>
         <input
           ref="desktopRenameInputRef"
           v-model="desktopRenameDialog.value"
@@ -1513,15 +1513,15 @@
           @keydown.esc.prevent="cancelDesktopRenameDialog"
         />
         <div class="term-rename-actions">
-          <button type="button" class="term-rename-btn" @click="cancelDesktopRenameDialog">取消</button>
-          <button type="button" class="term-rename-btn is-primary" @click="confirmDesktopRenameDialog">确定</button>
+          <button type="button" class="term-rename-btn" @click="cancelDesktopRenameDialog">{{ localeText('取消', 'Cancel') }}</button>
+          <button type="button" class="term-rename-btn is-primary" @click="confirmDesktopRenameDialog">{{ localeText('确定', 'Confirm') }}</button>
         </div>
       </div>
     </div>
 
     <div v-if="storageRenameDialog.open" class="term-rename-mask" @mousedown.self="cancelStorageRenameDialog">
       <div class="term-rename-card" @mousedown.stop>
-        <div class="term-rename-title">{{ storageRenameDialog.kind === "folder" ? "重命名文件夹" : "重命名文件" }}</div>
+        <div class="term-rename-title">{{ storageRenameDialog.kind === "folder" ? localeText('重命名文件夹', 'Rename Folder') : localeText('重命名文件', 'Rename File') }}</div>
         <input
           ref="storageRenameInputRef"
           v-model="storageRenameDialog.value"
@@ -1530,8 +1530,8 @@
           @keydown.esc.prevent="cancelStorageRenameDialog"
         />
         <div class="term-rename-actions">
-          <button type="button" class="term-rename-btn" @click="cancelStorageRenameDialog">取消</button>
-          <button type="button" class="term-rename-btn is-primary" @click="confirmStorageRenameDialog">确定</button>
+          <button type="button" class="term-rename-btn" @click="cancelStorageRenameDialog">{{ localeText('取消', 'Cancel') }}</button>
+          <button type="button" class="term-rename-btn is-primary" @click="confirmStorageRenameDialog">{{ localeText('确定', 'Confirm') }}</button>
         </div>
       </div>
     </div>
