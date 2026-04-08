@@ -770,3 +770,17 @@
   font-family: var(--yc-font-code);
   font-size: 0.92em;
 }
+
+.yc-editor-shell.is-readonly .yc-editor-host .cm-image-widget-toolbar,
+.yc-editor-shell.is-readonly .yc-editor-host .cm-image-widget-resize-handle,
+.yc-editor-shell.is-readonly .yc-editor-host .cm-math-widget-btn,
+.yc-editor-shell.is-readonly .yc-editor-host .cm-table-widget-btn,
+.yc-editor-shell.is-readonly .yc-editor-host .cm-table-widget-row-handle,
+.yc-editor-shell.is-readonly .yc-editor-host .cm-table-widget-col-handle,
+.yc-editor-shell.is-readonly .yc-editor-host .cm-table-widget-edge-btn {
+  display: none !important;
+}
+
+.yc-editor-shell.is-readonly .yc-editor-host [data-table-edit='true'] {
+  cursor: default;
+}

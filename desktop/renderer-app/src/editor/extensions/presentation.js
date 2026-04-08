@@ -1,5 +1,5 @@
 import { Decoration, EditorView, ViewPlugin, WidgetType, keymap } from "@codemirror/view";
-import { Prec, StateEffect, StateField } from "@codemirror/state";
+import { EditorState, Prec, StateEffect, StateField } from "@codemirror/state";
 import katex from "katex";
 import { marked } from "marked";
 import { parseImageLine, serializeImageLine } from "../parser/parse-image.js";
@@ -42,6 +42,11 @@ const KEYBOARD_NAVIGABLE_SPECIAL_BLOCK_TYPES = new Set([
   "math_block",
   "table"
 ]);
+
+const isEditorReadOnly = (view) => Boolean(
+  view?.state?.facet?.(EditorState.readOnly)
+  || view?.state?.readOnly
+);
 
 let presentationRuntimeOptions = {
   getCurrentRelPath: null,
@@ -2416,8 +2421,11 @@ const buildDecorations = (view, blocks, currentBlockId) => {
   const decorations = [];
   const doc = view.state.doc;
   const docLength = Number(doc.length || 0);
+  const readOnly = isEditorReadOnly(view);
   const selection = selectionSnapshotOf(view.state);
-  const activeInlineToken = pickActiveInlineSyntaxToken(blocks, selection, docLength);
+  const activeInlineToken = readOnly
+    ? null
+    : pickActiveInlineSyntaxToken(blocks, selection, docLength);
   const contextHighlightBlockId = view.state.field(contextHighlightField) || "";
   const imageExpandSet = view.state.field(imageExpandField) || new Set();
   const imageWidthMap = view.state.field(imageWidthField) || new Map();
@@ -2437,10 +2445,10 @@ const buildDecorations = (view, blocks, currentBlockId) => {
       const isTableExpanded = tableExpandSet.has(tableExpandKey);
       const blockSelectionVisible = selectionIntersectsRange(selection, blockFrom, blockTo);
       // Keep source visible for focused source-first block types or expanded media/math blocks.
-      const blockKeepsSourceVisible = (
+      const blockKeepsSourceVisible = !readOnly && ((
         (SOURCE_VISIBLE_BLOCK_TYPES.has(blockType) || AUTO_SOURCE_REVEAL_BLOCK_TYPES.has(blockType))
         && blockSelectionVisible
-      ) || isImageExpanded || isMathExpanded || isTableExpanded;
+      ) || isImageExpanded || isMathExpanded || isTableExpanded);
       const hideImageSourceLines = blockType === "image" && !blockKeepsSourceVisible;
       const hideMathSourceLines = blockType === "math_block" && !blockKeepsSourceVisible;
       const hideTableSourceLines = blockType === "table" && !blockKeepsSourceVisible;
@@ -3500,6 +3508,7 @@ const presentationMouseDownHandler = (event, view) => {
   if (!(target instanceof Element)) {
     return false;
   }
+  const readOnly = isEditorReadOnly(view);
 
   const codeCopyWidget = target.closest(".cm-code-block-copy-widget");
   if (codeCopyWidget) {
@@ -3524,6 +3533,11 @@ const presentationMouseDownHandler = (event, view) => {
 
   const tableEditableCell = target.closest("[data-table-edit='true']");
   if (tableEditableCell) {
+    if (readOnly) {
+      event.preventDefault();
+      event.stopPropagation();
+      return true;
+    }
     clearTableHandleSelection(view);
     event.stopPropagation();
     return false;
@@ -3538,6 +3552,11 @@ const presentationMouseDownHandler = (event, view) => {
 
   const tableRowHandle = target.closest("[data-table-row-handle]");
   if (tableRowHandle instanceof Element) {
+    if (readOnly) {
+      event.preventDefault();
+      event.stopPropagation();
+      return true;
+    }
     selectTableHandleTarget(view, tableRowHandle, "row");
     event.preventDefault();
     event.stopPropagation();
@@ -3546,6 +3565,11 @@ const presentationMouseDownHandler = (event, view) => {
 
   const tableColumnHandle = target.closest("[data-table-col-handle]");
   if (tableColumnHandle instanceof Element) {
+    if (readOnly) {
+      event.preventDefault();
+      event.stopPropagation();
+      return true;
+    }
     selectTableHandleTarget(view, tableColumnHandle, "column");
     event.preventDefault();
     event.stopPropagation();
@@ -3613,6 +3637,12 @@ const presentationKeyDownHandler = (event, view) => {
   if (target instanceof Element && view?.contentDOM instanceof Element && !view.contentDOM.contains(target)) {
     return false;
   }
+
+  if (readOnly) {
+    event.preventDefault();
+    event.stopPropagation();
+    return true;
+  }
   if (target instanceof Element) {
     const tableEditableCell = target.closest("[data-table-edit='true']");
     if (tableEditableCell) {
@@ -3651,6 +3681,7 @@ const presentationClickHandler = (event, view) => {
   if (!(target instanceof Element)) {
     return false;
   }
+  const readOnly = isEditorReadOnly(view);
 
   const codeCopyTrigger = target.closest(".cm-code-block-copy-trigger");
   if (codeCopyTrigger instanceof HTMLElement) {
@@ -3676,6 +3707,9 @@ const presentationClickHandler = (event, view) => {
   if (taskToggle) {
     event.preventDefault();
     event.stopPropagation();
+    if (readOnly) {
+      return true;
+    }
     const lineFrom = Number(taskToggle.getAttribute("data-task-toggle-from"));
     if (Number.isFinite(lineFrom)) {
       return toggleTaskListStateAtLine(view, lineFrom);
@@ -3687,6 +3721,9 @@ const presentationClickHandler = (event, view) => {
   if (tableActionButton) {
     event.preventDefault();
     event.stopPropagation();
+    if (readOnly) {
+      return true;
+    }
     const action = String(tableActionButton.getAttribute("data-table-action") || "");
     const blockId = String(tableActionButton.getAttribute("data-table-block-id") || "");
     return handleTableAction(view, blockId, action);
@@ -3703,6 +3740,9 @@ const presentationClickHandler = (event, view) => {
   if (imageBtn) {
     event.preventDefault();
     event.stopPropagation();
+    if (readOnly) {
+      return true;
+    }
     const blockId = imageBtn.getAttribute("data-image-block-id");
     if (blockId) {
       view.dispatch({
@@ -3716,6 +3756,9 @@ const presentationClickHandler = (event, view) => {
   if (mathBtn) {
     event.preventDefault();
     event.stopPropagation();
+    if (readOnly) {
+      return true;
+    }
     const blockId = mathBtn.getAttribute("data-math-block-id");
     if (blockId) {
       const blockRange = resolveMathBlockRangeById(view, blockId);
@@ -3748,6 +3791,9 @@ const presentationClickHandler = (event, view) => {
   if (tableBtn) {
     event.preventDefault();
     event.stopPropagation();
+    if (readOnly) {
+      return true;
+    }
     const blockId = tableBtn.getAttribute("data-table-block-id");
     if (blockId) {
       view.dispatch({
@@ -3759,6 +3805,11 @@ const presentationClickHandler = (event, view) => {
 
   const inlineMath = target.closest(".cm-inline-math-widget");
   if (inlineMath) {
+    if (readOnly) {
+      event.preventDefault();
+      event.stopPropagation();
+      return true;
+    }
     const from = Number(inlineMath.getAttribute("data-math-inline-from"));
     const to = Number(inlineMath.getAttribute("data-math-inline-to"));
     if (Number.isFinite(from)) {

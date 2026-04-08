@@ -519,12 +519,20 @@
               >
                 <div class="mx-auto" :style="displayStyle">
                   <div class="yc-view-render-shell is-readonly-view">
-                    <div
-                      data-preview="1"
-                      class="markdown-render"
-                      :class="`markdown-render-${currentThemeMode}`"
-                      v-html="viewRenderedMarkdown"
-                    ></div>
+                    <EditorShell
+                      ref="markdownViewRef"
+                      read-only
+                      :model-value="viewModeMarkdown"
+                      :dark="isDark"
+                      :presentation-blocks="viewSemanticBlocks"
+                      :current-block-id="''"
+                      :current-rel-path="activeMarkdownRelPath"
+                      :wiki-link-files="workspaceMarkdownFiles"
+                      :wiki-link-suggestions="getWikiLinkSuggestions"
+                      :wiki-link-suggestion-select="handleWikiLinkSuggestionSelect"
+                      @wiki-link-activate="handleEditorWikiLinkActivate"
+                      @external-link-activate="handleEditorExternalLinkActivate"
+                    />
                   </div>
                 </div>
               </div>
@@ -1006,15 +1014,9 @@
                 class="flex-1 min-w-0 nav-outline-body"
                 :class="'flex min-h-[30px] items-center is-single-line'"
               >
-                <input
-                  :value="heading.title"
-                  type="text"
-                  @click.stop
-                  @input="handleOutlineHeadingTitleInput(heading.outlineIndex, $event)"
-                  class="inspector-step-title-input w-full text-sm font-medium bg-transparent border-b px-1 py-0.5"
-                  :class="'is-single-line'"
-                  placeholder="标题"
-                />
+                <div class="w-full min-w-0 px-1 py-0.5 text-sm font-medium truncate">
+                  {{ heading.title || "标题" }}
+                </div>
               </div>
             </div>
           </div>
@@ -1608,6 +1610,7 @@ const mainRef = ref(null);
 const contentScrollRef = ref(null);
 const markdownEditorRef = ref(null);
 const markdownSourceRef = ref(null);
+const markdownViewRef = ref(null);
 const EMPTY_PRESENTATION_BLOCKS = Object.freeze([]);
 const fileTreeNavRef = ref(null);
 const showEditorDebugPanel = ref(false);
@@ -2728,20 +2731,6 @@ const viewModeMarkdown = computed(() => {
   return serializeStepsToMarkdown([currentStep]);
 });
 
-const viewRenderedMarkdown = computed(() => {
-  try {
-    return renderMarkdownToHtml({
-      markdown: viewModeMarkdown.value,
-      currentRelPath: activeMarkdownRelPath.value,
-      markdownFiles: workspaceMarkdownFiles.value,
-      workspaceRootPath: storageRootPath.value,
-      renderMathFormula
-    });
-  } catch {
-    return "";
-  }
-});
-
 async function focusStepInEditMode(index) {
   const safeIndex = clamp(Number(index) || 0, 0, Math.max(0, steps.value.length - 1));
   const targetId = steps.value[safeIndex]?.id;
@@ -2783,7 +2772,6 @@ const {
   moveStep,
   parseMarkdownToSteps,
   persistActiveMarkdownBeforeSwitch,
-  renameOutlineHeadingTitle,
   resetBlankEditorState,
   saveMarkdown,
   saveStatus,
@@ -2826,6 +2814,22 @@ const {
   parseDelayMs: 0,
   currentBlockStrategy: "anchor"
 });
+
+const viewSelection = ref({
+  anchor: 0,
+  head: 0
+});
+
+const {
+  blocks: viewSemanticBlocks
+} = useSemanticStore({
+  markdownRef: viewModeMarkdown,
+  selectionRef: viewSelection,
+  parseDelayMs: 0,
+  currentBlockStrategy: "anchor"
+});
+
+const viewHeadingOutline = computed(() => extractHeadingsFromMarkdown(viewModeMarkdown.value));
 
 const activeSemanticBlock = computed(() => {
   const current = currentSemanticBlock.value;
@@ -3086,11 +3090,6 @@ const handleManualSaveCurrentMarkdown = async () => {
   if (saveStatus.value !== "error") {
     showToast("无需保存，内容已是最新");
   }
-};
-
-const handleOutlineHeadingTitleInput = (index, event) => {
-  const nextTitle = String(event?.target?.value || "");
-  void renameOutlineHeadingTitle(index, nextTitle);
 };
 
 const onStepDragStart = (event, index) => {
@@ -6164,6 +6163,16 @@ const scrollPreviewHeadingIntoView = (anchorInput = "") => {
   if (!slug) {
     return false;
   }
+  if (!isEditMode.value) {
+    const headingMatch = findHeadingMatch(viewHeadingOutline.value, anchorInput)
+      || viewHeadingOutline.value.find((heading) => String(heading?.slug || "") === slug)
+      || null;
+    const localPos = Number(headingMatch?.from);
+    if (Number.isFinite(localPos)) {
+      markdownViewRef.value?.focusPosition?.(localPos);
+      return true;
+    }
+  }
   const host = contentScrollRef.value;
   if (!(host instanceof HTMLElement)) {
     return false;
@@ -6636,7 +6645,25 @@ const isPreviewInteractiveTarget = (target) => {
     return false;
   }
   return Boolean(
-    element.closest("a, button, input, textarea, select, label, summary, [role='button']")
+    element.closest([
+      "a",
+      "button",
+      "input",
+      "textarea",
+      "select",
+      "label",
+      "summary",
+      "[role='button']",
+      ".cm-wiki-link",
+      ".cm-inline-link",
+      ".cm-code-block-copy-btn",
+      ".cm-code-block-copy-trigger",
+      ".cm-image-widget-btn",
+      ".cm-math-widget-btn",
+      ".cm-table-widget-btn",
+      ".cm-table-widget-cell-editor",
+      ".cm-task-checkbox-widget"
+    ].join(", "))
   );
 };
 
@@ -8214,7 +8241,7 @@ watch([currentId, mode, terminalMaximized, terminalOpen, terminalPanelHeight], (
   });
 });
 
-watch(viewRenderedMarkdown, () => {
+watch(viewModeMarkdown, () => {
   nextTick(() => {
     refreshContentProgress();
     if (pendingPreviewHeadingSlug.value) {

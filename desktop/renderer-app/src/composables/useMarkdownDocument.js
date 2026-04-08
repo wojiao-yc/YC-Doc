@@ -626,29 +626,6 @@ export const useMarkdownDocument = ({
     return true;
   };
 
-  const renameOutlineHeadingTitle = async (index, nextTitle) => {
-    const markdown = normalizeMarkdownText(documentMarkdown.value);
-    const headings = collectHeadingOutline(markdown);
-    if (!headings.length) {
-      return false;
-    }
-
-    const safeIndex = clamp(Number(index) || 0, 0, Math.max(0, headings.length - 1));
-    const targetHeading = headings[safeIndex];
-    const normalizedTitle = trimClosingHeadingHashes(nextTitle || "");
-    if (!targetHeading || targetHeading.title === normalizedTitle) {
-      return false;
-    }
-
-    const nextHeadingLine = `${"#".repeat(clamp(targetHeading.level, 1, 6))} ${normalizedTitle}`.trimEnd();
-    const nextMarkdown = `${markdown.slice(0, targetHeading.from)}${nextHeadingLine}${markdown.slice(targetHeading.to)}`;
-    await applyExternalMarkdownChange(nextMarkdown, {
-      focusIndex: findSectionIndexForRawPos(nextMarkdown, targetHeading.from),
-      focusEditor: false
-    });
-    return true;
-  };
-
   const renameOutlineHeadingSubtitle = async (index, nextSubtitle) => {
     const markdown = normalizeMarkdownText(documentMarkdown.value);
     const headings = collectHeadingOutline(markdown);
@@ -842,7 +819,6 @@ export const useMarkdownDocument = ({
     persistActiveMarkdownBeforeSwitch,
     removeStep,
     renameOutlineHeadingSubtitle,
-    renameOutlineHeadingTitle,
     renameStepTitle,
     resetBlankEditorState,
     saveMarkdown,
