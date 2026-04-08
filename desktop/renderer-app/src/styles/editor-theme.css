@@ -300,9 +300,9 @@
 
 .yc-wikilink-autocomplete-item:hover,
 .yc-wikilink-autocomplete-item.is-active {
-  background: var(--yc-wikilink-menu-item-hover-bg);
-  box-shadow: var(--yc-wikilink-menu-item-hover-shadow);
-  color: var(--yc-wikilink-menu-item-hover-text, var(--yc-wikilink-menu-text));
+  background: var(--yc-editor-context-item-hover-bg, var(--yc-menu-hover));
+  box-shadow: var(--yc-editor-context-item-hover-shadow, none);
+  color: var(--yc-editor-context-item-hover-text, var(--yc-menu-text));
 }
 
 .yc-wikilink-autocomplete-item:focus,
@@ -316,13 +316,21 @@
 
 .yc-wikilink-autocomplete-item:hover .yc-wikilink-autocomplete-detail,
 .yc-wikilink-autocomplete-item.is-active .yc-wikilink-autocomplete-detail {
-  color: var(--yc-wikilink-menu-item-hover-detail, var(--yc-wikilink-menu-detail));
+  color: color-mix(
+    in srgb,
+    var(--yc-editor-context-item-hover-text, var(--yc-menu-text)) 72%,
+    var(--yc-wikilink-menu-detail) 28%
+  );
 }
 
 .yc-wikilink-autocomplete-item:hover .yc-wikilink-autocomplete-meta,
 .yc-wikilink-autocomplete-item.is-active .yc-wikilink-autocomplete-meta {
-  background: var(--yc-wikilink-menu-item-hover-meta-bg, var(--yc-wikilink-menu-meta-bg));
-  color: var(--yc-wikilink-menu-item-hover-meta-text, var(--yc-wikilink-menu-meta-text));
+  background: color-mix(
+    in srgb,
+    var(--yc-editor-context-item-hover-bg, var(--yc-menu-hover)) 76%,
+    var(--yc-wikilink-menu-meta-bg) 24%
+  );
+  color: var(--yc-editor-context-item-hover-text, var(--yc-menu-text));
 }
 
 .yc-wikilink-autocomplete-label {
@@ -390,5 +398,5 @@
 .yc-wikilink-autocomplete-hint-token {
   min-width: 16px;
   font-weight: 700;
-  color: var(--yc-wikilink-menu-hint-token);
+  color: var(--yc-menu-text);
 }
