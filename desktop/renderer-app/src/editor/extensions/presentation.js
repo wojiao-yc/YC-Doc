@@ -2635,19 +2635,13 @@ const buildDecorations = (view, blocks, currentBlockId) => {
         );
         const isImageSourceAnchorLine = hideImageSourceLines && lineNumber === lineRange.fromLine;
         const isImageSourceHiddenLine = hideImageSourceLines && !isImageSourceAnchorLine;
-        // For collapsed math/table blocks we hide every source line and mount widgets outside
-        // source range, so no anchor line should keep vertical space.
-        const isMathSourceAnchorLine = false;
         const isMathSourceHiddenLine = hideMathSourceLines;
-        const isTableSourceAnchorLine = false;
         const isTableSourceHiddenLine = hideTableSourceLines;
         const className = [
           baseClass,
           isImageSourceAnchorLine ? "cm-block-image-source-anchor" : "",
           isImageSourceHiddenLine ? "cm-block-image-source-hidden" : "",
-          isMathSourceAnchorLine ? "cm-block-math-source-anchor" : "",
           isMathSourceHiddenLine ? "cm-block-math-source-hidden" : "",
-          isTableSourceAnchorLine ? "cm-block-table-source-anchor" : "",
           isTableSourceHiddenLine ? "cm-block-table-source-hidden" : "",
           hideHeadingSubtitleMetaLines ? "cm-block-heading-subtitle-hidden" : ""
         ]
@@ -2743,8 +2737,9 @@ const buildDecorations = (view, blocks, currentBlockId) => {
 
       if (blockType === "table") {
         const rawText = String(block?.rawText || "");
-        let widgetPos = isTableExpanded ? blockTo : blockFrom;
-        let widgetSide = isTableExpanded ? 1 : -1;
+        // Keep table widget above source when source is visible, matching math-block behavior.
+        let widgetPos = blockFrom;
+        let widgetSide = -1;
         if (hideTableSourceLines) {
           const mount = resolveInlineWidgetMountOutsideHiddenBlock(docLength, blockFrom, blockTo);
           widgetPos = mount.pos;
@@ -3632,39 +3627,6 @@ const focusTableBlockCellEditor = (view, blockIdInput, direction = 1) => {
   return true;
 };
 
-const resolveCollapsedTableBlockAtPos = (view, posInput) => {
-  const docLength = Number(view?.state?.doc?.length || 0);
-  const pos = clampPos(posInput, docLength);
-  const data = view?.state?.field?.(presentationDataField);
-  const blocks = Array.isArray(data?.blocks) ? data.blocks : [];
-  const expandedTableBlocks = view?.state?.field?.(tableExpandField) || new Set();
-
-  for (const block of blocks) {
-    if (String(block?.type || "") !== "table") {
-      continue;
-    }
-
-    const from = clampPos(block?.from, docLength);
-    const to = Math.max(from, clampPos(block?.to, docLength));
-    const blockId = tableExpandKeyOf({ type: "table", from });
-    if (!blockId || expandedTableBlocks.has(blockId)) {
-      continue;
-    }
-    if (pos < from || pos > to) {
-      continue;
-    }
-
-    return {
-      ...block,
-      from,
-      to,
-      blockId
-    };
-  }
-
-  return null;
-};
-
 const moveCursorIntoSpecialBlockSource = (view, block, direction = 1) => {
   const docLength = Number(view.state.doc.length || 0);
   const from = clampPos(block?.from, docLength);
@@ -3802,40 +3764,6 @@ const presentationMouseDownHandler = (event, view) => {
   if (taskToggle) {
     event.preventDefault();
     event.stopPropagation();
-    return true;
-  }
-
-  const tableWidgetHost = target.closest(".cm-table-widget");
-  const tableSourceAnchorLine = target.closest(".cm-line.cm-block-table-source-anchor");
-  if (!tableWidgetHost && tableSourceAnchorLine instanceof Element) {
-    event.preventDefault();
-    event.stopPropagation();
-    clearTableHandleSelection(view);
-    if (readOnly) {
-      return true;
-    }
-    const posAtMouse = view.posAtCoords({
-      x: Number(event.clientX || 0),
-      y: Number(event.clientY || 0)
-    });
-    const fallbackCursorPos = Number(view.state.selection?.main?.head || 0);
-    const tableBlock = resolveCollapsedTableBlockAtPos(
-      view,
-      typeof posAtMouse === "number" ? posAtMouse : fallbackCursorPos
-    );
-    if (tableBlock) {
-      const docLength = Number(view.state.doc.length || 0);
-      const cursorRaw = cursorOutsideRange(docLength, tableBlock.from, tableBlock.to, 1);
-      const cursor = resolveNearestVisibleCursorPos(view, cursorRaw, 1);
-      view.dispatch({
-        selection: {
-          anchor: cursor,
-          head: cursor
-        },
-        scrollIntoView: true
-      });
-      view.focus();
-    }
     return true;
   }
 
