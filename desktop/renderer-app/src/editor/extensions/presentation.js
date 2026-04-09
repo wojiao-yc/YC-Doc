@@ -333,6 +333,8 @@ const splitTableCells = (lineText) =>
     .split("|")
     .map((cell) => String(cell || "").trim());
 
+const isPipeWrappedTableLine = (lineText) => /^\s*\|.*\|\s*$/.test(String(lineText || ""));
+
 const isTableDelimiterCell = (cellText) => /^:?-{3,}:?$/.test(String(cellText || "").trim());
 
 const tableCellAlign = (delimiterCellText) => {
@@ -362,6 +364,9 @@ const parseMarkdownTableRaw = (rawText) => {
   if (lines.length < 2) {
     return null;
   }
+  if (!isPipeWrappedTableLine(lines[0]) || !isPipeWrappedTableLine(lines[1])) {
+    return null;
+  }
 
   const headers = splitTableCells(lines[0]);
   const delimiter = splitTableCells(lines[1]);
@@ -376,11 +381,17 @@ const parseMarkdownTableRaw = (rawText) => {
     }
   }
 
-  const rows = lines
-    .slice(2)
-    .map((line) => splitTableCells(line))
-    .filter((cells) => cells.length > 0)
-    .map((cells) => headers.map((_, index) => String(cells[index] || "").trim()));
+  const rows = [];
+  for (const line of lines.slice(2)) {
+    if (!isPipeWrappedTableLine(line)) {
+      break;
+    }
+    const cells = splitTableCells(line);
+    if (cells.length !== headers.length) {
+      break;
+    }
+    rows.push(headers.map((_, index) => String(cells[index] || "").trim()));
+  }
 
   return {
     headers: headers.map((cell) => String(cell || "")),
@@ -1008,7 +1019,7 @@ const tableCellEditorSourceTextOf = (cellEditor) => {
   return normalizeTableCellEditorText(cellEditor.textContent || "");
 };
 
-const renderTableCellEditorFromSource = (cellEditor, sourceInput = "") => {
+const renderTableCellEditorFromMarkdown = (cellEditor, sourceInput = "") => {
   if (!(cellEditor instanceof HTMLElement)) {
     return false;
   }
@@ -1513,11 +1524,10 @@ class MathBlockWidget extends WidgetType {
 }
 
 class TableBlockWidget extends WidgetType {
-  constructor({ rawText = "", blockId = "", isExpanded = false, readOnly = false } = {}) {
+  constructor({ rawText = "", blockId = "", readOnly = false } = {}) {
     super();
     this.rawText = String(rawText || "");
     this.blockId = String(blockId || "");
-    this.isExpanded = Boolean(isExpanded);
     this.readOnly = Boolean(readOnly);
   }
 
@@ -1526,7 +1536,6 @@ class TableBlockWidget extends WidgetType {
       other instanceof TableBlockWidget
       && other.rawText === this.rawText
       && other.blockId === this.blockId
-      && other.isExpanded === this.isExpanded
       && other.readOnly === this.readOnly
     );
   }
@@ -1568,7 +1577,7 @@ class TableBlockWidget extends WidgetType {
         cellEditor.setAttribute("data-table-block-id", this.blockId);
         cellEditor.setAttribute("data-table-section", "header");
         cellEditor.setAttribute("data-table-col-index", String(index));
-        renderTableCellEditorFromSource(cellEditor, cellText);
+        renderTableCellEditorFromMarkdown(cellEditor, cellText);
         if (editable) {
           bindTableCellEditorDomEvents(cellEditor);
         }
@@ -1609,7 +1618,7 @@ class TableBlockWidget extends WidgetType {
           cellEditor.setAttribute("data-table-section", "body");
           cellEditor.setAttribute("data-table-row-index", String(rowIndex));
           cellEditor.setAttribute("data-table-col-index", String(index));
-          renderTableCellEditorFromSource(cellEditor, cellText);
+          renderTableCellEditorFromMarkdown(cellEditor, cellText);
           if (editable) {
             bindTableCellEditorDomEvents(cellEditor);
           }
@@ -1659,13 +1668,7 @@ class TableBlockWidget extends WidgetType {
       wrapper.appendChild(dropIndicator);
     }
 
-    const btn = document.createElement("span");
-    btn.className = "cm-table-widget-btn";
-    btn.textContent = this.isExpanded ? SOURCE_TOGGLE_ICON_EXPANDED : SOURCE_TOGGLE_ICON_COLLAPSED;
-    btn.setAttribute("data-table-block-id", this.blockId);
-
     wrapper.appendChild(content);
-    wrapper.appendChild(btn);
     return wrapper;
   }
 
@@ -2408,10 +2411,9 @@ const addMathSourceSyntaxDecorationsWithoutBlocks = (decorations, doc, docLength
 
 export const setPresentationDataEffect = StateEffect.define();
 
-// Toggle hidden-source preview for image/math/table blocks.
+// Toggle hidden-source preview for image/math blocks.
 export const toggleImageExpandEffect = StateEffect.define();
 export const toggleMathExpandEffect = StateEffect.define();
-export const toggleTableExpandEffect = StateEffect.define();
 export const setImageWidthEffect = StateEffect.define();
 export const setContextHighlightBlockEffect = StateEffect.define();
 
@@ -2543,36 +2545,6 @@ const mathExpandField = StateField.define({
   }
 });
 
-const tableExpandField = StateField.define({
-  create: () => new Set(),
-  update: (value, transaction) => {
-    let next = new Set(value);
-    for (const effect of transaction.effects) {
-      if (effect.is(toggleTableExpandEffect)) {
-        const tableId = String(effect.value || "");
-        if (next.has(tableId)) {
-          next.delete(tableId);
-        } else {
-          next.add(tableId);
-        }
-        continue;
-      }
-      if (effect.is(setPresentationDataEffect)) {
-        const blocks = Array.isArray(effect.value?.blocks) ? effect.value.blocks : [];
-        const validTableIds = new Set(
-          blocks
-            .map((block) => tableExpandKeyOf(block))
-            .filter(Boolean)
-        );
-        next = validTableIds.size
-          ? new Set([...next].filter((id) => validTableIds.has(id)))
-          : new Set();
-      }
-    }
-    return next;
-  }
-});
-
 const classesForBlockLine = (
   block,
   currentBlockId,
@@ -2638,8 +2610,6 @@ const buildDecorations = (view, blocks, currentBlockId) => {
   const imageExpandSet = view.state.field(imageExpandField) || new Set();
   const imageWidthMap = view.state.field(imageWidthField) || new Map();
   const mathExpandSet = view.state.field(mathExpandField) || new Set();
-  const tableExpandSet = view.state.field(tableExpandField) || new Set();
-
   for (const block of blocks) {
     try {
       const blockFrom = clampPos(block?.from, docLength);
@@ -2647,16 +2617,15 @@ const buildDecorations = (view, blocks, currentBlockId) => {
       const blockType = String(block?.type || "");
       const imageExpandKey = imageExpandKeyOf({ type: blockType, from: blockFrom });
       const mathExpandKey = mathExpandKeyOf({ type: blockType, from: blockFrom });
-      const tableExpandKey = tableExpandKeyOf({ type: blockType, from: blockFrom });
+      const tableBlockId = tableExpandKeyOf({ type: blockType, from: blockFrom });
       const isImageExpanded = imageExpandSet.has(imageExpandKey);
       const isMathExpanded = mathExpandSet.has(mathExpandKey);
-      const isTableExpanded = tableExpandSet.has(tableExpandKey);
       const blockSelectionVisible = selectionIntersectsRange(selection, blockFrom, blockTo);
       // Keep source visible for focused source-first block types or expanded media/math blocks.
       const blockKeepsSourceVisible = !readOnly && ((
         (SOURCE_VISIBLE_BLOCK_TYPES.has(blockType) || AUTO_SOURCE_REVEAL_BLOCK_TYPES.has(blockType))
         && blockSelectionVisible
-      ) || isImageExpanded || isMathExpanded || isTableExpanded);
+      ) || isImageExpanded || isMathExpanded);
       const hideImageSourceLines = blockType === "image" && !blockKeepsSourceVisible;
       const hideMathSourceLines = blockType === "math_block" && !blockKeepsSourceVisible;
       const hideTableSourceLines = blockType === "table" && !blockKeepsSourceVisible;
@@ -2789,8 +2758,7 @@ const buildDecorations = (view, blocks, currentBlockId) => {
           Decoration.widget({
             widget: new TableBlockWidget({
               rawText,
-              blockId: tableExpandKey,
-              isExpanded: isTableExpanded,
+              blockId: tableBlockId,
               readOnly
             }),
             side: widgetSide
@@ -2891,8 +2859,6 @@ class BlockPresentationPlugin {
     const imageExpandChanged = updateHasEffect(update, toggleImageExpandEffect);
     const imageWidthChanged = updateHasEffect(update, setImageWidthEffect);
     const mathExpandChanged = updateHasEffect(update, toggleMathExpandEffect);
-    const tableExpandChanged = updateHasEffect(update, toggleTableExpandEffect);
-
     if (!blocksChanged && !currentChanged) {
       if (update.docChanged) {
         // Any document edit can invalidate old ranges; wait for semantic snapshot instead of remapping stale blocks.
@@ -2905,7 +2871,6 @@ class BlockPresentationPlugin {
         || imageExpandChanged
         || imageWidthChanged
         || mathExpandChanged
-        || tableExpandChanged
       ) {
         this.decorations = buildDecorations(update.view, this.blocks, this.currentBlockId);
       }
@@ -3098,22 +3063,64 @@ const resolveTableBlockRangeById = (view, blockId) => {
     return null;
   }
 
-  const data = view.state.field(presentationDataField);
-  const blocks = Array.isArray(data?.blocks) ? data.blocks : [];
   const doc = view.state.doc;
   const docLength = Number(doc.length || 0);
-  for (const block of blocks) {
-    const from = clampPos(block?.from, docLength);
-    const to = Math.max(from, clampPos(block?.to, docLength));
-    if (tableExpandKeyOf({ type: block?.type, from }) === targetBlockId) {
-      return {
-        from,
-        to,
-        rawText: doc.sliceString(from, to)
-      };
-    }
+  const match = targetBlockId.match(/^table:(\d+)$/);
+  if (!match) {
+    return null;
   }
-  return null;
+
+  const blockStart = clampPos(Number(match[1]), docLength);
+  let lineNumber = doc.lineAt(blockStart).number;
+  let headerLineNumber = 0;
+  const isHeaderAt = (candidateLineNumber) => {
+    if (candidateLineNumber < 1 || candidateLineNumber >= doc.lines) {
+      return false;
+    }
+    const headerLine = doc.line(candidateLineNumber);
+    const delimiterLine = doc.line(candidateLineNumber + 1);
+    return isPipeWrappedTableLine(headerLine.text)
+      && isPipeWrappedTableLine(delimiterLine.text)
+      && parseMarkdownTableRaw(`${headerLine.text}\n${delimiterLine.text}`) !== null;
+  };
+
+  if (!isHeaderAt(lineNumber)) {
+    for (let offset = -2; offset <= 2; offset += 1) {
+      const candidate = lineNumber + offset;
+      if (isHeaderAt(candidate)) {
+        headerLineNumber = candidate;
+        break;
+      }
+    }
+  } else {
+    headerLineNumber = lineNumber;
+  }
+
+  if (!headerLineNumber) {
+    return null;
+  }
+
+  const headerCells = splitTableCells(doc.line(headerLineNumber).text);
+  const expectedColumnCount = headerCells.length;
+  let endLine = headerLineNumber + 1;
+  while (endLine < doc.lines) {
+    const nextLineText = doc.line(endLine + 1).text;
+    if (!isPipeWrappedTableLine(nextLineText)) {
+      break;
+    }
+    if (splitTableCells(nextLineText).length !== expectedColumnCount) {
+      break;
+    }
+    endLine += 1;
+  }
+
+  const from = doc.line(headerLineNumber).from;
+  const to = doc.line(endLine).to;
+  return {
+    from,
+    to,
+    rawText: doc.sliceString(from, to)
+  };
 };
 
 const persistTableByBlockId = (view, blockId, transformTableModel) => {
@@ -3416,6 +3423,7 @@ const handleTableAction = (view, blockId, actionInput) => {
   if (!action || !blockId) {
     return false;
   }
+  flushActiveTableCellEditor(view, blockId);
 
   if (action === "add-column-right") {
     return persistTableByBlockId(view, blockId, (model) => appendTableColumnRight(model));
@@ -3424,6 +3432,71 @@ const handleTableAction = (view, blockId, actionInput) => {
     return persistTableByBlockId(view, blockId, (model) => appendTableRowBottom(model));
   }
   return false;
+};
+
+const activeTableCellEditorOf = (view) => {
+  const active = typeof document !== "undefined" ? document.activeElement : null;
+  if (!(active instanceof HTMLElement)) {
+    return null;
+  }
+  const root = view?.dom;
+  if (!(root instanceof Element) || !root.contains(active)) {
+    return null;
+  }
+  return active.matches?.("[data-table-edit='true']")
+    ? active
+    : active.closest?.("[data-table-edit='true']");
+};
+
+const flushActiveTableCellEditor = (view, blockIdInput = "") => {
+  const activeCell = activeTableCellEditorOf(view);
+  if (!(activeCell instanceof HTMLElement)) {
+    return null;
+  }
+
+  const blockId = String(blockIdInput || "").trim();
+  if (blockId && String(activeCell.getAttribute("data-table-block-id") || "") !== blockId) {
+    return null;
+  }
+
+  const text = markdownFromTableCellEditor(activeCell);
+  commitTableCellEdit(view, activeCell, text);
+  const root = view?.dom;
+  if (!(root instanceof Element)) {
+    return null;
+  }
+  return root.querySelector(
+    [
+      "[data-table-edit='true']",
+      `[data-table-block-id="${String(activeCell.getAttribute("data-table-block-id") || "")}"]`,
+      `[data-table-section="${String(activeCell.getAttribute("data-table-section") || "")}"]`,
+      `[data-table-col-index="${String(activeCell.getAttribute("data-table-col-index") || "")}"]`,
+      ...(activeCell.hasAttribute("data-table-row-index")
+        ? [`[data-table-row-index="${String(activeCell.getAttribute("data-table-row-index") || "")}"]`]
+        : [])
+    ].join("")
+  );
+};
+
+const resolveFreshTableHandle = (view, handle, axis) => {
+  if (!(handle instanceof Element)) {
+    return null;
+  }
+  const blockId = String(handle.getAttribute("data-table-block-id") || "");
+  if (!blockId) {
+    return null;
+  }
+  const axisAttr = axis === "column" ? "data-table-col-index" : "data-table-row-index";
+  const axisValue = String(handle.getAttribute(axisAttr) || "");
+  const selector = axis === "column"
+    ? `[data-table-col-handle][data-table-block-id="${blockId}"][data-table-col-index="${axisValue}"]`
+    : `[data-table-row-handle][data-table-block-id="${blockId}"][data-table-row-index="${axisValue}"]`;
+  const root = view?.dom;
+  if (!(root instanceof Element)) {
+    return null;
+  }
+  const resolved = root.querySelector(selector);
+  return resolved instanceof Element ? resolved : null;
 };
 
 const commitTableCellEdit = (view, editableCell, textInput = null) => {
@@ -3551,9 +3624,6 @@ const blockExpandedForKeyboardNavigation = (view, block) => {
   }
   if (type === "math_block") {
     return view.state.field(mathExpandField).has(mathExpandKeyOf(block));
-  }
-  if (type === "table") {
-    return view.state.field(tableExpandField).has(tableExpandKeyOf(block));
   }
   return false;
 };
@@ -3824,6 +3894,8 @@ const presentationMouseDownHandler = (event, view) => {
 
   const tableActionButton = target.closest("[data-table-action]");
   if (tableActionButton) {
+    const blockId = String(tableActionButton.getAttribute("data-table-block-id") || "");
+    flushActiveTableCellEditor(view, blockId);
     event.preventDefault();
     event.stopPropagation();
     return true;
@@ -3836,10 +3908,13 @@ const presentationMouseDownHandler = (event, view) => {
       event.stopPropagation();
       return true;
     }
-    selectTableHandleTarget(view, tableRowHandle, "row");
+    const blockId = String(tableRowHandle.getAttribute("data-table-block-id") || "");
+    flushActiveTableCellEditor(view, blockId);
+    const freshHandle = resolveFreshTableHandle(view, tableRowHandle, "row") || tableRowHandle;
+    selectTableHandleTarget(view, freshHandle, "row");
     event.preventDefault();
     event.stopPropagation();
-    return startTableDragReorder(event, view, tableRowHandle, "row");
+    return startTableDragReorder(event, view, freshHandle, "row");
   }
 
   const tableColumnHandle = target.closest("[data-table-col-handle]");
@@ -3849,10 +3924,26 @@ const presentationMouseDownHandler = (event, view) => {
       event.stopPropagation();
       return true;
     }
-    selectTableHandleTarget(view, tableColumnHandle, "column");
+    const blockId = String(tableColumnHandle.getAttribute("data-table-block-id") || "");
+    flushActiveTableCellEditor(view, blockId);
+    const freshHandle = resolveFreshTableHandle(view, tableColumnHandle, "column") || tableColumnHandle;
+    selectTableHandleTarget(view, freshHandle, "column");
     event.preventDefault();
     event.stopPropagation();
-    return startTableDragReorder(event, view, tableColumnHandle, "column");
+    return startTableDragReorder(event, view, freshHandle, "column");
+  }
+
+  const tableWidget = target.closest(".cm-table-widget");
+  if (tableWidget instanceof Element) {
+    if (readOnly) {
+      event.preventDefault();
+      event.stopPropagation();
+      return true;
+    }
+    event.preventDefault();
+    event.stopPropagation();
+    clearTableHandleSelection(view);
+    return true;
   }
 
   const resizeHandle = target.closest(".cm-image-widget-resize-handle");
@@ -3955,7 +4046,7 @@ const presentationFocusOutHandler = (event, view) => {
   if (String(tableEditableCell.getAttribute(TABLE_CELL_SKIP_FOCUSOUT_COMMIT_ATTR) || "") === "1") {
     tableEditableCell.removeAttribute(TABLE_CELL_SKIP_FOCUSOUT_COMMIT_ATTR);
     if (tableEditableCell.isConnected) {
-      renderTableCellEditorFromSource(tableEditableCell, tableCellEditorSourceTextOf(tableEditableCell));
+      renderTableCellEditorFromMarkdown(tableEditableCell, markdownFromTableCellEditor(tableEditableCell));
     }
     return false;
   }
@@ -3963,7 +4054,7 @@ const presentationFocusOutHandler = (event, view) => {
   const text = markdownFromTableCellEditor(tableEditableCell);
   commitTableCellEdit(view, tableEditableCell, text);
   if (tableEditableCell.isConnected) {
-    renderTableCellEditorFromSource(tableEditableCell, text);
+    renderTableCellEditorFromMarkdown(tableEditableCell, text);
   }
   return false;
 };
@@ -4028,6 +4119,28 @@ const presentationClickHandler = (event, view) => {
     return true;
   }
 
+  const tableWidget = target.closest(".cm-table-widget");
+  if (tableWidget instanceof Element) {
+    event.preventDefault();
+    event.stopPropagation();
+    if (readOnly) {
+      return true;
+    }
+    const hostCell = target.closest("th, td");
+    const targetEditor = (
+      hostCell?.querySelector?.("[data-table-edit='true']")
+      || tableWidget.querySelector("[data-table-edit='true']")
+    );
+    if (targetEditor instanceof HTMLElement) {
+      try {
+        targetEditor.focus({ preventScroll: true });
+      } catch {
+        targetEditor.focus();
+      }
+    }
+    return true;
+  }
+
   const imageBtn = target.closest(".cm-image-widget-btn");
   if (imageBtn) {
     event.preventDefault();
@@ -4087,49 +4200,6 @@ const presentationClickHandler = (event, view) => {
     }
   }
 
-  const tableBtn = target.closest(".cm-table-widget-btn");
-  if (tableBtn) {
-    event.preventDefault();
-    event.stopPropagation();
-    if (readOnly) {
-      return true;
-    }
-    const blockId = tableBtn.getAttribute("data-table-block-id");
-    if (blockId) {
-      const blockRange = resolveTableBlockRangeById(view, blockId);
-      const isExpanded = view.state.field(tableExpandField).has(blockId);
-      const docLength = Number(view.state.doc.length || 0);
-      const selection = (
-        isExpanded && blockRange
-          ? {
-              anchor: resolveNearestVisibleCursorPos(
-                view,
-                cursorOutsideRange(docLength, blockRange.from, blockRange.to, -1),
-                -1
-              ),
-              head: resolveNearestVisibleCursorPos(
-                view,
-                cursorOutsideRange(docLength, blockRange.from, blockRange.to, -1),
-                -1
-              )
-            }
-          : null
-      );
-      const dispatchPayload = {
-        effects: toggleTableExpandEffect.of(blockId)
-      };
-      if (selection) {
-        dispatchPayload.selection = selection;
-        dispatchPayload.scrollIntoView = true;
-      }
-      view.dispatch(dispatchPayload);
-      if (selection) {
-        view.focus();
-      }
-      return true;
-    }
-  }
-
   const inlineMath = target.closest(".cm-inline-math-widget");
   if (inlineMath) {
     if (readOnly) {
@@ -4163,7 +4233,6 @@ export const presentationExtensions = [
   imageExpandField,
   imageWidthField,
   mathExpandField,
-  tableExpandField,
   specialBlockNavigationKeymap,
   EditorView.domEventHandlers({
     contextmenu: presentationContextMenuHandler,

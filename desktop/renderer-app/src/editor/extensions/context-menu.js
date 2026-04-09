@@ -136,7 +136,47 @@ const tableBlockStartFromId = (blockIdInput) => {
   return Number(match[1]);
 };
 
-const isMarkdownTableLine = (lineTextInput) => /^\s*\|.*\|\s*$/.test(String(lineTextInput || ""));
+const isMarkdownPipeWrappedTableLine = (lineTextInput) => /^\s*\|.*\|\s*$/.test(String(lineTextInput || ""));
+
+const splitTableCells = (lineTextInput) =>
+  String(lineTextInput || "")
+    .trim()
+    .replace(/^\|/, "")
+    .replace(/\|$/, "")
+    .split("|")
+    .map((cell) => String(cell || "").trim());
+
+const markdownTableColumnCountOf = (lineTextInput) =>
+  isMarkdownPipeWrappedTableLine(lineTextInput)
+    ? splitTableCells(lineTextInput).length
+    : 0;
+
+const isMarkdownTableDelimiterLine = (lineTextInput) => {
+  if (!isMarkdownPipeWrappedTableLine(lineTextInput)) {
+    return false;
+  }
+  const cells = splitTableCells(lineTextInput);
+  return cells.length > 0 && cells.every((cell) => /^:?-{3,}:?$/.test(String(cell || "").trim()));
+};
+
+const isMarkdownTableHeaderLine = (lineTextInput) => {
+  if (!isMarkdownPipeWrappedTableLine(lineTextInput)) {
+    return false;
+  }
+  const cells = splitTableCells(lineTextInput);
+  return cells.length >= 2 && cells.some((cell) => String(cell || "").trim().length > 0);
+};
+
+const isMarkdownTableBodyLine = (lineTextInput, expectedColumnCount = 0) => {
+  if (!isMarkdownPipeWrappedTableLine(lineTextInput)) {
+    return false;
+  }
+  const cells = splitTableCells(lineTextInput);
+  if (!cells.length) {
+    return false;
+  }
+  return expectedColumnCount > 0 ? cells.length === expectedColumnCount : true;
+};
 
 const resolveTableRangeByBlockId = (view, blockIdInput) => {
   const blockStart = tableBlockStartFromId(blockIdInput);
@@ -152,50 +192,45 @@ const resolveTableRangeByBlockId = (view, blockIdInput) => {
   const docLength = Number(doc.length || 0);
   const safeStart = Math.max(0, Math.min(docLength, blockStart));
   let lineNumber = doc.lineAt(safeStart).number;
-  let line = doc.line(lineNumber);
-  if (!isMarkdownTableLine(line.text)) {
-    let found = 0;
+  let headerLineNumber = 0;
+  const isHeaderAt = (candidateLineNumber) => {
+    if (candidateLineNumber < 1 || candidateLineNumber >= doc.lines) {
+      return false;
+    }
+    const headerLine = doc.line(candidateLineNumber);
+    const delimiterLine = doc.line(candidateLineNumber + 1);
+    return isMarkdownTableHeaderLine(headerLine.text) && isMarkdownTableDelimiterLine(delimiterLine.text);
+  };
+
+  if (!isHeaderAt(lineNumber)) {
     for (let offset = -2; offset <= 2; offset += 1) {
       const candidate = lineNumber + offset;
-      if (candidate < 1 || candidate > doc.lines) {
-        continue;
-      }
-      const candidateLine = doc.line(candidate);
-      if (isMarkdownTableLine(candidateLine.text)) {
-        lineNumber = candidate;
-        line = candidateLine;
-        found = 1;
+      if (isHeaderAt(candidate)) {
+        headerLineNumber = candidate;
         break;
       }
     }
-    if (!found) {
+    if (!headerLineNumber) {
       return null;
     }
+  } else {
+    headerLineNumber = lineNumber;
   }
 
-  let startLine = lineNumber;
-  while (startLine > 1 && isMarkdownTableLine(doc.line(startLine - 1).text)) {
-    startLine -= 1;
-  }
-
-  let endLine = lineNumber;
-  while (endLine < doc.lines && isMarkdownTableLine(doc.line(endLine + 1).text)) {
+  const expectedColumnCount = markdownTableColumnCountOf(doc.line(headerLineNumber).text);
+  let endLine = headerLineNumber + 1;
+  while (
+    endLine < doc.lines
+    && isMarkdownTableBodyLine(doc.line(endLine + 1).text, expectedColumnCount)
+  ) {
     endLine += 1;
   }
 
   return {
-    from: doc.line(startLine).from,
+    from: doc.line(headerLineNumber).from,
     to: doc.line(endLine).to
   };
 };
-
-const splitTableCells = (lineTextInput) =>
-  String(lineTextInput || "")
-    .trim()
-    .replace(/^\|/, "")
-    .replace(/\|$/, "")
-    .split("|")
-    .map((cell) => String(cell || "").trim());
 
 const isTableDelimiterCell = (cellTextInput) => /^:?-{3,}:?$/.test(String(cellTextInput || "").trim());
 
@@ -240,6 +275,9 @@ const parseMarkdownTableModel = (rawTextInput) => {
   if (lines.length < 2) {
     return null;
   }
+  if (!isMarkdownPipeWrappedTableLine(lines[0]) || !isMarkdownPipeWrappedTableLine(lines[1])) {
+    return null;
+  }
 
   const headers = splitTableCells(lines[0]);
   const delimiterCells = splitTableCells(lines[1]);
@@ -254,10 +292,14 @@ const parseMarkdownTableModel = (rawTextInput) => {
 
   const columnCount = headers.length;
   const alignments = Array.from({ length: columnCount }, (_, index) => alignFromDelimiterCell(delimiterCells[index]));
-  const rows = lines.slice(2).map((line) => {
+  const rows = [];
+  for (const line of lines.slice(2)) {
+    if (!isMarkdownTableBodyLine(line, columnCount)) {
+      break;
+    }
     const cells = splitTableCells(line);
-    return Array.from({ length: columnCount }, (_, index) => String(cells[index] || "").trim());
-  });
+    rows.push(Array.from({ length: columnCount }, (_, index) => String(cells[index] || "").trim()));
+  }
   const indent = lines.find((line) => line.trim().length > 0)?.match(/^\s*/u)?.[0] || "";
 
   return {

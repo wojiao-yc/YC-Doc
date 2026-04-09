@@ -60,15 +60,16 @@ test("presentation hides markdown syntax by default and keeps active token sourc
   assert.doesNotMatch(presentation, /"math_block"\s*\]/);
 });
 
-test("presentation also supports block-level markdown rendering and source reveal", () => {
+test("presentation keeps tables in widget mode without block-level source toggles", () => {
   const presentation = readSrc("editor/extensions/presentation.js");
 
   assert.match(presentation, /SOURCE_VISIBLE_BLOCK_TYPES/);
   assert.match(presentation, /addListPrefixDecorationsForBlock/);
   assert.match(presentation, /addBlockquotePrefixDecorationsForBlock/);
   assert.match(presentation, /TableBlockWidget/);
-  assert.match(presentation, /toggleTableExpandEffect/);
   assert.match(presentation, /cm-table-widget/);
+  assert.doesNotMatch(presentation, /toggleTableExpandEffect/);
+  assert.doesNotMatch(presentation, /cm-table-widget-btn/);
 });
 
 test("image source toggle updates immediately and prunes stale expanded-image ids", () => {
@@ -172,6 +173,16 @@ test("editor code blocks expose a copy button and explicit selection styling", (
   assert.match(codeBlockCss, /\.yc-editor-host \.cm-code-block-copy-btn \.cm-code-block-copy-icon-svg \{/);
   assert.match(themeCss, /\.yc-editor-host \.cm-content::selection/);
   assert.match(themeCss, /\.yc-editor-host \.cm-content \*::selection/);
+});
+
+test("table cells switch to markdown source text on focus without restoring block-level source toggle", () => {
+  const presentation = readSrc("editor/extensions/presentation.js");
+
+  assert.match(presentation, /renderTableCellEditorFromMarkdown/);
+  assert.match(presentation, /enterTableCellEditorSourceMode/);
+  assert.match(presentation, /cellEditor\.addEventListener\("focus",/);
+  assert.match(presentation, /data-table-source-mode/);
+  assert.doesNotMatch(presentation, /cm-table-widget-btn/);
 });
 
 test("editor includes custom right-click context menu extension with grouped commands", () => {

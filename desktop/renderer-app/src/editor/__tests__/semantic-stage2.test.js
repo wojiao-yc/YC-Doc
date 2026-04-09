@@ -50,6 +50,28 @@ test("paragraph-like special blocks are split without separator blank lines", ()
   assert.equal(markdown.slice(blocks[3].from, blocks[3].to), ["| a | b |", "| - | - |", "| 1 | 2 |"].join("\n"));
 });
 
+test("table parsing stops before following non-table paragraph and wikilink lines", () => {
+  const markdown = [
+    "| 等等 | qq | 等等 |",
+    "| --- | --- | --- |",
+    "| 等等 | 等等 | 等等 |",
+    "天天",
+    "[[dddddaa#SkillRL 文件全览]]"
+  ].join("\n");
+  const blocks = parseMarkdownToBlocks(markdown);
+
+  assert.deepEqual(
+    blocks.map((block) => block.type),
+    ["table", "paragraph", "paragraph"]
+  );
+  assert.equal(
+    markdown.slice(blocks[0].from, blocks[0].to),
+    ["| 等等 | qq | 等等 |", "| --- | --- | --- |", "| 等等 | 等等 | 等等 |"].join("\n")
+  );
+  assert.equal(markdown.slice(blocks[1].from, blocks[1].to), "天天");
+  assert.equal(markdown.slice(blocks[2].from, blocks[2].to), "[[dddddaa#SkillRL 文件全览]]");
+});
+
 test("image block range does not swallow newline before heading or list", () => {
   const markdown = [
     "![alt](https://example.com/a.png)",

@@ -224,14 +224,6 @@
   pointer-events: none;
 }
 
-.yc-editor-host .cm-line.cm-block-table-source-anchor {
-  background: transparent !important;
-  box-shadow: none !important;
-  padding-top: 0 !important;
-  padding-bottom: 0 !important;
-  border: 0 !important;
-}
-
 .yc-editor-host .cm-line.cm-block-heading-subtitle-hidden {
   height: 0 !important;
   min-height: 0 !important;
@@ -257,14 +249,6 @@
 .yc-editor-host .cm-line.cm-block-math-block.cm-block-source-visible.cm-block-end,
 .yc-editor-host .cm-line.cm-block-math-block.cm-block-source-visible.cm-block-start.cm-block-end {
   box-shadow: none !important;
-  border-radius: 0 !important;
-}
-
-.yc-editor-host .cm-line.cm-block-table.cm-block-source-visible {
-  background: transparent !important;
-  box-shadow: none !important;
-  padding-left: inherit !important;
-  padding-right: inherit !important;
   border-radius: 0 !important;
 }
 
@@ -725,34 +709,6 @@
   width: 2px;
 }
 
-.yc-editor-host .cm-table-widget-btn {
-  position: absolute;
-  top: 0;
-  right: 0;
-  font-size: 12px;
-  font-family: var(--yc-font-widget-mono);
-  font-weight: 600;
-  color: var(--yc-math-widget-btn-color);
-  background: var(--yc-math-widget-btn-bg);
-  padding: 2px 6px;
-  border-radius: 4px;
-  cursor: pointer;
-  user-select: none;
-  line-height: 1.2;
-  opacity: 0;
-  pointer-events: none;
-  transition: opacity 0.15s ease, background-color 0.15s ease;
-}
-
-.yc-editor-host .cm-table-widget:hover .cm-table-widget-btn {
-  opacity: 1;
-  pointer-events: auto;
-}
-
-.yc-editor-host .cm-table-widget-btn:hover {
-  background: var(--yc-math-widget-btn-bg-hover);
-}
-
 .yc-editor-host .cm-inline-math-widget {
   display: inline-flex;
   align-items: center;
@@ -774,7 +730,6 @@
 .yc-editor-shell.is-readonly .yc-editor-host .cm-image-widget-toolbar,
 .yc-editor-shell.is-readonly .yc-editor-host .cm-image-widget-resize-handle,
 .yc-editor-shell.is-readonly .yc-editor-host .cm-math-widget-btn,
-.yc-editor-shell.is-readonly .yc-editor-host .cm-table-widget-btn,
 .yc-editor-shell.is-readonly .yc-editor-host .cm-table-widget-row-handle,
 .yc-editor-shell.is-readonly .yc-editor-host .cm-table-widget-col-handle,
 .yc-editor-shell.is-readonly .yc-editor-host .cm-table-widget-edge-btn {

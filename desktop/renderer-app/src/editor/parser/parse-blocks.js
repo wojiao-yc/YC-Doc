@@ -210,9 +210,11 @@ const tableColumnsOf = (token) => {
 
 const tableCellsFromLine = (lineText) => String(lineText || "").trim().replace(/^\|/, "").replace(/\|$/, "").split("|");
 
+const isPipeWrappedTableLine = (lineText) => /^\s*\|.*\|\s*$/.test(String(lineText || ""));
+
 const isTableDelimiterLine = (lineText) => {
   const trimmed = String(lineText || "").trim();
-  if (!trimmed.includes("|")) {
+  if (!isPipeWrappedTableLine(trimmed)) {
     return false;
   }
   const cells = tableCellsFromLine(trimmed);
@@ -224,16 +226,23 @@ const isTableDelimiterLine = (lineText) => {
 
 const isTableHeaderLine = (lineText) => {
   const trimmed = String(lineText || "").trim();
-  if (!trimmed || !trimmed.includes("|")) {
+  if (!trimmed || !isPipeWrappedTableLine(trimmed)) {
     return false;
   }
   const cells = tableCellsFromLine(trimmed);
   return cells.length >= 2 && cells.some((cell) => String(cell || "").trim().length > 0);
 };
 
-const isTableBodyLine = (lineText) => {
+const isTableBodyLine = (lineText, expectedColumnCount = 0) => {
   const trimmed = String(lineText || "").trim();
-  return Boolean(trimmed) && trimmed.includes("|");
+  if (!trimmed || !isPipeWrappedTableLine(trimmed)) {
+    return false;
+  }
+  const cells = tableCellsFromLine(trimmed);
+  if (!cells.length) {
+    return false;
+  }
+  return expectedColumnCount > 0 ? cells.length === expectedColumnCount : true;
 };
 
 const tableColumnCountFromHeaderLine = (lineText) => {
@@ -356,8 +365,12 @@ const parseParagraphRangeToBlocks = (markdown, from, to) => {
     const nextLine = lines[index + 1];
     if (nextLine && isTableHeaderLine(lineText) && isTableDelimiterLine(nextLine.text)) {
       flushParagraph();
+      const tableColumnCount = tableColumnCountFromHeaderLine(lineText);
       let tableEndIndex = index + 1;
-      while (tableEndIndex + 1 < lines.length && isTableBodyLine(lines[tableEndIndex + 1].text)) {
+      while (
+        tableEndIndex + 1 < lines.length
+        && isTableBodyLine(lines[tableEndIndex + 1].text, tableColumnCount)
+      ) {
         tableEndIndex += 1;
       }
 
@@ -368,7 +381,7 @@ const parseParagraphRangeToBlocks = (markdown, from, to) => {
           from: line.from,
           to: blockTo,
           attrs: {
-            columns: tableColumnCountFromHeaderLine(lineText)
+            columns: tableColumnCount
           }
         });
       }
@@ -656,6 +669,25 @@ export const parseMarkdownToBlocks = (markdownInput) => {
 
     if (type === "table") {
       const trimmedTo = trimTrailingBlankLinesInRange(markdown, range.from, range.to);
+      const strictBlocks = parseParagraphRangeToBlocks(markdown, range.from, trimmedTo);
+      if (strictBlocks.length) {
+        for (const strictBlock of strictBlocks) {
+          pushBlock(
+            blocks,
+            markdown,
+            lineStarts,
+            strictBlock.type,
+            strictBlock.from,
+            strictBlock.to,
+            strictBlock.type === BLOCK_TYPES.TABLE
+              ? {
+                  columns: Number(strictBlock.attrs?.columns || tableColumnsOf(token) || 0)
+                }
+              : (strictBlock.attrs || {})
+          );
+        }
+        continue;
+      }
       pushBlock(blocks, markdown, lineStarts, BLOCK_TYPES.TABLE, range.from, trimmedTo, {
         columns: tableColumnsOf(token)
       });

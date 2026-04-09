@@ -7023,7 +7023,6 @@ const isPreviewInteractiveTarget = (target) => {
       ".cm-code-block-copy-trigger",
       ".cm-image-widget-btn",
       ".cm-math-widget-btn",
-      ".cm-table-widget-btn",
       ".cm-table-widget-cell-editor",
       ".cm-task-checkbox-widget"
     ].join(", "))
