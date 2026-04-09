@@ -606,6 +606,19 @@ const transformTableByCommand = (model, commandIdInput, context = {}) => {
   return null;
 };
 
+const TABLE_CELL_FORMAT_COMMAND_IDS = new Set([
+  "add-link",
+  "add-external-link",
+  "format-bold",
+  "format-italic",
+  "format-strike",
+  "format-highlight",
+  "format-code",
+  "format-math",
+  "format-comment",
+  "format-clear"
+]);
+
 const selectionRangeInsideElement = (element) => {
   if (!(element instanceof HTMLElement) || typeof window === "undefined" || typeof window.getSelection !== "function") {
     return null;
@@ -643,6 +656,96 @@ const ensureTableCellSelectionRange = (editableCell) => {
   selection.removeAllRanges();
   selection.addRange(range);
   return range;
+};
+
+const normalizeTableCellClipboardText = (textInput) =>
+  String(textInput ?? "")
+    .replace(/\u00A0/g, " ")
+    .replace(/\r?\n/g, " ");
+
+const resolveTableCellEditingRange = (
+  editableCell,
+  {
+    selectAllIfMissing = false,
+    collapseToEndIfMissing = false
+  } = {}
+) => {
+  const cell = editableCell instanceof HTMLElement ? editableCell : null;
+  if (!cell || typeof window === "undefined" || typeof window.getSelection !== "function") {
+    return null;
+  }
+  const directRange = selectionRangeInsideElement(cell);
+  if (directRange) {
+    return directRange;
+  }
+  const selection = window.getSelection();
+  if (!selection) {
+    return null;
+  }
+  const text = String(cell.textContent || "");
+  if (!text && !collapseToEndIfMissing) {
+    return null;
+  }
+  const range = document.createRange();
+  range.selectNodeContents(cell);
+  if (!selectAllIfMissing || !text) {
+    range.collapse(false);
+  }
+  selection.removeAllRanges();
+  selection.addRange(range);
+  return range;
+};
+
+const finalizeTableCellDomChange = (editableCell) => {
+  if (!(editableCell instanceof HTMLElement)) {
+    return false;
+  }
+  try {
+    editableCell.dispatchEvent(new Event("focusout", { bubbles: true }));
+  } catch {
+    // ignore
+  }
+  editableCell.focus();
+  return true;
+};
+
+const tableCellSelectionText = (editableCell) => {
+  const range = ensureTableCellSelectionRange(editableCell);
+  if (!range) {
+    return "";
+  }
+  return normalizeTableCellClipboardText(range.toString());
+};
+
+const replaceTableCellSelectionWithText = (
+  editableCell,
+  textInput,
+  {
+    collapseToEndIfMissing = false
+  } = {}
+) => {
+  const cell = editableCell instanceof HTMLElement ? editableCell : null;
+  if (!cell) {
+    return false;
+  }
+  const range = resolveTableCellEditingRange(cell, { collapseToEndIfMissing });
+  if (!range) {
+    return false;
+  }
+  const text = normalizeTableCellClipboardText(textInput);
+  const textNode = document.createTextNode(text);
+  range.deleteContents();
+  range.insertNode(textNode);
+
+  const selection = window.getSelection();
+  if (selection) {
+    const nextRange = document.createRange();
+    nextRange.setStart(textNode, text.length);
+    nextRange.collapse(true);
+    selection.removeAllRanges();
+    selection.addRange(nextRange);
+  }
+  return finalizeTableCellDomChange(cell);
 };
 
 const wrapTableCellSelectionWithTag = (editableCell, tagName, attributes = null) => {
@@ -717,16 +820,7 @@ const applyTableCellInlineFormat = (commandIdInput, menuContext = {}) => {
   }
 
   const finalize = (handled) => {
-    if (!handled) {
-      return false;
-    }
-    try {
-      editableCell.dispatchEvent(new Event("focusout", { bubbles: true }));
-    } catch {
-      // ignore
-    }
-    editableCell.focus();
-    return true;
+    return handled ? finalizeTableCellDomChange(editableCell) : false;
   };
 
   if (commandId === "format-bold") {
@@ -1146,6 +1240,48 @@ const readClipboardText = async () => {
   return clipboard.readText();
 };
 
+const commandTableCellCopy = async (menuContext = {}) => {
+  const editableCell = menuContext?.table?.editableCell;
+  if (!(editableCell instanceof HTMLElement)) {
+    return false;
+  }
+  const text = tableCellSelectionText(editableCell);
+  if (!text) {
+    return false;
+  }
+  await writeClipboardText(text);
+  editableCell.focus();
+  return true;
+};
+
+const commandTableCellCut = async (menuContext = {}) => {
+  const editableCell = menuContext?.table?.editableCell;
+  if (!(editableCell instanceof HTMLElement)) {
+    return false;
+  }
+  const text = tableCellSelectionText(editableCell);
+  if (!text) {
+    return false;
+  }
+  await writeClipboardText(text);
+  return replaceTableCellSelectionWithText(editableCell, "");
+};
+
+const commandTableCellPaste = async (menuContext = {}, { plain = false } = {}) => {
+  const editableCell = menuContext?.table?.editableCell;
+  if (!(editableCell instanceof HTMLElement)) {
+    return false;
+  }
+  const raw = await readClipboardText();
+  if (raw == null) {
+    return false;
+  }
+  const text = plain ? String(raw).replace(/\r\n/g, "\n") : String(raw);
+  return replaceTableCellSelectionWithText(editableCell, text, {
+    collapseToEndIfMissing: true
+  });
+};
+
 const commandCopy = async (view) => {
   const range = selectionRangeOf(view);
   if (range.empty) {
@@ -1240,6 +1376,21 @@ const executeCommand = async (view, commandId, menuContext = {}) => {
 
   if (tableContext?.editableCell && TABLE_CELL_FORMAT_COMMAND_IDS.has(normalizedCommandId)) {
     return applyTableCellInlineFormat(normalizedCommandId, menuContext);
+  }
+
+  if (tableContext?.editableCell) {
+    if (normalizedCommandId === "clipboard-cut") {
+      return commandTableCellCut(menuContext);
+    }
+    if (normalizedCommandId === "clipboard-copy") {
+      return commandTableCellCopy(menuContext);
+    }
+    if (normalizedCommandId === "clipboard-paste") {
+      return commandTableCellPaste(menuContext);
+    }
+    if (normalizedCommandId === "clipboard-paste-plain") {
+      return commandTableCellPaste(menuContext, { plain: true });
+    }
   }
 
   try {
@@ -1585,6 +1736,12 @@ const menuDefinitionForContext = (menuContext = {}) => {
   if (tableContext.activeHandleAxis === "column") {
     return [...tableColumnActions, { type: "separator" }, ...tableSortActions];
   }
+  if (tableContext.editableCell) {
+    const filteredRootMenu = rootMenu.filter((item) =>
+      item?.type === "separator" || (item?.id !== "paragraph" && item?.id !== "insert")
+    );
+    return [...buildTableMenuDefinition(), { type: "separator" }, ...filteredRootMenu];
+  }
   return [...buildTableMenuDefinition(), { type: "separator" }, ...rootMenu];
 };
 
@@ -1594,6 +1751,14 @@ const withDisabledState = (items, view, menuContext = {}) => {
   const canWriteClipboard = Boolean(globalThis?.navigator?.clipboard?.writeText);
   const hasBlockRange = Number.isFinite(menuContext?.blockRange?.from) && Number.isFinite(menuContext?.blockRange?.to)
     && Number(menuContext.blockRange.to) > Number(menuContext.blockRange.from);
+  const tableEditableCell = menuContext?.table?.editableCell instanceof HTMLElement
+    ? menuContext.table.editableCell
+    : null;
+  const tableCellSelection = tableEditableCell ? selectionRangeInsideElement(tableEditableCell) : null;
+  const tableCellSelectedText = tableCellSelection && !tableCellSelection.collapsed
+    ? normalizeTableCellClipboardText(tableCellSelection.toString())
+    : "";
+  const tableCellHasClipboardSource = Boolean(tableCellSelectedText || String(tableEditableCell?.textContent || "").trim());
   const canInsertImage = typeof contextMenuRuntimeOptions?.requestImageMarkdown === "function";
   const canOpenEditorSettings = typeof contextMenuRuntimeOptions?.onEditorSettingCommand === "function";
   return (Array.isArray(items) ? items : []).map((item) => {
@@ -1603,7 +1768,9 @@ const withDisabledState = (items, view, menuContext = {}) => {
     const id = String(item?.id || "");
     let disabled = false;
     if (id === "clipboard-cut" || id === "clipboard-copy") {
-      disabled = selection.empty || !canWriteClipboard;
+      disabled = tableEditableCell
+        ? !tableCellHasClipboardSource || !canWriteClipboard
+        : selection.empty || !canWriteClipboard;
     } else if (id === "clipboard-paste" || id === "clipboard-paste-plain") {
       disabled = !canReadClipboard;
     } else if (id === "select-block") {

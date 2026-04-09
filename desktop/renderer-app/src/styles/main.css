@@ -98,7 +98,7 @@ body {
   padding: 0 6px 0 0;
   -webkit-app-region: drag;
   overflow-x: hidden;
-  overflow-y: visible;
+  overflow-y: hidden;
 }
 
 .editor-chrome-tabs {
@@ -111,7 +111,7 @@ body {
   gap: 4px;
   padding: 4px 0 0 8px;
   overflow-x: clip;
-  overflow-y: visible;
+  overflow-y: hidden;
   scrollbar-width: none;
   -ms-overflow-style: none;
 }

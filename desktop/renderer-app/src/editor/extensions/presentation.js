@@ -626,6 +626,20 @@ const isPlainTableVerticalArrowEvent = (event) => {
   return true;
 };
 
+const isPlainTableClipboardShortcutEvent = (event) => {
+  if (!event || event.defaultPrevented || event.isComposing) {
+    return false;
+  }
+  const key = String(event.key || "").toLowerCase();
+  if (!key) {
+    return false;
+  }
+  if ((!event.ctrlKey && !event.metaKey) || event.altKey) {
+    return false;
+  }
+  return key === "c" || key === "x" || key === "v" || key === "a";
+};
+
 const tableCellEditorIdentityOf = (cellEditor) => {
   if (!(cellEditor instanceof HTMLElement)) {
     return null;
@@ -753,6 +767,48 @@ const focusTableCellEditorElement = (cellEditor, textOffsetInput = 0) => {
       inline: "nearest"
     });
   }
+  return true;
+};
+
+const selectionRangeInsideTableCellEditor = (cellEditor) => {
+  if (!(cellEditor instanceof HTMLElement) || typeof window === "undefined") {
+    return null;
+  }
+  const selection = window.getSelection?.();
+  if (!selection || selection.rangeCount < 1) {
+    return null;
+  }
+  const range = selection.getRangeAt(0);
+  if (!cellEditor.contains(range.startContainer) || !cellEditor.contains(range.endContainer)) {
+    return null;
+  }
+  return range;
+};
+
+const insertPlainTextIntoTableCellEditor = (cellEditor, textInput) => {
+  if (!(cellEditor instanceof HTMLElement) || typeof document === "undefined" || typeof window === "undefined") {
+    return false;
+  }
+  const text = normalizeTableCellEditorText(textInput);
+  const selection = window.getSelection?.();
+  if (!selection) {
+    return false;
+  }
+  const existingRange = selectionRangeInsideTableCellEditor(cellEditor);
+  const activeRange = existingRange || document.createRange();
+  if (!existingRange) {
+    activeRange.selectNodeContents(cellEditor);
+    activeRange.collapse(false);
+  }
+  const textNode = document.createTextNode(text);
+  activeRange.deleteContents();
+  activeRange.insertNode(textNode);
+
+  const nextRange = document.createRange();
+  nextRange.setStart(textNode, text.length);
+  nextRange.collapse(true);
+  selection.removeAllRanges();
+  selection.addRange(nextRange);
   return true;
 };
 
@@ -1107,8 +1163,22 @@ const bindTableCellEditorDomEvents = (cellEditor) => {
     stopBubble(event);
     enterTableCellEditorSourceMode(cellEditor);
   });
+  cellEditor.addEventListener("copy", stopBubble);
+  cellEditor.addEventListener("cut", stopBubble);
+  cellEditor.addEventListener("paste", (event) => {
+    stopBubble(event);
+    const pastedText = event.clipboardData?.getData("text/plain");
+    if (typeof pastedText !== "string") {
+      return;
+    }
+    event.preventDefault();
+    insertPlainTextIntoTableCellEditor(cellEditor, pastedText);
+  });
   cellEditor.addEventListener("keydown", (event) => {
     event.stopPropagation();
+    if (isPlainTableClipboardShortcutEvent(event)) {
+      return;
+    }
     if (isPlainTableVerticalArrowEvent(event)) {
       event.preventDefault();
       const direction = event.key === "ArrowUp" ? -1 : 1;
@@ -2861,9 +2931,9 @@ class BlockPresentationPlugin {
     const mathExpandChanged = updateHasEffect(update, toggleMathExpandEffect);
     if (!blocksChanged && !currentChanged) {
       if (update.docChanged) {
-        // Any document edit can invalidate old ranges; wait for semantic snapshot instead of remapping stale blocks.
-        this.blocks = [];
-        this.decorations = buildDecorations(update.view, this.blocks, this.currentBlockId);
+        // Keep existing block styling mapped through document edits until the next semantic snapshot arrives.
+        // This avoids transient flicker on block backgrounds such as code block shells while typing.
+        this.decorations = this.decorations.map(update.changes);
       } else if (
         selectionChanged
         || readOnlyChanged
@@ -4018,6 +4088,9 @@ const presentationKeyDownHandler = (event, view) => {
     const tableEditableCell = target.closest("[data-table-edit='true']");
     if (tableEditableCell) {
       event.stopPropagation();
+      if (isPlainTableClipboardShortcutEvent(event)) {
+        return false;
+      }
       if (event.key === "Enter" && !event.shiftKey && !event.altKey && !event.ctrlKey && !event.metaKey) {
         event.preventDefault();
         if (tableEditableCell instanceof HTMLElement) {

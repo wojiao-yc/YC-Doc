@@ -80,7 +80,7 @@ test("image source toggle updates immediately and prunes stale expanded-image id
   assert.match(presentation, /imageExpandChanged/);
   assert.match(presentation, /effect\.is\(setPresentationDataEffect\)/);
   assert.match(presentation, /validImageIds/);
-  assert.match(presentation, /this\.blocks = \[\]/);
+  assert.match(presentation, /this\.decorations = this\.decorations\.map\(update\.changes\)/);
   assert.match(presentation, /btn\.textContent\s*=\s*this\.isExpanded/);
   assert.match(presentation, /btn\.className = "cm-image-widget-btn"/);
   assert.doesNotMatch(presentation, /sourceToggleTitle/);
@@ -183,6 +183,28 @@ test("table cells switch to markdown source text on focus without restoring bloc
   assert.match(presentation, /cellEditor\.addEventListener\("focus",/);
   assert.match(presentation, /data-table-source-mode/);
   assert.doesNotMatch(presentation, /cm-table-widget-btn/);
+});
+
+test("table cells keep native clipboard shortcuts local and expose table-aware clipboard commands", () => {
+  const presentation = readSrc("editor/extensions/presentation.js");
+  const menuExtension = readSrc("editor/extensions/context-menu.js");
+
+  assert.match(presentation, /isPlainTableClipboardShortcutEvent/);
+  assert.match(presentation, /cellEditor\.addEventListener\("copy", stopBubble\)/);
+  assert.match(presentation, /const insertPlainTextIntoTableCellEditor =/);
+  assert.match(presentation, /event\.clipboardData\?\.getData\("text\/plain"\)/);
+
+  assert.match(menuExtension, /const TABLE_CELL_FORMAT_COMMAND_IDS = new Set\(\[/);
+  assert.match(menuExtension, /const commandTableCellPaste = async/);
+  assert.match(menuExtension, /tableContext\?\.editableCell\) \{\s*if \(normalizedCommandId === "clipboard-cut"/);
+  assert.match(menuExtension, /item\?\.id !== "paragraph" && item\?\.id !== "insert"/);
+});
+
+test("editor chrome tabs hide vertical overflow to avoid a right-edge scrollbar stub", () => {
+  const mainCss = readSrc("styles/main.css");
+
+  assert.match(mainCss, /\.editor-chrome-tabs-wrap\s*\{[\s\S]*overflow-y:\s*hidden;/);
+  assert.match(mainCss, /\.editor-chrome-tabs\s*\{[\s\S]*overflow-y:\s*hidden;/);
 });
 
 test("editor includes custom right-click context menu extension with grouped commands", () => {
