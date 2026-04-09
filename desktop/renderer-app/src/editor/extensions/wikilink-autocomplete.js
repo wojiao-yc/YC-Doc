@@ -17,11 +17,17 @@ export const setWikilinkLocaleText = (fn) => {
 
 const i18n = (zhText, enText) => wikilinkLocaleText(zhText, enText);
 
-const WIKI_LINK_MENU_HINTS = [
-  { token: "#", text: i18n("可以链接到标题", "Can link to headings") },
+const wikiLinkMenuHints = () => ([
+  { token: "#", text: i18n("链接到标题", "Link to headings") },
   { token: "^", text: i18n("链接文本块", "Link to text block") },
-  { token: "|", text: i18n("指定显示的文本", "Specify display text") }
-];
+  { token: "|", text: i18n("指定显示的文本", "Display text") }
+]);
+
+const wikiLinkMenuHintsHtml = () => wikiLinkMenuHints()
+  .map((hint) =>
+    `<div class="yc-wikilink-autocomplete-hint"><span class="yc-wikilink-autocomplete-hint-token">${escapeHtml(hint.token)}</span><span class="yc-wikilink-autocomplete-hint-text">${escapeHtml(hint.text)}</span></div>`
+  )
+  .join("");
 
 const escapeHtml = (valueInput = "") =>
   String(valueInput || "")
@@ -149,11 +155,7 @@ export const createWikiLinkAutocompleteExtension = ({
       this.list.className = "yc-wikilink-autocomplete-list";
       this.footer = document.createElement("div");
       this.footer.className = "yc-wikilink-autocomplete-footer";
-      this.footer.innerHTML = WIKI_LINK_MENU_HINTS
-        .map((hint) =>
-          `<div class="yc-wikilink-autocomplete-hint"><span class="yc-wikilink-autocomplete-hint-token">${escapeHtml(hint.token)}</span><span class="yc-wikilink-autocomplete-hint-text">${escapeHtml(hint.text)}</span></div>`
-        )
-        .join("");
+      this.footer.innerHTML = wikiLinkMenuHintsHtml();
       this.panel.append(this.list, this.footer);
       this.panel.style.display = "none";
       document.body.appendChild(this.panel);
@@ -363,6 +365,7 @@ export const createWikiLinkAutocompleteExtension = ({
         "is-dark",
         Boolean(document.getElementById("app")?.dataset?.themeMode === "dark")
       );
+      this.footer.innerHTML = wikiLinkMenuHintsHtml();
       this.list.innerHTML = "";
       let selectedButton = null;
 

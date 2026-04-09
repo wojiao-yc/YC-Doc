@@ -223,7 +223,7 @@
             v-model="storageSearchQuery"
             type="search"
             class="file-tree-search-input"
-            :placeholder="localeText('搜索 Workshop...', 'Search Workshop...')"
+            :placeholder="localeText('搜索工作区...', 'Search Workspace...')"
             spellcheck="false"
           />
         </label>
@@ -773,7 +773,7 @@
                 @mousedown.stop
                 @click="openTerminalPanel('runner')"
               >
-                Local Runner
+                {{ localeText('本地运行器', 'Local Runner') }}
               </button>
             </template>
           </div>
@@ -827,7 +827,7 @@
         >
           <button type="button" class="term-context-item" role="menuitem" @click="openDesktopRenameDialog(desktopTabMenu.sid)">
             <AppIcon name="rename" class="storage-context-icon" />
-            <span>重命名</span>
+            <span>{{ localeText('重命名', 'Rename') }}</span>
           </button>
         </div>
 
@@ -1953,6 +1953,61 @@ const desktopSecondaryTerminalRef = ref(null);
 const desktopSessions = ref([]);
 const activeDesktopSessionId = ref("");
 const desktopSessionSeq = ref(1);
+const DEFAULT_DESKTOP_SESSION_ZH_PATTERN = /^终端\s+(\d+)$/u;
+const DEFAULT_DESKTOP_SESSION_EN_PATTERN = /^terminal\s+(\d+)$/iu;
+const desktopSessionLabelByIndex = (indexInput = 1) => {
+  const index = Math.max(1, Math.round(Number(indexInput) || 1));
+  return localeText(`终端 ${index}`, `Terminal ${index}`);
+};
+const detectAutoDesktopSessionLabelIndex = (labelInput = "") => {
+  const label = String(labelInput || "").trim();
+  if (!label) {
+    return Number.NaN;
+  }
+  const zhMatch = label.match(DEFAULT_DESKTOP_SESSION_ZH_PATTERN);
+  if (zhMatch) {
+    return Math.max(1, Number(zhMatch[1] || 1));
+  }
+  const enMatch = label.match(DEFAULT_DESKTOP_SESSION_EN_PATTERN);
+  if (enMatch) {
+    return Math.max(1, Number(enMatch[1] || 1));
+  }
+  return Number.NaN;
+};
+const hasOwn = (target, key) => Object.prototype.hasOwnProperty.call(target || {}, key);
+const refreshDesktopSessionLanguageLabels = () => {
+  const sessions = Array.isArray(desktopSessions.value) ? desktopSessions.value : [];
+  if (!sessions.length) {
+    return;
+  }
+  let changed = false;
+  const next = sessions.map((session) => {
+    const hasAutoLabelIndex = hasOwn(session, "autoLabelIndex");
+    const explicitAutoLabelIndex = Number(session?.autoLabelIndex);
+    if (hasAutoLabelIndex && !(Number.isFinite(explicitAutoLabelIndex) && explicitAutoLabelIndex > 0)) {
+      return session;
+    }
+    const resolvedAutoLabelIndex = Number.isFinite(explicitAutoLabelIndex) && explicitAutoLabelIndex > 0
+      ? explicitAutoLabelIndex
+      : detectAutoDesktopSessionLabelIndex(session?.label);
+    if (!(Number.isFinite(resolvedAutoLabelIndex) && resolvedAutoLabelIndex > 0)) {
+      return session;
+    }
+    const nextLabel = desktopSessionLabelByIndex(resolvedAutoLabelIndex);
+    if (String(session?.label || "") === nextLabel && explicitAutoLabelIndex === resolvedAutoLabelIndex) {
+      return session;
+    }
+    changed = true;
+    return {
+      ...session,
+      label: nextLabel,
+      autoLabelIndex: resolvedAutoLabelIndex
+    };
+  });
+  if (changed) {
+    desktopSessions.value = next;
+  }
+};
 const desktopFullscreen = ref(false);
 const desktopSplit = ref(false);
 const desktopSplitRatio = ref(50);
@@ -6809,7 +6864,7 @@ const getWikiLinkSuggestions = ({ mode = "file", noteQuery = "", headingQuery = 
   if (!exactExisting) {
     fileItems.unshift({
       id: `create:${rawTarget}`,
-      label: `创建 ${rawTarget}`,
+      label: localeText(`创建 ${rawTarget}`, `Create ${rawTarget}`),
       detail: suggestRelPathForMissing(rawTarget, activeMarkdownRelPath.value),
       insertText: rawTarget,
       tone: "warning",
@@ -7817,10 +7872,11 @@ const confirmDesktopRenameDialog = () => {
     }
     return {
       ...item,
-      label: trimmed
+      label: trimmed,
+      autoLabelIndex: -1
     };
   });
-  showToast(`已重命名为 ${trimmed}`);
+  showToast(localeText(`已重命名为 ${trimmed}`, `Renamed to ${trimmed}`));
   cancelDesktopRenameDialog();
 };
 
@@ -7915,12 +7971,14 @@ const createDesktopTerminal = async () => {
   if (!sid) {
     return;
   }
+  const labelIndex = Math.max(1, Number(desktopSessionSeq.value || 1));
   desktopSessions.value.push({
     id: sid,
-    label: localeText(`终端 ${desktopSessionSeq.value}`, `Terminal ${desktopSessionSeq.value}`),
-    shell
+    label: desktopSessionLabelByIndex(labelIndex),
+    shell,
+    autoLabelIndex: labelIndex
   });
-  desktopSessionSeq.value += 1;
+  desktopSessionSeq.value = labelIndex + 1;
   desktopSessionBuffers.set(sid, "");
   if (!primaryPaneSessionId.value) {
     primaryPaneSessionId.value = sid;
@@ -8623,6 +8681,7 @@ watch(appLanguage, (nextLanguage) => {
   } catch {
     // ignore storage failure
   }
+  refreshDesktopSessionLanguageLabels();
 }, { immediate: true });
 
 watch(storageTree, () => {

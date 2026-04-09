@@ -97,7 +97,8 @@ body {
   gap: 0;
   padding: 0 6px 0 0;
   -webkit-app-region: drag;
-  overflow: hidden;
+  overflow-x: hidden;
+  overflow-y: visible;
 }
 
 .editor-chrome-tabs {
@@ -155,7 +156,8 @@ body {
   top: calc(100% + 8px);
   transform: translateX(-50%) translateY(-2px);
   white-space: nowrap;
-  max-width: 300px;
+  line-height: 1;
+  max-width: min(420px, calc(100vw - 32px));
   overflow: hidden;
   text-overflow: ellipsis;
   padding: 5px 9px;
@@ -164,7 +166,6 @@ body {
   background: var(--yc-tooltip-bg);
   color: var(--yc-tooltip-text);
   font-size: 11px;
-  line-height: 1;
   opacity: 0;
   pointer-events: none;
   transition: opacity 0.12s ease, transform 0.12s ease;
@@ -2290,10 +2291,12 @@ body {
   transform: translateX(-2px) translateY(-50%);
   width: max-content;
   max-width: min(220px, calc(100vw - 96px));
-  padding: 7px 10px;
+  padding: 6px 10px;
   border-radius: 12px;
-  white-space: normal;
-  line-height: 1.35;
+  white-space: nowrap;
+  line-height: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .file-sidebar-panel .term-tip-btn:hover::after,
@@ -3432,7 +3435,7 @@ body {
   top: calc(100% + 8px);
   transform: translateX(-50%) translateY(-2px);
   white-space: nowrap;
-  max-width: 300px;
+  max-width: min(420px, calc(100vw - 32px));
   overflow: hidden;
   text-overflow: ellipsis;
   padding: 5px 9px;
@@ -3452,6 +3455,42 @@ body {
 .term-tip-btn:hover::after {
   opacity: 1;
   transform: translateX(-50%) translateY(0);
+}
+
+.app-chrome-leading .term-tip-btn::after {
+  left: 0;
+  right: auto;
+  transform: translateX(0) translateY(-2px);
+}
+
+.app-chrome-leading .term-tip-btn:hover::after {
+  transform: translateX(0) translateY(0);
+}
+
+.app-chrome-trailing .term-tip-btn::after {
+  left: auto;
+  right: 0;
+  transform: translateX(0) translateY(-2px);
+}
+
+.app-chrome-trailing .term-tip-btn:hover::after {
+  transform: translateX(0) translateY(0);
+}
+
+.term-tabs-bar .term-tip-btn::after {
+  left: 0;
+  right: auto;
+  transform: translateX(0) translateY(-2px);
+  max-width: min(360px, calc(100vw - 40px));
+}
+
+.term-tabs-bar .term-tip-btn:hover::after {
+  transform: translateX(0) translateY(0);
+}
+
+.term-tabs-bar .ml-auto .term-tip-btn::after {
+  left: auto;
+  right: 0;
 }
 
 .term-icon {

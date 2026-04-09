@@ -991,7 +991,7 @@ const promptLinkUrl = (defaultValue = DEFAULT_LINK_URL) => {
   if (typeof window === "undefined" || typeof window.prompt !== "function") {
     return defaultValue;
   }
-  return window.prompt("请输入链接地址", defaultValue);
+  return window.prompt(i18n("请输入链接地址", "Enter link URL"), defaultValue);
 };
 
 const commandInsertWikiLink = (view) => {
@@ -1279,7 +1279,7 @@ const executeCommand = async (view, commandId, menuContext = {}) => {
   }
 };
 
-const MENU_DEFINITION = [
+const buildMenuDefinition = () => [
   { id: "add-link", icon: "+", label: i18n("新增链接", "Add Wiki Link") },
   { id: "add-external-link", icon: "->", label: i18n("新增外部链接", "Add External Link") },
   { type: "separator" },
@@ -1344,26 +1344,14 @@ const MENU_DEFINITION = [
   { id: "select-all", icon: "*", label: i18n("全选", "Select All") }
 ];
 
-const EDITOR_INSERT_IMAGE_ITEM = Object.freeze({
+const buildEditorInsertImageItem = () => ({
   id: "insert-image",
   icon: "img",
   label: i18n("图片", "Image")
 });
 
-const EDITOR_SETTINGS_MENU_ITEM = Object.freeze({
-  id: "editor-settings",
-  icon: "cfg",
-  label: i18n("设置", "Settings"),
-  children: [
-    { id: "editor-width-narrower", icon: "<-", label: i18n("收窄编辑区", "Narrow Editor") },
-    { id: "editor-width-wider", icon: "->", label: i18n("放宽编辑区", "Widen Editor") },
-    { id: "editor-width-reset", icon: "[]", label: i18n("重置编辑区宽度", "Reset Editor Width") },
-    { type: "separator" },
-    { id: "editor-debug-toggle", icon: "dbg", label: i18n("切换调试面板", "Toggle Debug Panel") }
-  ]
-});
-
 const withEditorMenuExtras = (itemsInput = []) => {
+  const insertImageItem = buildEditorInsertImageItem();
   return (Array.isArray(itemsInput) ? itemsInput : []).map((item) => {
     if (!item || item.type === "separator" || item.id !== "insert" || !Array.isArray(item.children)) {
       return item;
@@ -1374,10 +1362,10 @@ const withEditorMenuExtras = (itemsInput = []) => {
     const insertChildren = separatorIndex >= 0
       ? [
           ...item.children.slice(0, separatorIndex + 1),
-          EDITOR_INSERT_IMAGE_ITEM,
+          insertImageItem,
           ...item.children.slice(separatorIndex + 1)
         ]
-      : [...item.children, EDITOR_INSERT_IMAGE_ITEM];
+      : [...item.children, insertImageItem];
     return {
       ...item,
       children: insertChildren
@@ -1385,7 +1373,7 @@ const withEditorMenuExtras = (itemsInput = []) => {
   });
 };
 
-const TABLE_ROW_ACTIONS = [
+const buildTableRowActions = () => [
   { id: "table-row-insert-above", icon: "^", label: i18n("在上方新增行", "Insert Row Above") },
   { id: "table-row-insert-below", icon: "v", label: i18n("在下方新增行", "Insert Row Below") },
   { type: "separator" },
@@ -1396,7 +1384,7 @@ const TABLE_ROW_ACTIONS = [
   { id: "table-row-delete", icon: "del", label: i18n("删除行", "Delete Row") }
 ];
 
-const TABLE_COLUMN_ACTIONS = [
+const buildTableColumnActions = () => [
   { id: "table-col-insert-left", icon: "<", label: i18n("在左侧新增列", "Insert Column Left") },
   { id: "table-col-insert-right", icon: ">", label: i18n("在右侧新增列", "Insert Column Right") },
   { type: "separator" },
@@ -1411,26 +1399,26 @@ const TABLE_COLUMN_ACTIONS = [
   { id: "table-col-delete", icon: "del", label: i18n("删除列", "Delete Column") }
 ];
 
-const TABLE_SORT_ACTIONS = [
+const buildTableSortActions = () => [
   { id: "table-sort-asc", icon: "A^", label: i18n("按列升序 (A-Z)", "Sort Ascending (A-Z)") },
   { id: "table-sort-desc", icon: "Zv", label: i18n("按列降序 (Z-A)", "Sort Descending (Z-A)") }
 ];
 
-const TABLE_MENU_DEFINITION = [
+const buildTableMenuDefinition = () => [
   {
     id: "table-row",
     icon: "row",
     label: i18n("行", "Row"),
-    children: TABLE_ROW_ACTIONS
+    children: buildTableRowActions()
   },
   {
     id: "table-col",
     icon: "col",
     label: i18n("列", "Column"),
-    children: TABLE_COLUMN_ACTIONS
+    children: buildTableColumnActions()
   },
   { type: "separator" },
-  ...TABLE_SORT_ACTIONS
+  ...buildTableSortActions()
 ];
 
 const CONTEXT_MENU_ICON_NAME_BY_ID = Object.freeze({
@@ -1542,17 +1530,20 @@ const disposeMountedContextMenuIcons = (rootInput) => {
 
 const menuDefinitionForContext = (menuContext = {}) => {
   const tableContext = menuContext?.table || null;
-  const rootMenu = withEditorMenuExtras(MENU_DEFINITION);
+  const rootMenu = withEditorMenuExtras(buildMenuDefinition());
+  const tableRowActions = buildTableRowActions();
+  const tableColumnActions = buildTableColumnActions();
+  const tableSortActions = buildTableSortActions();
   if (!tableContext?.blockId) {
     return rootMenu;
   }
   if (tableContext.activeHandleAxis === "row") {
-    return TABLE_ROW_ACTIONS;
+    return tableRowActions;
   }
   if (tableContext.activeHandleAxis === "column") {
-    return [...TABLE_COLUMN_ACTIONS, { type: "separator" }, ...TABLE_SORT_ACTIONS];
+    return [...tableColumnActions, { type: "separator" }, ...tableSortActions];
   }
-  return [...TABLE_MENU_DEFINITION, { type: "separator" }, ...rootMenu];
+  return [...buildTableMenuDefinition(), { type: "separator" }, ...rootMenu];
 };
 
 const withDisabledState = (items, view, menuContext = {}) => {
