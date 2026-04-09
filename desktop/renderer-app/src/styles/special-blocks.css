@@ -211,6 +211,14 @@
   border: 0 !important;
 }
 
+.yc-editor-host .cm-line.cm-block-table-source-anchor {
+  background: transparent !important;
+  box-shadow: none !important;
+  padding-top: 0 !important;
+  padding-bottom: 0 !important;
+  border: 0 !important;
+}
+
 .yc-editor-host .cm-line.cm-block-table-source-hidden {
   height: 0 !important;
   min-height: 0 !important;

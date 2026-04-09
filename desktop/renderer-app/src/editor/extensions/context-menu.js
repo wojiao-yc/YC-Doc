@@ -567,19 +567,29 @@ const replaceTableCellSelectionWithText = (
   return finalizeTableCellDomChange(cell);
 };
 
-const surroundTableCellSelectionWithText = (editableCell, prefixInput, suffixInput) => {
+const surroundTableCellSelectionWithText = (
+  editableCell,
+  prefixInput,
+  suffixInput,
+  placeholderInput = ""
+) => {
   const cell = editableCell instanceof HTMLElement ? editableCell : null;
   if (!cell) {
     return false;
   }
-  const range = ensureTableCellSelectionRange(cell);
+  const range = resolveTableCellEditingRange(cell, { collapseToEndIfMissing: true });
   if (!range) {
     return false;
   }
   const selectedText = range.toString();
   const prefix = String(prefixInput || "");
   const suffix = String(suffixInput || "");
-  const textNode = document.createTextNode(`${prefix}${selectedText}${suffix}`);
+  const inner = selectedText || resolveInlineFormattingPlaceholder({
+    prefix,
+    suffix,
+    placeholder: placeholderInput
+  });
+  const textNode = document.createTextNode(`${prefix}${inner}${suffix}`);
   range.deleteContents();
   range.insertNode(textNode);
 
@@ -587,7 +597,7 @@ const surroundTableCellSelectionWithText = (editableCell, prefixInput, suffixInp
   if (selection) {
     const nextRange = document.createRange();
     nextRange.setStart(textNode, prefix.length);
-    nextRange.setEnd(textNode, prefix.length + selectedText.length);
+    nextRange.setEnd(textNode, prefix.length + inner.length);
     selection.removeAllRanges();
     selection.addRange(nextRange);
   }
@@ -815,6 +825,36 @@ const replaceSelection = (view, insert, selection = null) => {
   return true;
 };
 
+const replaceSelectionWithStandaloneBlock = (
+  view,
+  insertInput,
+  {
+    selectionStart = null,
+    selectionEnd = null
+  } = {}
+) => {
+  const doc = view?.state?.doc;
+  if (!doc) {
+    return false;
+  }
+
+  const range = selectionRangeOf(view);
+  const blockText = String(insertInput ?? "");
+  const prefix = range.from > 0 && doc.sliceString(range.from - 1, range.from) !== "\n" ? "\n" : "";
+  const suffix = range.to < doc.length && doc.sliceString(range.to, range.to + 1) !== "\n" ? "\n" : "";
+  const insert = `${prefix}${blockText}${suffix}`;
+  const selectionBase = range.from + prefix.length;
+  const fallbackCursor = range.from + insert.length;
+  const anchor = Number.isFinite(selectionStart)
+    ? selectionBase + Math.max(0, Number(selectionStart))
+    : fallbackCursor;
+  const head = Number.isFinite(selectionEnd)
+    ? selectionBase + Math.max(0, Number(selectionEnd))
+    : anchor;
+
+  return replaceSelection(view, insert, { anchor, head });
+};
+
 const surroundSelection = (view, { prefix = "", suffix = "", placeholder = "" } = {}) => {
   const range = selectionRangeOf(view);
   const selectedText = view.state.sliceDoc(range.from, range.to);
@@ -1011,7 +1051,7 @@ const commandInsertFootnote = (view) => {
 };
 
 const commandInsertTable = (view) =>
-  replaceSelection(
+  replaceSelectionWithStandaloneBlock(
     view,
     "|  |  |\n| --- | --- |\n|  |  |"
   );
@@ -1035,7 +1075,7 @@ const commandInsertMathBlock = (view) =>
   });
 
 const commandInsertDatabase = (view) =>
-  replaceSelection(
+  replaceSelectionWithStandaloneBlock(
     view,
     "|  |  |  |  |\n| --- | --- | --- | --- |\n|  |  |  |  |"
   );

@@ -230,7 +230,7 @@ const isTableHeaderLine = (lineText) => {
     return false;
   }
   const cells = tableCellsFromLine(trimmed);
-  return cells.length >= 2 && cells.some((cell) => String(cell || "").trim().length > 0);
+  return cells.length >= 2;
 };
 
 const isTableBodyLine = (lineText, expectedColumnCount = 0) => {

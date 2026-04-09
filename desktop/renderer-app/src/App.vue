@@ -3161,18 +3161,6 @@ const {
   currentBlockStrategy: "anchor"
 });
 
-const viewSelection = ref({
-  anchor: 0,
-  head: 0
-});
-
-useSemanticStore({
-  markdownRef: viewModeMarkdown,
-  selectionRef: viewSelection,
-  parseDelayMs: 0,
-  currentBlockStrategy: "anchor"
-});
-
 const viewHeadingOutline = computed(() => extractHeadingsFromMarkdown(viewModeMarkdown.value));
 
 const activeSemanticBlock = computed(() => {

@@ -26,7 +26,6 @@ const TASK_LIST_PREFIX_PATTERN = /^(\s*)([-+*])\s+\[( |x|X)\]\s+/;
 const BULLET_LIST_PREFIX_PATTERN = /^(\s*)([-+*])\s+/;
 const ORDERED_LIST_PREFIX_PATTERN = /^(\s*)(\d+)([.)])\s+/;
 const TASK_LIST_CHECKBOX_PATTERN = /^(\s*[-+*]\s+\[)( |x|X)(\]\s+)/;
-const OPEN_CODE_FENCE_PATTERN = /^\s{0,3}(`{3,}|~{3,})(.*)$/;
 const SINGLE_LINE_MATH_BLOCK_PATTERN = /^\s{0,3}\$\$(.+?)\$\$\s*$/;
 const OPEN_MATH_FENCE_PATTERN = /^\s{0,3}\$\$\s*$/;
 const INLINE_SYNTAX_TOKEN_TYPES = new Set([
@@ -121,30 +120,6 @@ const resolveLineRange = (doc, block) => {
 };
 
 const clampPos = (value, length) => Math.max(0, Math.min(Number(length || 0), Number(value || 0)));
-const resolveInlineWidgetMountOutsideHiddenBlock = (docLengthInput, fromInput, toInput) => {
-  const docLength = Math.max(0, Number(docLengthInput || 0));
-  const from = clampPos(fromInput, docLength);
-  const to = Math.max(from, clampPos(toInput, docLength));
-
-  if (to < docLength) {
-    return {
-      pos: clampPos(to + 1, docLength),
-      side: -1
-    };
-  }
-
-  if (from > 0) {
-    return {
-      pos: clampPos(from - 1, docLength),
-      side: 1
-    };
-  }
-
-  return {
-    pos: from,
-    side: -1
-  };
-};
 const mathExpandKeyOf = (block) => {
   if (String(block?.type || "") !== "math_block") {
     return "";
@@ -225,46 +200,6 @@ const escapeHtml = (value) =>
     .replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;")
     .replace(/'/g, "&#39;");
-
-const closeFencePatternFor = (fenceToken = "") => {
-  const token = String(fenceToken || "");
-  if (!token) {
-    return /^$/;
-  }
-  const marker = token[0] === "~" ? "~" : "`";
-  return new RegExp(`^\\s{0,3}${marker}{${token.length},}\\s*$`);
-};
-
-const extractCodeBlockContent = (rawTextInput = "") => {
-  const rawText = String(rawTextInput || "");
-  if (!rawText) {
-    return "";
-  }
-
-  const lines = rawText.split("\n");
-  if (!lines.length) {
-    return "";
-  }
-
-  const openMatch = String(lines[0] || "").match(OPEN_CODE_FENCE_PATTERN);
-  if (!openMatch) {
-    return rawText;
-  }
-
-  const closePattern = closeFencePatternFor(openMatch[1]);
-  let closeLineIndex = -1;
-  for (let index = 1; index < lines.length; index += 1) {
-    if (closePattern.test(String(lines[index] || ""))) {
-      closeLineIndex = index;
-      break;
-    }
-  }
-
-  const contentLines = closeLineIndex >= 0
-    ? lines.slice(1, closeLineIndex)
-    : lines.slice(1);
-  return contentLines.join("\n");
-};
 
 const renderMathHtml = (formulaInput, displayMode = false) => {
   const formula = String(formulaInput || "").trim();
@@ -2597,13 +2532,20 @@ const buildDecorations = (view) => {
           lineRange,
           sourceVisible
         );
-        const isImageSourceHiddenLine = hideImageSourceLines;
-        const isMathSourceHiddenLine = hideMathSourceLines;
-        const isTableSourceHiddenLine = hideTableSourceLines;
+        const isAnchorLine = lineNumber === lineRange.fromLine;
+        const isImageSourceAnchorLine = hideImageSourceLines && isAnchorLine;
+        const isMathSourceAnchorLine = hideMathSourceLines && isAnchorLine;
+        const isTableSourceAnchorLine = hideTableSourceLines && isAnchorLine;
+        const isImageSourceHiddenLine = hideImageSourceLines && !isAnchorLine;
+        const isMathSourceHiddenLine = hideMathSourceLines && !isAnchorLine;
+        const isTableSourceHiddenLine = hideTableSourceLines && !isAnchorLine;
         const className = [
           baseClass,
+          isImageSourceAnchorLine ? "cm-block-image-source-anchor" : "",
           isImageSourceHiddenLine ? "cm-block-image-source-hidden" : "",
+          isMathSourceAnchorLine ? "cm-block-math-source-anchor" : "",
           isMathSourceHiddenLine ? "cm-block-math-source-hidden" : "",
+          isTableSourceAnchorLine ? "cm-block-table-source-anchor" : "",
           isTableSourceHiddenLine ? "cm-block-table-source-hidden" : "",
           hideHeadingSubtitleMetaLines ? "cm-block-heading-subtitle-hidden" : ""
         ]
@@ -2660,13 +2602,6 @@ const buildDecorations = (view) => {
           imageWidthMap.get(imageExpandKey),
           Number.isFinite(persistedWidth) ? persistedWidth : DEFAULT_IMAGE_WIDTH
         );
-        let widgetPos = blockFrom;
-        let widgetSide = -1;
-        if (hideImageSourceLines) {
-          const mount = resolveInlineWidgetMountOutsideHiddenBlock(docLength, blockFrom, blockTo);
-          widgetPos = mount.pos;
-          widgetSide = mount.side;
-        }
         if (src) {
           decorations.push(
             Decoration.widget({
@@ -2678,8 +2613,8 @@ const buildDecorations = (view) => {
                 isExpanded: isImageExpanded,
                 width: imageWidth
               }),
-              side: widgetSide
-            }).range(widgetPos)
+              side: -1
+            }).range(blockFrom)
           );
         }
       }
@@ -2687,31 +2622,16 @@ const buildDecorations = (view) => {
       if (blockType === "math_block") {
         const attrs = block?.attrs || {};
         const formula = String(attrs.formula || "").trim();
-        let widgetPos = blockFrom;
-        let widgetSide = -1;
-        if (hideMathSourceLines) {
-          const mount = resolveInlineWidgetMountOutsideHiddenBlock(docLength, blockFrom, blockTo);
-          widgetPos = mount.pos;
-          widgetSide = mount.side;
-        }
         decorations.push(
           Decoration.widget({
             widget: new MathBlockWidget({ formula, blockId: mathExpandKey, isExpanded: isMathExpanded }),
-            side: widgetSide
-          }).range(widgetPos)
+            side: -1
+          }).range(blockFrom)
         );
       }
 
       if (blockType === "table") {
         const rawText = String(block?.rawText || "");
-        // Keep table widget above source when source is visible, matching math-block behavior.
-        let widgetPos = blockFrom;
-        let widgetSide = -1;
-        if (hideTableSourceLines) {
-          const mount = resolveInlineWidgetMountOutsideHiddenBlock(docLength, blockFrom, blockTo);
-          widgetPos = mount.pos;
-          widgetSide = mount.side;
-        }
         decorations.push(
           Decoration.widget({
             widget: new TableBlockWidget({
@@ -2719,8 +2639,8 @@ const buildDecorations = (view) => {
               blockId: tableBlockId,
               readOnly
             }),
-            side: widgetSide
-          }).range(widgetPos)
+            side: -1
+          }).range(blockFrom)
         );
       }
 

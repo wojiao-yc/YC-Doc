@@ -2,7 +2,7 @@ import { createPreviewDocument } from "../model/preview-document.js";
 import { createPreviewNode } from "../model/preview-node.js";
 import { BLOCK_TYPES } from "../model/block-types.js";
 import { parseMarkdownToBlocks } from "./parse-blocks.js";
-import { parseSpecialBlocksFromMarkdown, specialBlockStateKeyOf } from "./parse-special-blocks.js";
+import { parseSpecialBlocksFromMarkdown } from "./parse-special-blocks.js";
 import { buildOutlineFromBlocks } from "../runtime/outline.js";
 
 const normalizeMarkdown = (markdownInput = "") => String(markdownInput || "").replace(/\r\n/g, "\n");
@@ -111,21 +111,15 @@ const editingOfBlock = (block, specialBlock = null) => {
 
 const buildSpecialBlockIndex = (specialBlocks = []) => {
   const byTypeAndFrom = new Map();
-  const byStateKey = new Map();
 
   for (const block of Array.isArray(specialBlocks) ? specialBlocks : []) {
     const type = String(block?.type || "");
     const from = Math.max(0, Number(block?.from || 0));
     byTypeAndFrom.set(`${type}:${from}`, block);
-    const stateKey = specialBlockStateKeyOf(block);
-    if (stateKey) {
-      byStateKey.set(stateKey, block);
-    }
   }
 
   return {
-    byTypeAndFrom,
-    byStateKey
+    byTypeAndFrom
   };
 };
 

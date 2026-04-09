@@ -123,7 +123,7 @@ const isTableHeaderLine = (lineTextInput = "") => {
     return false;
   }
   const cells = splitTableCells(trimmed);
-  return cells.length >= 2 && cells.some((cell) => cell.length > 0);
+  return cells.length >= 2;
 };
 
 const isTableBodyLine = (lineTextInput = "", expectedColumnCount = 0) => {
@@ -493,17 +493,4 @@ export const remapSpecialBlockStateKey = (keyInput = "", changes = null) => {
   }
 
   return `${type}:${changes.mapPos(from, -1)}`;
-};
-
-export const findSpecialBlockByStateKey = (blocksInput = [], keyInput = "") => {
-  const key = String(keyInput || "");
-  if (!key) {
-    return null;
-  }
-  for (const block of Array.isArray(blocksInput) ? blocksInput : []) {
-    if (specialBlockStateKeyOf(block) === key) {
-      return block;
-    }
-  }
-  return null;
 };

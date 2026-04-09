@@ -80,3 +80,29 @@ test("semantic snapshot carries preview document data", () => {
   assert.deepEqual(snapshot.blocks, snapshot.previewDocument.blocks);
   assert.deepEqual(snapshot.outline, snapshot.previewDocument.outline);
 });
+
+test("preview parser recognizes empty-header tables from insert template", () => {
+  const previewDocument = parseMarkdownToPreviewDocument([
+    "|  |  |",
+    "| --- | --- |",
+    "|  |  |"
+  ].join("\n"));
+
+  const tableNode = previewDocument.nodes.find((node) => node.type === "table");
+
+  assert.ok(tableNode);
+  assert.equal(tableNode?.editing?.keyboardNavigable, true);
+  assert.equal(tableNode?.rawText, "|  |  |\n| --- | --- |\n|  |  |");
+});
+
+test("preview parser keeps adjacent image lines as separate blocks", () => {
+  const previewDocument = parseMarkdownToPreviewDocument([
+    "![One](./one.png)",
+    "![Two](./two.png)"
+  ].join("\n"));
+
+  const imageNodes = previewDocument.nodes.filter((node) => node.type === "image");
+
+  assert.equal(imageNodes.length, 2);
+  assert.notEqual(imageNodes[0]?.from, imageNodes[1]?.from);
+});
