@@ -36,9 +36,7 @@ const SOURCE_VISIBLE_BLOCK_TYPES = new Set([
   "blockquote",
   "thematic_break"
 ]);
-const AUTO_SOURCE_REVEAL_BLOCK_TYPES = new Set([
-  "image"
-]);
+const AUTO_SOURCE_REVEAL_BLOCK_TYPES = new Set([]);
 const KEYBOARD_NAVIGABLE_SPECIAL_BLOCK_TYPES = new Set([
   "image",
   "math_block",
@@ -2777,8 +2775,13 @@ const buildDecorations = (view, blocks, currentBlockId) => {
           imageWidthMap.get(imageExpandKey),
           Number.isFinite(persistedWidth) ? persistedWidth : DEFAULT_IMAGE_WIDTH
         );
-        const widgetPos = isImageExpanded ? blockTo : blockFrom;
-        const widgetSide = isImageExpanded ? 1 : -1;
+        let widgetPos = blockFrom;
+        let widgetSide = -1;
+        if (hideImageSourceLines) {
+          const mount = resolveInlineWidgetMountOutsideHiddenBlock(docLength, blockFrom, blockTo);
+          widgetPos = mount.pos;
+          widgetSide = mount.side;
+        }
         if (src) {
           decorations.push(
             Decoration.widget({

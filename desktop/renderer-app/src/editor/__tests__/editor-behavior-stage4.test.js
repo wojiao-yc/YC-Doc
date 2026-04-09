@@ -83,6 +83,8 @@ test("image source toggle updates immediately and prunes stale expanded-image id
   assert.match(presentation, /this\.decorations = this\.decorations\.map\(update\.changes\)/);
   assert.match(presentation, /btn\.textContent\s*=\s*this\.isExpanded/);
   assert.match(presentation, /btn\.className = "cm-image-widget-btn"/);
+  assert.match(presentation, /const AUTO_SOURCE_REVEAL_BLOCK_TYPES = new Set\(\[\]\)/);
+  assert.match(presentation, /if \(hideImageSourceLines\) \{\s*const mount = resolveInlineWidgetMountOutsideHiddenBlock/);
   assert.doesNotMatch(presentation, /sourceToggleTitle/);
 });
 
@@ -195,6 +197,8 @@ test("table cells keep native clipboard shortcuts local and expose table-aware c
   assert.match(presentation, /event\.clipboardData\?\.getData\("text\/plain"\)/);
 
   assert.match(menuExtension, /const TABLE_CELL_FORMAT_COMMAND_IDS = new Set\(\[/);
+  assert.match(menuExtension, /surroundTableCellSelectionWithText\(editableCell, "\*\*", "\*\*"\)/);
+  assert.match(menuExtension, /buildExternalLinkMarkdown/);
   assert.match(menuExtension, /const commandTableCellPaste = async/);
   assert.match(menuExtension, /tableContext\?\.editableCell\) \{\s*if \(normalizedCommandId === "clipboard-cut"/);
   assert.match(menuExtension, /item\?\.id !== "paragraph" && item\?\.id !== "insert"/);
@@ -217,6 +221,8 @@ test("editor includes custom right-click context menu extension with grouped com
   assert.match(menuExtension, /id:\s*"add-link"/);
   assert.match(menuExtension, /commandInsertWikiLink/);
   assert.match(menuExtension, /commandInsertExternalLink/);
+  assert.match(menuExtension, /promptLinkTitle/);
+  assert.match(menuExtension, /buildExternalLinkMarkdown/);
   assert.match(menuExtension, /\[\[\$\{linkText\}\]\]/);
   assert.match(menuExtension, /id:\s*"format"/);
   assert.match(menuExtension, /id:\s*"paragraph"/);

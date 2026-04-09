@@ -748,42 +748,6 @@ const replaceTableCellSelectionWithText = (
   return finalizeTableCellDomChange(cell);
 };
 
-const wrapTableCellSelectionWithTag = (editableCell, tagName, attributes = null) => {
-  const cell = editableCell instanceof HTMLElement ? editableCell : null;
-  if (!cell) {
-    return false;
-  }
-  const range = ensureTableCellSelectionRange(cell);
-  if (!range) {
-    return false;
-  }
-
-  const wrapper = document.createElement(String(tagName || "span"));
-  const attrs = attributes && typeof attributes === "object" ? attributes : null;
-  if (attrs) {
-    for (const [key, value] of Object.entries(attrs)) {
-      if (!key || value == null) {
-        continue;
-      }
-      wrapper.setAttribute(key, String(value));
-    }
-  }
-
-  const fragment = range.extractContents();
-  wrapper.appendChild(fragment);
-  range.insertNode(wrapper);
-
-  const selection = window.getSelection();
-  if (selection) {
-    const nextRange = document.createRange();
-    nextRange.selectNodeContents(wrapper);
-    selection.removeAllRanges();
-    selection.addRange(nextRange);
-  }
-  cell.focus();
-  return true;
-};
-
 const surroundTableCellSelectionWithText = (editableCell, prefixInput, suffixInput) => {
   const cell = editableCell instanceof HTMLElement ? editableCell : null;
   if (!cell) {
@@ -812,6 +776,24 @@ const surroundTableCellSelectionWithText = (editableCell, prefixInput, suffixInp
   return true;
 };
 
+const insertTableCellExternalLink = (editableCell, selectedTextInput = "") => {
+  const selectedText = String(selectedTextInput || "").trim();
+  const suggestedUrl = /^https?:\/\//i.test(selectedText) ? selectedText : DEFAULT_LINK_URL;
+  const promptedUrl = promptLinkUrl(suggestedUrl);
+  if (promptedUrl == null) {
+    return false;
+  }
+  const url = String(promptedUrl || "").trim() || DEFAULT_LINK_URL;
+  const promptedTitle = promptLinkTitle("");
+  if (promptedTitle == null) {
+    return false;
+  }
+  const markdown = buildExternalLinkMarkdown(selectedText, url, promptedTitle);
+  return replaceTableCellSelectionWithText(editableCell, markdown, {
+    collapseToEndIfMissing: true
+  });
+};
+
 const applyTableCellInlineFormat = (commandIdInput, menuContext = {}) => {
   const commandId = String(commandIdInput || "");
   const editableCell = menuContext?.table?.editableCell;
@@ -823,20 +805,22 @@ const applyTableCellInlineFormat = (commandIdInput, menuContext = {}) => {
     return handled ? finalizeTableCellDomChange(editableCell) : false;
   };
 
+  const selectedText = tableCellSelectionText(editableCell);
+
   if (commandId === "format-bold") {
-    return finalize(wrapTableCellSelectionWithTag(editableCell, "strong"));
+    return finalize(surroundTableCellSelectionWithText(editableCell, "**", "**"));
   }
   if (commandId === "format-italic") {
-    return finalize(wrapTableCellSelectionWithTag(editableCell, "em"));
+    return finalize(surroundTableCellSelectionWithText(editableCell, "*", "*"));
   }
   if (commandId === "format-strike") {
-    return finalize(wrapTableCellSelectionWithTag(editableCell, "del"));
+    return finalize(surroundTableCellSelectionWithText(editableCell, "~~", "~~"));
   }
   if (commandId === "format-highlight") {
-    return finalize(wrapTableCellSelectionWithTag(editableCell, "mark"));
+    return finalize(surroundTableCellSelectionWithText(editableCell, "==", "=="));
   }
   if (commandId === "format-code") {
-    return finalize(wrapTableCellSelectionWithTag(editableCell, "code"));
+    return finalize(surroundTableCellSelectionWithText(editableCell, "`", "`"));
   }
   if (commandId === "format-math") {
     return finalize(surroundTableCellSelectionWithText(editableCell, "$", "$"));
@@ -859,12 +843,7 @@ const applyTableCellInlineFormat = (commandIdInput, menuContext = {}) => {
     return finalize(surroundTableCellSelectionWithText(editableCell, "[[", "]]"));
   }
   if (commandId === "add-external-link") {
-    const prompted = promptLinkUrl(DEFAULT_LINK_URL);
-    if (prompted == null) {
-      return false;
-    }
-    const url = String(prompted || "").trim() || DEFAULT_LINK_URL;
-    return finalize(wrapTableCellSelectionWithTag(editableCell, "a", { href: url }));
+    return insertTableCellExternalLink(editableCell, selectedText);
   }
   return false;
 };
@@ -1130,6 +1109,21 @@ const promptLinkUrl = (defaultValue = DEFAULT_LINK_URL) => {
   return window.prompt(i18n("请输入链接地址", "Enter link URL"), defaultValue);
 };
 
+const promptLinkTitle = (defaultValue = "") => {
+  if (typeof window === "undefined" || typeof window.prompt !== "function") {
+    return defaultValue;
+  }
+  return window.prompt(i18n("请输入链接title（可选）", "Enter link title (optional)"), defaultValue);
+};
+
+const buildExternalLinkMarkdown = (labelInput, urlInput, titleInput = "") => {
+  const label = String(labelInput || "");
+  const url = String(urlInput || "").trim() || DEFAULT_LINK_URL;
+  const title = String(titleInput || "").trim();
+  const titlePart = title ? ` "${title.replace(/"/g, '\\"')}"` : "";
+  return `[${label}](${url}${titlePart})`;
+};
+
 const commandInsertWikiLink = (view) => {
   const range = selectionRangeOf(view);
   const linkText = view.state.sliceDoc(range.from, range.to).trim();
@@ -1145,12 +1139,16 @@ const commandInsertExternalLink = (view) => {
   const selectedText = view.state.sliceDoc(range.from, range.to).trim();
   const linkText = selectedText || "";
   const suggestedUrl = /^https?:\/\//i.test(selectedText) ? selectedText : DEFAULT_LINK_URL;
-  const prompted = promptLinkUrl(suggestedUrl);
-  if (prompted == null) {
+  const promptedUrl = promptLinkUrl(suggestedUrl);
+  if (promptedUrl == null) {
     return false;
   }
-  const url = String(prompted || "").trim() || DEFAULT_LINK_URL;
-  const markdown = `[${linkText}](${url})`;
+  const url = String(promptedUrl || "").trim() || DEFAULT_LINK_URL;
+  const promptedTitle = promptLinkTitle("");
+  if (promptedTitle == null) {
+    return false;
+  }
+  const markdown = buildExternalLinkMarkdown(linkText, url, promptedTitle);
   return replaceSelection(view, markdown, {
     anchor: range.from + 1,
     head: range.from + 1 + linkText.length
