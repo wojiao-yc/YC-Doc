@@ -9,6 +9,8 @@ const SUBMENU_GAP = 2;
 const SUBMENU_OPEN_DELAY_MS = 140;
 const SUBMENU_CLOSE_DELAY_MS = 640;
 const DEFAULT_LINK_URL = "https://";
+const DEFAULT_EXTERNAL_LINK_LABEL = "链接显示名";
+const DEFAULT_EXTERNAL_LINK_TITLE = "链接标题";
 let contextMenuRuntimeOptions = {};
 let contextMenuLocaleText = (zh, en) => zh; // 默认返回中文
 
@@ -721,7 +723,9 @@ const replaceTableCellSelectionWithText = (
   editableCell,
   textInput,
   {
-    collapseToEndIfMissing = false
+    collapseToEndIfMissing = false,
+    selectionStart = null,
+    selectionEnd = null
   } = {}
 ) => {
   const cell = editableCell instanceof HTMLElement ? editableCell : null;
@@ -740,8 +744,16 @@ const replaceTableCellSelectionWithText = (
   const selection = window.getSelection();
   if (selection) {
     const nextRange = document.createRange();
-    nextRange.setStart(textNode, text.length);
-    nextRange.collapse(true);
+    const hasExplicitSelection = Number.isFinite(selectionStart) && Number.isFinite(selectionEnd);
+    if (hasExplicitSelection) {
+      const from = Math.max(0, Math.min(text.length, Number(selectionStart)));
+      const to = Math.max(from, Math.min(text.length, Number(selectionEnd)));
+      nextRange.setStart(textNode, from);
+      nextRange.setEnd(textNode, to);
+    } else {
+      nextRange.setStart(textNode, text.length);
+      nextRange.collapse(true);
+    }
     selection.removeAllRanges();
     selection.addRange(nextRange);
   }
@@ -776,21 +788,44 @@ const surroundTableCellSelectionWithText = (editableCell, prefixInput, suffixInp
   return true;
 };
 
-const insertTableCellExternalLink = (editableCell, selectedTextInput = "") => {
+const composeExternalLinkMarkdown = (labelInput, urlInput, titleInput = "") => {
+  const label = String(labelInput || "");
+  const url = String(urlInput || "").trim() || DEFAULT_LINK_URL;
+  const title = String(titleInput || "").trim();
+  const titlePart = title ? ` "${title.replace(/"/g, '\\"')}"` : "";
+  return `[${label}](${url}${titlePart})`;
+};
+
+const buildExternalLinkTemplate = (selectedTextInput = "") => {
   const selectedText = String(selectedTextInput || "").trim();
-  const suggestedUrl = /^https?:\/\//i.test(selectedText) ? selectedText : DEFAULT_LINK_URL;
-  const promptedUrl = promptLinkUrl(suggestedUrl);
-  if (promptedUrl == null) {
-    return false;
-  }
-  const url = String(promptedUrl || "").trim() || DEFAULT_LINK_URL;
-  const promptedTitle = promptLinkTitle("");
-  if (promptedTitle == null) {
-    return false;
-  }
-  const markdown = buildExternalLinkMarkdown(selectedText, url, promptedTitle);
+  const looksLikeUrl = /^https?:\/\//i.test(selectedText);
+  const label = looksLikeUrl
+    ? DEFAULT_EXTERNAL_LINK_LABEL
+    : selectedText || DEFAULT_EXTERNAL_LINK_LABEL;
+  const url = looksLikeUrl ? selectedText : DEFAULT_LINK_URL;
+  const title = DEFAULT_EXTERNAL_LINK_TITLE;
+  const markdown = composeExternalLinkMarkdown(label, url, title);
+  const labelStart = 1;
+  const urlStart = markdown.indexOf(url);
+  return selectedText && !looksLikeUrl
+    ? {
+        markdown,
+        selectionStart: urlStart,
+        selectionEnd: urlStart + url.length
+      }
+    : {
+        markdown,
+        selectionStart: labelStart,
+        selectionEnd: labelStart + label.length
+      };
+};
+
+const insertTableCellExternalLink = (editableCell, selectedTextInput = "") => {
+  const { markdown, selectionStart, selectionEnd } = buildExternalLinkTemplate(selectedTextInput);
   return replaceTableCellSelectionWithText(editableCell, markdown, {
-    collapseToEndIfMissing: true
+    collapseToEndIfMissing: true,
+    selectionStart,
+    selectionEnd
   });
 };
 
@@ -1137,21 +1172,10 @@ const commandInsertWikiLink = (view) => {
 const commandInsertExternalLink = (view) => {
   const range = selectionRangeOf(view);
   const selectedText = view.state.sliceDoc(range.from, range.to).trim();
-  const linkText = selectedText || "";
-  const suggestedUrl = /^https?:\/\//i.test(selectedText) ? selectedText : DEFAULT_LINK_URL;
-  const promptedUrl = promptLinkUrl(suggestedUrl);
-  if (promptedUrl == null) {
-    return false;
-  }
-  const url = String(promptedUrl || "").trim() || DEFAULT_LINK_URL;
-  const promptedTitle = promptLinkTitle("");
-  if (promptedTitle == null) {
-    return false;
-  }
-  const markdown = buildExternalLinkMarkdown(linkText, url, promptedTitle);
+  const { markdown, selectionStart, selectionEnd } = buildExternalLinkTemplate(selectedText);
   return replaceSelection(view, markdown, {
-    anchor: range.from + 1,
-    head: range.from + 1 + linkText.length
+    anchor: range.from + selectionStart,
+    head: range.from + selectionEnd
   });
 };
 

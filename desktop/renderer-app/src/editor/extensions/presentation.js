@@ -2710,13 +2710,11 @@ const buildDecorations = (view, blocks, currentBlockId) => {
           lineRange,
           blockKeepsSourceVisible
         );
-        const isImageSourceAnchorLine = hideImageSourceLines && lineNumber === lineRange.fromLine;
-        const isImageSourceHiddenLine = hideImageSourceLines && !isImageSourceAnchorLine;
+        const isImageSourceHiddenLine = hideImageSourceLines;
         const isMathSourceHiddenLine = hideMathSourceLines;
         const isTableSourceHiddenLine = hideTableSourceLines;
         const className = [
           baseClass,
-          isImageSourceAnchorLine ? "cm-block-image-source-anchor" : "",
           isImageSourceHiddenLine ? "cm-block-image-source-hidden" : "",
           isMathSourceHiddenLine ? "cm-block-math-source-hidden" : "",
           isTableSourceHiddenLine ? "cm-block-table-source-hidden" : "",
