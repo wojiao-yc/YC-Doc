@@ -1,7 +1,8 @@
 {
-  "name": "gemini-doc-pro",
+  "name": "markvein-renderer",
   "private": true,
   "version": "0.1.0",
+  "description": "MarkVein renderer",
   "type": "module",
   "scripts": {
     "dev": "vite",

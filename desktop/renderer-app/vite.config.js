@@ -4,11 +4,6 @@ import vue from "@vitejs/plugin-vue";
 import { VitePWA } from "vite-plugin-pwa";
 
 export default defineConfig({
-  resolve: {
-    alias: {
-      "@data": path.resolve(__dirname, "../data")
-    }
-  },
   server: {
     fs: {
       allow: [path.resolve(__dirname, "..")]
@@ -23,9 +18,9 @@ export default defineConfig({
       registerType: "autoUpdate",
       includeAssets: ["icon.svg"],
       manifest: {
-        name: "AI 交互汇报 App Pro",
-        short_name: "Gemini Doc",
-        description: "交互式汇报系统 Pro",
+        name: "MarkVein",
+        short_name: "MarkVein",
+        description: "MarkVein Markdown 工作区",
         theme_color: "#f97316",
         background_color: "#0f172a",
         display: "standalone",

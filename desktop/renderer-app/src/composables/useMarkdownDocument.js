@@ -1,4 +1,4 @@
-import { ref, watch, nextTick, onBeforeUnmount } from "vue";
+import { computed, ref, watch, nextTick, onBeforeUnmount } from "vue";
 import { serializeImageLine } from "../editor/parser/parse-image.js";
 import { normalizeMarkdownDocument, normalizeMarkdownText } from "../utils/markdown-normalize.js";
 
@@ -245,28 +245,7 @@ const collectHeadingOutline = (rawMarkdown) => {
   return headings;
 };
 
-const findSectionIndexForRawPos = (rawMarkdown, rawPosInput = 0) => {
-  const markdown = String(rawMarkdown || "");
-  const rawPos = clamp(Number(rawPosInput || 0), 0, markdown.length);
-  const sections = collectHeadingSections(markdown).sections;
-  if (!Array.isArray(sections) || !sections.length) {
-    return 0;
-  }
-  for (let index = 0; index < sections.length; index += 1) {
-    const section = sections[index];
-    const sectionStart = Number.isFinite(section?.start) ? section.start : 0;
-    const sectionEnd = Number.isFinite(section?.end) ? section.end : markdown.length;
-    if (rawPos >= sectionStart && rawPos < sectionEnd) {
-      return index;
-    }
-  }
-  return clamp(sections.length - 1, 0, sections.length - 1);
-};
-
 export const useMarkdownDocument = ({
-  steps,
-  currentId,
-  currentStepIndex,
   isEditMode,
   desktopDataBridge,
   isDesktopStorage,
@@ -280,6 +259,16 @@ export const useMarkdownDocument = ({
   const saveStatus = ref("idle");
   const lastSavedAt = ref(0);
   const lastSaveError = ref("");
+  const steps = ref(createBlankSteps());
+  const currentId = ref(steps.value[0]?.id ?? 1);
+  const activeStep = computed(
+    () => steps.value.find((step) => step.id === currentId.value) || steps.value[0] || createBlankStep(1)
+  );
+  const currentStepIndex = computed(() =>
+    Math.max(0, steps.value.findIndex((step) => step.id === currentId.value))
+  );
+  const isFirstStep = computed(() => currentStepIndex.value <= 0);
+  const isLastStep = computed(() => currentStepIndex.value >= Math.max(0, steps.value.length - 1));
 
   let markdownSaveTimer = null;
   const lastSavedMarkdownByPath = new Map();
@@ -301,14 +290,6 @@ export const useMarkdownDocument = ({
       return content ? "Document" : "Blank Document";
     }
     return defaultStepTitle(index);
-  };
-
-  const stepPreviewText = (step) => {
-    const lines = normalizeMarkdownText(step?.content || "")
-      .split("\n")
-      .map((line) => line.trim())
-      .filter(Boolean);
-    return lines[0] || "Blank Content";
   };
 
   const parseMarkdownToSteps = (rawMarkdown) => {
@@ -547,125 +528,6 @@ export const useMarkdownDocument = ({
     }
   };
 
-  const addStep = async () => {
-    const model = collectHeadingSections(documentMarkdown.value);
-    const sections = model.sections.map((section) => ({
-      title: section.title,
-      subtitle: section.subtitle,
-      content: section.content
-    }));
-
-    if (!sections.length) {
-      const insertTitle = defaultStepTitle(0);
-      const base = trimOuterBlankLines(model.text);
-      const nextMarkdown = base ? `${base}\n\n# ${insertTitle}\n` : `# ${insertTitle}\n`;
-      await applyExternalMarkdownChange(nextMarkdown, { focusIndex: 0 });
-      return;
-    }
-
-    const insertIndex = clamp(currentStepIndex.value + 1, 0, sections.length);
-    sections.splice(insertIndex, 0, {
-      title: defaultStepTitle(insertIndex),
-      subtitle: "",
-      content: ""
-    });
-    const nextMarkdown = serializeHeadingSections({
-      prologue: model.prologue,
-      sections
-    });
-    await applyExternalMarkdownChange(nextMarkdown, { focusIndex: insertIndex });
-  };
-
-  const removeStep = async () => {
-    const model = collectHeadingSections(documentMarkdown.value);
-    if (!model.sections.length) {
-      await applyExternalMarkdownChange("", { focusIndex: 0 });
-      return;
-    }
-
-    const nextSections = model.sections.map((section) => ({
-      title: section.title,
-      subtitle: section.subtitle,
-      content: section.content
-    }));
-    const idx = clamp(currentStepIndex.value, 0, Math.max(0, nextSections.length - 1));
-    nextSections.splice(idx, 1);
-
-    const nextMarkdown = serializeHeadingSections({
-      prologue: model.prologue,
-      sections: nextSections
-    });
-    const nextIndex = Math.max(0, idx - 1);
-    await applyExternalMarkdownChange(nextMarkdown, { focusIndex: nextIndex });
-  };
-
-  const renameStepTitle = async (index, nextTitle) => {
-    const model = collectHeadingSections(documentMarkdown.value);
-    if (!model.sections.length) {
-      return false;
-    }
-
-    const safeIndex = clamp(Number(index) || 0, 0, Math.max(0, model.sections.length - 1));
-    const normalizedTitle = trimClosingHeadingHashes(nextTitle || "");
-
-    const nextSections = model.sections.map((section) => ({
-      title: section.title,
-      subtitle: section.subtitle,
-      content: section.content
-    }));
-    if (nextSections[safeIndex]?.title === normalizedTitle) {
-      return false;
-    }
-    nextSections[safeIndex].title = normalizedTitle;
-
-    const nextMarkdown = serializeHeadingSections({
-      prologue: model.prologue,
-      sections: nextSections
-    });
-    await applyExternalMarkdownChange(nextMarkdown, { focusIndex: safeIndex, focusEditor: false });
-    return true;
-  };
-
-  const renameOutlineHeadingSubtitle = async (index, nextSubtitle) => {
-    const markdown = normalizeMarkdownText(documentMarkdown.value);
-    const headings = collectHeadingOutline(markdown);
-    if (!headings.length) {
-      return false;
-    }
-
-    const safeIndex = clamp(Number(index) || 0, 0, Math.max(0, headings.length - 1));
-    const targetHeading = headings[safeIndex];
-    const normalizedSubtitle = normalizeHeadingSubtitle(nextSubtitle || "");
-    if (!targetHeading || targetHeading.subtitle === normalizedSubtitle) {
-      return false;
-    }
-
-    let nextMarkdown = markdown;
-    if (targetHeading.subtitleMetaFrom >= 0 && targetHeading.subtitleMetaTo >= targetHeading.subtitleMetaFrom) {
-      const existingMetaText = markdown.slice(targetHeading.subtitleMetaFrom, targetHeading.subtitleMetaTo);
-      const trailingNewline = existingMetaText.endsWith("\n") ? "\n" : "";
-      const replacement = normalizedSubtitle
-        ? `${serializeHeadingSubtitleMeta(normalizedSubtitle)}${trailingNewline}`
-        : "";
-      nextMarkdown = `${markdown.slice(0, targetHeading.subtitleMetaFrom)}${replacement}${markdown.slice(targetHeading.subtitleMetaTo)}`;
-    } else if (normalizedSubtitle) {
-      const insertion = targetHeading.lineEnd > targetHeading.to
-        ? `${serializeHeadingSubtitleMeta(normalizedSubtitle)}\n`
-        : `\n${serializeHeadingSubtitleMeta(normalizedSubtitle)}`;
-      nextMarkdown = `${markdown.slice(0, targetHeading.lineEnd)}${insertion}${markdown.slice(targetHeading.lineEnd)}`;
-    }
-
-    if (nextMarkdown === markdown) {
-      return false;
-    }
-
-    await applyExternalMarkdownChange(nextMarkdown, {
-      focusIndex: findSectionIndexForRawPos(nextMarkdown, targetHeading.from),
-      focusEditor: false
-    });
-    return true;
-  };
-
   const moveStep = async (fromIndexInput, toIndexInput) => {
     const model = collectHeadingSections(documentMarkdown.value);
     const count = model.sections.length;
@@ -695,12 +557,7 @@ export const useMarkdownDocument = ({
     return true;
   };
 
-  const syncDocumentMarkdownFromSteps = (sourceSteps = steps.value) => {
-    const nextMarkdown = serializeStepsToMarkdown(sourceSteps);
-    updateMarkdown(nextMarkdown);
-  };
-
-  const loadStepsFromMarkdownFile = async (relPath, showSuccessToast = false) => {
+  const loadMarkdownFile = async (relPath, showSuccessToast = false) => {
     if (!isDesktopStorage || !canWorkspaceFileIO) {
       return false;
     }
@@ -797,7 +654,7 @@ export const useMarkdownDocument = ({
 
   return {
     activeMarkdownRelPath,
-    addStep,
+    activeStep,
     appendMarkdownImage,
     clearScheduledMarkdownSave,
     documentMarkdown,
@@ -805,29 +662,26 @@ export const useMarkdownDocument = ({
     extractHeadingOutline,
     flushPendingMarkdownSave,
     formatBytes,
+    currentId,
+    currentStepIndex,
+    isFirstStep,
     isMarkdownDirty,
     isMarkdownFileName,
     isMarkdownFileTooLarge,
-    isSingleBlankStepList,
+    isLastStep,
     lastSaveError,
     lastSavedAt,
     loadMarkdown,
-    loadStepsFromMarkdownFile,
+    loadMarkdownFile,
     markdownHydrating,
     moveStep,
-    parseMarkdownToSteps,
     persistActiveMarkdownBeforeSwitch,
-    removeStep,
-    renameOutlineHeadingSubtitle,
-    renameStepTitle,
     resetBlankEditorState,
     saveMarkdown,
     saveStatus,
-    serializeHeadingSections,
     serializeStepsToMarkdown,
+    steps,
     stepDisplayTitle,
-    stepPreviewText,
-    syncDocumentMarkdownFromSteps,
     updateMarkdown,
     writeActiveMarkdownNow
   };

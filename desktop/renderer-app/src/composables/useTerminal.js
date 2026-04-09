@@ -1,8 +1,8 @@
 import { ref, watch } from "vue";
 import { copyText } from "../utils/clipboard";
-import { getDesktopBridge } from "../../../renderer/desktopBridge.js";
+import { getDesktopBridge } from "../utils/desktop-bridge.js";
 
-export const useTerminal = (_activeStep, showToast) => {
+export const useTerminal = (showToast) => {
   const desktopBridge = getDesktopBridge();
   const isDesktopPty = ref(Boolean(desktopBridge && desktopBridge.isDesktop));
 

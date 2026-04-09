@@ -1556,7 +1556,6 @@ import { setPresentationRuntimeOptions } from "./editor/extensions/presentation.
 import { useSemanticStore } from "./editor/state/semantic-store";
 import { useMarkdownDocument } from "./composables/useMarkdownDocument";
 import { useResizable } from "./composables/useResizable";
-import { useSteps } from "./composables/useSteps";
 import { useTerminal } from "./composables/useTerminal";
 import { useToast } from "./composables/useToast";
 import {
@@ -2898,17 +2897,6 @@ const releaseTransientPointerState = ({ syncTerminal = true } = {}) => {
 };
 
 const {
-  steps,
-  currentId,
-  activeStep,
-  currentStepIndex,
-  isFirstStep,
-  isLastStep,
-  next: baseNext,
-  prev: basePrev
-} = useSteps(showToast);
-
-const {
   sidebarWidth,
   displayWidth,
   displayStyle,
@@ -3102,34 +3090,35 @@ async function focusStepInEditMode(index) {
 
 const {
   activeMarkdownRelPath,
+  activeStep,
   clearScheduledMarkdownSave,
+  currentId,
+  currentStepIndex,
   documentMarkdown,
   extractHeadingOutline,
   extractMarkdownSections,
   flushPendingMarkdownSave,
   formatBytes,
+  isFirstStep,
   isMarkdownDirty,
   isMarkdownFileName,
   isMarkdownFileTooLarge,
+  isLastStep,
   lastSaveError,
   lastSavedAt,
-  isSingleBlankStepList,
-  loadStepsFromMarkdownFile,
+  loadMarkdownFile,
   markdownHydrating,
   moveStep,
-  parseMarkdownToSteps,
   persistActiveMarkdownBeforeSwitch,
   resetBlankEditorState,
   saveMarkdown,
   saveStatus,
   updateMarkdown,
   serializeStepsToMarkdown,
+  steps,
   stepDisplayTitle,
   writeActiveMarkdownNow
 } = useMarkdownDocument({
-  steps,
-  currentId,
-  currentStepIndex,
   isEditMode,
   desktopDataBridge,
   isDesktopStorage,
@@ -3473,7 +3462,7 @@ const next = async () => {
   if (nextIndex >= steps.value.length) {
     return;
   }
-  baseNext();
+  currentId.value = steps.value[nextIndex]?.id ?? currentId.value;
   if (!isEditMode.value) {
     return;
   }
@@ -3485,7 +3474,7 @@ const prev = async () => {
   if (previousIndex < 0) {
     return;
   }
-  basePrev();
+  currentId.value = steps.value[previousIndex]?.id ?? currentId.value;
   if (!isEditMode.value) {
     return;
   }
@@ -4757,7 +4746,7 @@ const loadMarkdownFileInEditor = async (relPathInput, { showSuccessToast = false
   if (!relPath) {
     return false;
   }
-  const loaded = await loadStepsFromMarkdownFile(relPath, showSuccessToast);
+  const loaded = await loadMarkdownFile(relPath, showSuccessToast);
   if (!loaded) {
     return false;
   }
@@ -7336,7 +7325,7 @@ const {
   resizeTerminalSession,
   killTerminalSession,
   disposeTerminal
-} = useTerminal(activeStep, showToast);
+} = useTerminal(showToast);
 
 const terminalPrompt = computed(() => {
   const cwd = runnerCwd.value || "D:\\python\\project\\Simple\\web";

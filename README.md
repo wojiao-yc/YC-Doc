@@ -1,117 +1,48 @@
-# YC-Doc Stage 1 Baseline
+# MarkVein
 
-本项目当前定位是桌面 Markdown 写作器，阶段一目标是先做稳定地基，不追求完整所见即所得。
+MarkVein 是一个基于 Electron、Vue 3 和 CodeMirror 6 的桌面 Markdown 工作区应用。
 
-## Stage 1 技术选型（已落地）
+它以本地 Markdown 文件作为唯一内容来源，适合写作、知识整理、演示稿编写，以及包含图片、数学公式、代码块、表格的文档编辑。
 
-- 运行形态: Electron 桌面版
-- 前端框架: Vite + Vue 3
-- 编辑器内核: CodeMirror 6
-- Markdown 真源: `documentMarkdown` 字符串
-- 状态组织: Vue composables（`useMarkdownDocument` 等轻量方案）
-- 文件读写: Electron preload 暴露的 `desktopDataBridge`
+## 功能概览
 
-## Stage 1 核心结构（编辑器相关）
+- 本地工作区模式：直接读取和保存本地 `.md` 文件，不再依赖单独的 `steps.js` 示例数据。
+- Markdown 编辑与展示一体化：支持编辑态、阅读态、演示态切换。
+- 富内容块支持：代码块、数学块、表格、图片、引用、列表、Wiki Link。
+- 工作区文件树：新建文件、新建文件夹、重命名、移动、删除、导入文件。
+- 内置终端：在桌面端直接打开本地终端会话。
+- 自动保存与 PDF 导出：文档变更会自动落盘，也支持导出 PDF。
 
-- `desktop/renderer-app/src/editor/core/`: `EditorState` / `EditorView` / `createMarkdownEditor`
-- `desktop/renderer-app/src/editor/extensions/`: core keymap、history、markdown、theme
-- `desktop/renderer-app/src/editor/EditorShell.vue`: 编辑器组件壳
-- `desktop/renderer-app/src/composables/useMarkdownDocument.js`: 文档真源状态与保存流程
+## 当前目录结构
 
-## 阶段一清单对照
+- `MarkVein.png`
+  Electron 应用图标来源文件。
+- `desktop/main.cjs`
+  Electron 主进程，负责窗口、工作区文件读写、图片导入、终端 IPC 等能力。
+- `desktop/preload.cjs`
+  预加载桥接层，向前端暴露桌面能力。
+- `desktop/renderer-app`
+  前端源码目录，也是现在唯一保留的 renderer 源码入口。
+- `desktop/renderer-dist`
+  前端构建输出目录，由 `npm run build:renderer` 生成。
+- `desktop/package.json`
+  桌面端脚本、Electron Builder 配置、应用命名与打包配置。
 
-- [x] 项目骨架稳定（Electron + Vue + renderer workspace）
-- [x] CodeMirror 核心实例封装（创建、更新文档、销毁）
-- [x] Markdown 语言支持、基础 keymap、history
-- [x] 文档真源状态: 当前 Markdown、当前文件路径、dirty、上次保存内容
-- [x] 文档状态: 上次保存时间（`lastSavedAt`）与保存状态（`saveStatus`）
-- [x] 自动保存（500ms debounce + dirty 检查）
-- [x] 保存失败提示（toast）
-- [x] 保存成功提示（手动保存和状态条反馈）
-- [x] Ctrl/Cmd + S 手动保存快捷键
-- [x] Electron 文件能力（新建/打开/写入）
-- [x] 写作向基础布局（单栏、宽度限制、行高字号）
-- [x] 撤销/重做、复制粘贴、全选、光标移动（依赖 CodeMirror）
-- [x] 查找能力（Ctrl/Cmd + F，CodeMirror Search Panel）
-- [ ] 重启后恢复同一文档（需要显式验收测试）
+说明：
+现在仓库里不再区分旧的 `desktop/renderer` 和新的 `desktop/renderer-app` 逻辑来源。前端源码统一放在 `desktop/renderer-app` 中，`desktop/renderer-dist` 仅作为打包产物目录。
 
-## 当前遗漏（优先级）
+## 开发环境
 
-1. 重启恢复同一文档的自动化或手动验收记录。
+建议在 Windows 下开发和打包，并确保以下工具已经安装且加入 PATH：
 
-## Stage 2 语义快照（进行中）
+- Node.js
+- npm
 
-目标: 建立 Markdown 真源到块级语义的统一快照层，供 current block、outline、后续 widget/行为规则复用。
+如果终端执行 `node -v` 或 `npm -v` 提示找不到命令，请先修复环境变量，再继续下面的步骤。
 
-### 已落地模块
+## 本地开发
 
-- `desktop/renderer-app/src/editor/model/block-types.js`
-- `desktop/renderer-app/src/editor/model/block-node.js`
-- `desktop/renderer-app/src/editor/model/outline-node.js`
-- `desktop/renderer-app/src/editor/model/semantic-snapshot.js`
-- `desktop/renderer-app/src/editor/parser/parse-markdown.js`
-- `desktop/renderer-app/src/editor/parser/parse-blocks.js`
-- `desktop/renderer-app/src/editor/parser/parse-heading.js`
-- `desktop/renderer-app/src/editor/parser/parse-list.js`
-- `desktop/renderer-app/src/editor/parser/parse-image.js`
-- `desktop/renderer-app/src/editor/parser/parse-code-block.js`
-- `desktop/renderer-app/src/editor/parser/parse-math-block.js`
-- `desktop/renderer-app/src/editor/runtime/block-index.js`
-- `desktop/renderer-app/src/editor/runtime/current-block.js`
-- `desktop/renderer-app/src/editor/runtime/outline.js`
-- `desktop/renderer-app/src/editor/state/semantic-store.js`
-
-### 当前能力（Stage 2 第一版）
-
-- [x] 块类型系统与块节点结构（含 `from/to`、`lineStart/lineEnd`、`attrs`）
-- [x] 统一解析入口 `parseMarkdownToSemanticSnapshot(markdown)`
-- [x] 块级语义识别（paragraph / heading / list item / blockquote / code block / image / math block / thematic break / table / html block）
-- [x] outline 提取（heading level + text + range）
-- [x] current block lookup（基于 selection anchor）
-- [x] 文本变更触发语义快照更新（debounce）
-- [x] 选区变化触发 current block 更新（不重复全文 parse）
-
-### 待继续增强
-
-- [ ] 更严格的 CommonMark/GFM 一致性（当前为工程化第一版解析器）
-- [ ] 嵌套 list / blockquote 的树形 children 构建（当前以平铺 blocks 为主）
-- [ ] 大文档增量解析优化（当前为全量 parse + debounce）
-- [ ] 阶段三行为规则（Enter/Backspace/Tab）接入语义层
-
-## Stage 3 文档展示层（进行中）
-
-目标: 在不改变 Markdown 真源的前提下，让编辑器整体视觉从“代码工具”转向“写作文档”。
-
-### 已落地模块
-
-- `desktop/renderer-app/src/editor/extensions/presentation.js`
-- `desktop/renderer-app/src/styles/document-layout.css`
-- `desktop/renderer-app/src/styles/typography.css`
-- `desktop/renderer-app/src/styles/headings.css`
-- `desktop/renderer-app/src/styles/lists.css`
-- `desktop/renderer-app/src/styles/blockquote.css`
-- `desktop/renderer-app/src/styles/code-block.css`
-- `desktop/renderer-app/src/styles/special-blocks.css`
-- `desktop/renderer-app/src/styles/editor-theme.css`
-
-### 当前能力（Stage 3 第一版）
-
-- [x] 页面级版式骨架（内容区留白、文档列气质）
-- [x] 正文字号/行高/段落节奏
-- [x] 标题层级系统（h1-h6）
-- [x] 列表、引用、代码块视觉层级
-- [x] 分割线/图片/数学/表格的基础块感
-- [x] current block 轻量聚焦感（基于块级行装饰）
-
-### 待继续增强
-
-- [ ] 主题变量系统进一步收敛（深浅主题 token 化）
-- [ ] 特殊块占位与后续 widget 视觉过渡打磨
-- [ ] 与阶段四“语法弱化/替换”的衔接细节验证
-
-## 开发与构建
-
-在 `desktop` 目录执行:
+在 `desktop` 目录执行：
 
 ```powershell
 cd D:\python\project\Homepage\YC-Doc\desktop
@@ -119,16 +50,106 @@ npm install
 npm run dev
 ```
 
-仅构建渲染层:
+说明：
+
+- `npm run dev` 会同时启动 Vite 前端开发服务器和 Electron 桌面窗口。
+- 前端源码位于 `desktop/renderer-app`。
+- Electron 主进程入口为 `desktop/main.cjs`。
+
+## 构建前端
+
+如果只想生成前端资源，可以执行：
 
 ```powershell
 cd D:\python\project\Homepage\YC-Doc\desktop
-npm run build -w renderer-app
+npm run build:renderer
 ```
 
-打包桌面应用:
+构建结果会输出到 `desktop/renderer-dist`。
+
+## 打包桌面应用
+
+在 `desktop` 目录执行：
 
 ```powershell
 cd D:\python\project\Homepage\YC-Doc\desktop
+npm install
 npm run pack:win
 ```
+
+打包完成后，安装包会生成在 `desktop/dist/` 下。
+当前配置会使用以下品牌信息：
+
+- 应用名称：`MarkVein`
+- Electron `appId`：`com.markvein.desktop`
+- Windows 可执行文件名：`MarkVein`
+- 图标文件：`MarkVein.png`
+
+默认安装包名称格式为：
+
+```text
+MarkVein-0.1.0-setup.exe
+```
+
+如果你只想先生成未安装版目录，可以使用：
+
+```powershell
+cd D:\python\project\Homepage\YC-Doc\desktop
+npm run pack:dir
+```
+
+## 如何分发给其他人
+
+最直接的方式是把 `desktop/dist/` 目录里生成的 Windows 安装包发给其他人下载。
+
+推荐流程：
+
+1. 在你的机器上执行 `npm run pack:win`。
+2. 从 `desktop/dist/` 取出生成的 `.exe` 安装包。
+3. 把该安装包上传到网盘、GitHub Release、内网文件服务器或网站下载页。
+4. 让对方直接下载安装即可。
+
+补充说明：
+
+- 首次安装后，应用默认会在“文档”目录下创建 `MarkVein-Workspace` 作为默认工作区。
+- 如果安装包没有做代码签名，其他 Windows 电脑上可能会出现 SmartScreen 安全提示，这是未签名桌面应用的常见现象。
+- 如果准备长期对外发布，建议后续补充代码签名证书和版本发布页。
+
+## 使用方式
+
+### 1. 打开应用
+
+启动 MarkVein 后，应用会自动加载当前工作区。
+
+### 2. 选择或切换工作区
+
+- 可以在左侧文件区管理工作区文件。
+- 可以切换工作区根目录。
+- 默认工作区路径通常位于用户“文档”目录下的 `MarkVein-Workspace`。
+
+### 3. 新建 Markdown 文件
+
+- 在左侧文件树中创建新文件或新文件夹。
+- 选择 `.md` 文件后，编辑器会直接读取并显示其内容。
+
+### 4. 编辑内容
+
+- 支持普通 Markdown 语法。
+- 支持图片、表格、数学公式、代码块等内容块。
+- 文档内容会按照 Markdown 文件直接保存，不再写入单独的步骤缓存文件。
+
+### 5. 导出或分享
+
+- 可以在应用内导出 PDF。
+- 也可以直接把工作区中的 Markdown 文件复制给别人。
+
+## 命名与图标
+
+项目已统一使用 `MarkVein` 作为桌面应用名称，相关配置集中在：
+
+- `desktop/package.json`
+- `desktop/main.cjs`
+- `desktop/renderer-app/package.json`
+- `MarkVein.png`
+
+如果后续需要更换品牌图标，替换 `MarkVein.png` 并重新执行 `npm run pack:win` 即可。

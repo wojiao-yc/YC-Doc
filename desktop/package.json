@@ -1,7 +1,8 @@
 {
-  "name": "gemini-doc-desktop",
+  "name": "markvein-desktop",
   "private": true,
   "version": "0.1.0",
+  "description": "MarkVein desktop markdown workspace",
   "workspaces": [
     "renderer-app"
   ],
@@ -26,8 +27,9 @@
     "wait-on": "^8.0.3"
   },
   "build": {
-    "appId": "com.ycdoc.desktop",
-    "productName": "YC-Doc",
+    "appId": "com.markvein.desktop",
+    "productName": "MarkVein",
+    "artifactName": "${productName}-${version}-setup.${ext}",
     "files": [
       "main.cjs",
       "preload.cjs",
@@ -38,6 +40,8 @@
       "node_modules/node-pty/**/*"
     ],
     "win": {
+      "icon": "../MarkVein.png",
+      "executableName": "MarkVein",
       "target": [
         {
           "target": "nsis",

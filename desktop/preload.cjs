@@ -58,9 +58,6 @@ contextBridge.exposeInMainWorld("desktopWindow", {
 });
 
 contextBridge.exposeInMainWorld("desktopData", {
-  getStepsPath: () => ipcRenderer.invoke("desktop:data:get-steps-path"),
-  loadSteps: () => ipcRenderer.invoke("desktop:data:load-steps"),
-  saveSteps: (payload = {}) => ipcRenderer.invoke("desktop:data:save-steps", payload),
   getWorkspaceRoot: () => ipcRenderer.invoke("desktop:data:get-workspace-root"),
   readWorkspaceTree: () => ipcRenderer.invoke("desktop:data:read-workspace-tree"),
   createWorkspaceFile: (payload = {}) => ipcRenderer.invoke("desktop:data:create-workspace-file", payload),

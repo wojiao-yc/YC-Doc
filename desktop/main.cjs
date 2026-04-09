@@ -8,6 +8,14 @@ const pty = require("node-pty");
 let mainWindow = null;
 const sessions = new Map();
 const MAX_WORKSPACE_MARKDOWN_BYTES = 20 * 1024 * 1024;
+const APP_NAME = "MarkVein";
+const APP_ID = "com.markvein.desktop";
+const APP_ICON_PATH = path.join(__dirname, "..", "MarkVein.png");
+
+app.setName(APP_NAME);
+if (process.platform === "win32") {
+  app.setAppUserModelId(APP_ID);
+}
 
 const clamp = (value, min, max) => Math.min(max, Math.max(min, value));
 
@@ -59,7 +67,6 @@ const ensureDesktopDataDir = () => {
   return dir;
 };
 
-const getStepsDataPath = () => path.join(ensureDesktopDataDir(), "steps.json");
 const getWorkspaceConfigPath = () => path.join(ensureDesktopDataDir(), "workspace-root.json");
 
 const readWorkspaceRootConfig = () => {
@@ -105,7 +112,7 @@ const setWorkspaceRootDir = (rawPath) => {
 };
 
 const ensureWorkspaceDir = () => {
-  const fallback = path.join(app.getPath("documents"), "YC-Doc-Workspace");
+  const fallback = path.join(app.getPath("documents"), `${APP_NAME}-Workspace`);
   const stored = readWorkspaceRootConfig();
   const candidates = stored ? [stored, fallback] : [fallback];
 
@@ -455,16 +462,6 @@ const copyWorkspaceEntrySync = (sourceAbs, targetAbs) => {
   fs.copyFileSync(sourceAbs, targetAbs);
 };
 
-const normalizeSavedSteps = (input) =>
-  (Array.isArray(input) ? input : [])
-    .filter((item) => item && typeof item === "object")
-    .map((item, index) => ({
-      id: Number(item.id) || index + 1,
-      title: String(item.title || `Step ${index + 1}`),
-      subtitle: String(item.subtitle || ""),
-      content: String(item.content || "")
-    }));
-
 const killAllSessions = () => {
   for (const [sessionId, item] of sessions) {
     try {
@@ -478,6 +475,7 @@ const killAllSessions = () => {
 
 const createWindow = async () => {
   mainWindow = new BrowserWindow({
+    title: APP_NAME,
     width: 1400,
     height: 900,
     minWidth: 1000,
@@ -488,6 +486,7 @@ const createWindow = async () => {
     backgroundColor: "#f8fafc",
     hasShadow: true,
     roundedCorners: true,
+    ...(fs.existsSync(APP_ICON_PATH) ? { icon: APP_ICON_PATH } : {}),
     ...(process.platform === "darwin" ? { titleBarStyle: "hidden" } : {}),
     webPreferences: {
       preload: path.join(__dirname, "preload.cjs"),
@@ -504,10 +503,8 @@ const createWindow = async () => {
     await mainWindow.loadURL(devUrl);
   } else {
     const bundledRenderer = path.join(__dirname, "renderer-dist", "index.html");
-    const legacyRenderer = path.join(__dirname, "renderer-app", "dist", "index.html");
-    const built = fs.existsSync(bundledRenderer) ? bundledRenderer : legacyRenderer;
-    if (fs.existsSync(built)) {
-      await mainWindow.loadFile(built);
+    if (fs.existsSync(bundledRenderer)) {
+      await mainWindow.loadFile(bundledRenderer);
     } else {
       const message = "Renderer build not found. Run `npm run build:renderer` in desktop/ first.";
       await mainWindow.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(message)}`);
@@ -833,64 +830,6 @@ ipcMain.handle("desktop:window:export-pdf", async (_event, payload = {}) => {
     if (printWindow && !printWindow.isDestroyed()) {
       printWindow.close();
     }
-  }
-});
-
-ipcMain.handle("desktop:data:get-steps-path", async () => ({
-  ok: true,
-  path: getStepsDataPath()
-}));
-
-ipcMain.handle("desktop:data:load-steps", async () => {
-  const filePath = getStepsDataPath();
-  if (!fs.existsSync(filePath)) {
-    return { ok: true, exists: false, steps: [], currentId: null, path: filePath };
-  }
-
-  try {
-    const raw = fs.readFileSync(filePath, "utf8");
-    const parsed = JSON.parse(raw);
-    const steps = normalizeSavedSteps(Array.isArray(parsed) ? parsed : parsed?.steps);
-    const currentId = Number(Array.isArray(parsed) ? null : parsed?.currentId);
-    return {
-      ok: true,
-      exists: true,
-      steps,
-      currentId: Number.isFinite(currentId) ? currentId : null,
-      path: filePath
-    };
-  } catch (error) {
-    return {
-      ok: false,
-      error: String(error?.message || error || "read_failed"),
-      path: filePath
-    };
-  }
-});
-
-ipcMain.handle("desktop:data:save-steps", async (_event, payload = {}) => {
-  const filePath = getStepsDataPath();
-  try {
-    const steps = normalizeSavedSteps(payload?.steps);
-    const requestedCurrentId = Number(payload?.currentId);
-    const fallbackCurrentId = steps[0]?.id ?? 1;
-    const currentId = Number.isFinite(requestedCurrentId) ? requestedCurrentId : fallbackCurrentId;
-    const record = {
-      version: 1,
-      updatedAt: new Date().toISOString(),
-      currentId,
-      steps
-    };
-    const tempPath = `${filePath}.tmp`;
-    fs.writeFileSync(tempPath, JSON.stringify(record, null, 2), "utf8");
-    fs.renameSync(tempPath, filePath);
-    return { ok: true, path: filePath };
-  } catch (error) {
-    return {
-      ok: false,
-      error: String(error?.message || error || "write_failed"),
-      path: filePath
-    };
   }
 });
 
@@ -1578,7 +1517,7 @@ ipcMain.handle("desktop:assets:pick-image", async () => {
 });
 
 app.whenReady().then(async () => {
-  protocol.registerFileProtocol("ycdoc-file", (request, callback) => {
+  protocol.registerFileProtocol("markvein-file", (request, callback) => {
     try {
       const parsed = new URL(request.url);
       if (parsed.hostname !== "local") {
