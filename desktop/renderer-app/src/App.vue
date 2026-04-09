@@ -522,10 +522,9 @@
                     <EditorShell
                       ref="markdownViewRef"
                       read-only
+                      presentation-enabled
                       :model-value="viewModeMarkdown"
                       :dark="isDark"
-                      :presentation-blocks="viewSemanticBlocks"
-                      :current-block-id="''"
                       :current-rel-path="activeMarkdownRelPath"
                       :wiki-link-files="workspaceMarkdownFiles"
                       :wiki-link-suggestions="getWikiLinkSuggestions"
@@ -600,10 +599,9 @@
                       <EditorShell
                         v-if="isSourceMode"
                         ref="markdownSourceRef"
+                        :presentation-enabled="false"
                         :model-value="documentMarkdown"
                         :dark="isDark"
-                        :presentation-blocks="EMPTY_PRESENTATION_BLOCKS"
-                        :current-block-id="''"
                         :current-rel-path="activeMarkdownRelPath"
                         :wiki-link-files="workspaceMarkdownFiles"
                         :wiki-link-suggestions="getWikiLinkSuggestions"
@@ -617,10 +615,9 @@
                       <EditorShell
                         v-else
                         ref="markdownEditorRef"
+                        presentation-enabled
                         :model-value="documentMarkdown"
                         :dark="isDark"
-                        :presentation-blocks="semanticBlocks"
-                        :current-block-id="currentSemanticBlockId"
                         :current-rel-path="activeMarkdownRelPath"
                         :wiki-link-files="workspaceMarkdownFiles"
                         :wiki-link-suggestions="getWikiLinkSuggestions"
@@ -1885,7 +1882,6 @@ const contentScrollRef = ref(null);
 const markdownEditorRef = ref(null);
 const markdownSourceRef = ref(null);
 const markdownViewRef = ref(null);
-const EMPTY_PRESENTATION_BLOCKS = Object.freeze([]);
 const fileTreeNavRef = ref(null);
 const showEditorDebugPanel = ref(false);
 const editorSelection = ref({ anchor: 0, head: 0 });
@@ -3156,7 +3152,6 @@ const handleEditorSelectionChange = (selection) => {
 };
 
 const {
-  blocks: semanticBlocks,
   outline: semanticOutline,
   currentBlock: currentSemanticBlock
 } = useSemanticStore({
@@ -3171,9 +3166,7 @@ const viewSelection = ref({
   head: 0
 });
 
-const {
-  blocks: viewSemanticBlocks
-} = useSemanticStore({
+useSemanticStore({
   markdownRef: viewModeMarkdown,
   selectionRef: viewSelection,
   parseDelayMs: 0,
@@ -3302,8 +3295,6 @@ const toggleOutlineCollapse = (headingIdInput = "") => {
   }
   collapsedOutlineHeadingIds.value = [...collapsed];
 };
-
-const currentSemanticBlockId = computed(() => String(activeSemanticBlock.value?.id || ""));
 
 const currentBlockLabel = computed(() => {
   const block = activeSemanticBlock.value;

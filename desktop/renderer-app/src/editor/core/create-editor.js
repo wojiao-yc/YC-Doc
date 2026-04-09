@@ -6,7 +6,11 @@ import { createEditorView } from "./create-view.js";
 import { coreExtensions } from "../extensions/core.js";
 import { markdownExtensions } from "../extensions/markdown.js";
 import { codeBlockHighlightExtensions } from "../extensions/code-block-highlight.js";
-import { presentationExtensions, setPresentationDataEffect } from "../extensions/presentation.js";
+import {
+  presentationEnabledFacet,
+  presentationExtensions,
+  setPresentationEnabledEffect
+} from "../extensions/presentation.js";
 import { contextMenuExtensions } from "../extensions/context-menu.js";
 import { createWikiLinkEventExtensions } from "../extensions/wikilink-events.js";
 import { createWikiLinkAutocompleteExtension, setWikilinkLocaleText } from "../extensions/wikilink-autocomplete.js";
@@ -19,6 +23,7 @@ export const createMarkdownEditor = ({
   doc = "",
   dark = false,
   readOnly = false,
+  presentationEnabled = true,
   onChange = null,
   onSelectionChange = null,
   onWikiLinkActivate = null,
@@ -60,6 +65,7 @@ export const createMarkdownEditor = ({
       ...coreExtensions,
       ...markdownExtensions,
       ...codeBlockHighlightExtensions,
+      presentationEnabledFacet.of(Boolean(presentationEnabled)),
       ...presentationExtensions,
       ...wikiLinkEventConfig.extensions,
       wikiLinkAutocompleteExtension,
@@ -84,27 +90,17 @@ export const createMarkdownEditor = ({
 
   const getDoc = () => view.state.doc.toString();
 
-  const setDoc = (nextDoc, { presentationData = null } = {}) => {
+  const setDoc = (nextDoc) => {
     const next = String(nextDoc ?? "");
     if (next === getDoc()) {
-      if (presentationData) {
-        setPresentationData(presentationData);
-      }
       return;
     }
-    const effects = presentationData
-      ? [setPresentationDataEffect.of({
-          blocks: Array.isArray(presentationData?.blocks) ? presentationData.blocks : [],
-          currentBlockId: String(presentationData?.currentBlockId || "")
-        })]
-      : [];
     view.dispatch({
       changes: {
         from: 0,
         to: view.state.doc.length,
         insert: next
-      },
-      effects
+      }
     });
   };
 
@@ -123,12 +119,9 @@ export const createMarkdownEditor = ({
     });
   };
 
-  const setPresentationData = ({ blocks = [], currentBlockId = "" } = {}) => {
+  const setPresentationEnabled = (nextEnabled) => {
     view.dispatch({
-      effects: setPresentationDataEffect.of({
-        blocks: Array.isArray(blocks) ? blocks : [],
-        currentBlockId: String(currentBlockId || "")
-      })
+      effects: setPresentationEnabledEffect.of(Boolean(nextEnabled))
     });
   };
 
@@ -262,7 +255,7 @@ export const createMarkdownEditor = ({
     setDoc,
     setDark,
     setReadOnly,
-    setPresentationData,
+    setPresentationEnabled,
     setCursor,
     describeTextInsertAtCoords,
     setCursorAtCoords,

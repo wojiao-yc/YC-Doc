@@ -1,6 +1,5 @@
 import { createSemanticSnapshot } from "../model/semantic-snapshot.js";
-import { parseMarkdownToBlocks } from "./parse-blocks.js";
-import { buildOutlineFromBlocks } from "../runtime/outline.js";
+import { parseMarkdownToPreviewDocument } from "./parse-preview-document.js";
 
 let cachedMarkdown = null;
 let cachedSnapshot = null;
@@ -11,12 +10,12 @@ export const parseMarkdownToSemanticSnapshot = (markdown) => {
     return cachedSnapshot;
   }
 
-  const blocks = parseMarkdownToBlocks(normalizedMarkdown);
-  const outline = buildOutlineFromBlocks(blocks);
+  const previewDocument = parseMarkdownToPreviewDocument(normalizedMarkdown);
   const snapshot = createSemanticSnapshot({
-    blocks,
-    outline,
-    generatedAt: Date.now()
+    previewDocument,
+    blocks: previewDocument.blocks,
+    outline: previewDocument.outline,
+    generatedAt: previewDocument.generatedAt
   });
 
   cachedMarkdown = normalizedMarkdown;

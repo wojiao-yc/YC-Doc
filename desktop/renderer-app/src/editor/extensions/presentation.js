@@ -1,8 +1,20 @@
 import { Decoration, EditorView, ViewPlugin, WidgetType, keymap } from "@codemirror/view";
-import { EditorState, Prec, StateEffect, StateField } from "@codemirror/state";
+import { EditorState, Facet, Prec, StateEffect, StateField } from "@codemirror/state";
 import katex from "katex";
 import { marked } from "marked";
 import { parseImageLine, serializeImageLine } from "../parser/parse-image.js";
+import {
+  remapSpecialBlockStateKey
+} from "../parser/parse-special-blocks.js";
+import { parseMarkdownToPreviewDocument } from "../parser/parse-preview-document.js";
+import {
+  previewNodeIdentityOf,
+  resolveCurrentPreviewNodeId,
+  resolvePreviewBlockRangeById,
+  resolvePreviewCodeBlockRangeById,
+  specialPreviewNodesOf
+} from "../runtime/preview-document.js";
+import { parseMarkdownTableModel, serializeMarkdownTableModel } from "../runtime/table-model.js";
 import { copyText } from "../../utils/clipboard.js";
 import { createAppIconSvgElement } from "../../utils/app-icon.js";
 import { resolveWorkspaceAssetSrc } from "../../utils/workspace-media.js";
@@ -27,20 +39,6 @@ const INLINE_SYNTAX_TOKEN_TYPES = new Set([
   "math_inline",
   "mark",
   "comment"
-]);
-const SOURCE_VISIBLE_BLOCK_TYPES = new Set([
-  "heading",
-  "bullet_list_item",
-  "ordered_list_item",
-  "task_list_item",
-  "blockquote",
-  "thematic_break"
-]);
-const AUTO_SOURCE_REVEAL_BLOCK_TYPES = new Set([]);
-const KEYBOARD_NAVIGABLE_SPECIAL_BLOCK_TYPES = new Set([
-  "image",
-  "math_block",
-  "table"
 ]);
 
 const isEditorStateReadOnly = (state) => Boolean(
@@ -122,11 +120,6 @@ const resolveLineRange = (doc, block) => {
   return { fromLine, toLine };
 };
 
-const normalizePresentationData = (input = {}) => ({
-  blocks: Array.isArray(input.blocks) ? input.blocks : [],
-  currentBlockId: String(input.currentBlockId || "")
-});
-
 const clampPos = (value, length) => Math.max(0, Math.min(Number(length || 0), Number(value || 0)));
 const resolveInlineWidgetMountOutsideHiddenBlock = (docLengthInput, fromInput, toInput) => {
   const docLength = Math.max(0, Number(docLengthInput || 0));
@@ -151,15 +144,6 @@ const resolveInlineWidgetMountOutsideHiddenBlock = (docLengthInput, fromInput, t
     pos: from,
     side: -1
   };
-};
-const blockIdentityOf = (block) => {
-  const explicitId = String(block?.id || "");
-  if (explicitId) {
-    return explicitId;
-  }
-  const blockType = String(block?.type || "paragraph");
-  const blockFrom = Math.max(0, Number(block?.from || 0));
-  return `${blockType}:${blockFrom}`;
 };
 const mathExpandKeyOf = (block) => {
   if (String(block?.type || "") !== "math_block") {
@@ -234,26 +218,6 @@ const normalizeImageWidth = (value, fallback = DEFAULT_IMAGE_WIDTH) => {
   return Math.max(MIN_IMAGE_WIDTH, Math.min(MAX_IMAGE_WIDTH, rounded));
 };
 
-const pickBlockIdentityAtPos = (blocks, posInput, docLength) => {
-  const pos = clampPos(posInput, docLength);
-  let pickedId = "";
-  let pickedSpan = Number.POSITIVE_INFINITY;
-  for (const block of Array.isArray(blocks) ? blocks : []) {
-    const from = clampPos(block?.from, docLength);
-    const to = clampPos(block?.to, docLength);
-    const boundedTo = Math.max(from, to);
-    if (pos < from || pos > boundedTo) {
-      continue;
-    }
-    const span = Math.max(0, boundedTo - from);
-    if (span <= pickedSpan) {
-      pickedSpan = span;
-      pickedId = blockIdentityOf(block);
-    }
-  }
-  return pickedId;
-};
-
 const escapeHtml = (value) =>
   String(value || "")
     .replace(/&/g, "&amp;")
@@ -322,119 +286,6 @@ const renderMathHtml = (formulaInput, displayMode = false) => {
 
   return `<span class="cm-math-fallback">${escapeHtml(formula)}</span>`;
 };
-
-const splitTableCells = (lineText) =>
-  String(lineText || "")
-    .trim()
-    .replace(/^\|/, "")
-    .replace(/\|$/, "")
-    .split("|")
-    .map((cell) => String(cell || "").trim());
-
-const isPipeWrappedTableLine = (lineText) => /^\s*\|.*\|\s*$/.test(String(lineText || ""));
-
-const isTableDelimiterCell = (cellText) => /^:?-{3,}:?$/.test(String(cellText || "").trim());
-
-const tableCellAlign = (delimiterCellText) => {
-  const cell = String(delimiterCellText || "").trim();
-  if (!isTableDelimiterCell(cell)) {
-    return "";
-  }
-  const left = cell.startsWith(":");
-  const right = cell.endsWith(":");
-  if (left && right) {
-    return "center";
-  }
-  if (right) {
-    return "right";
-  }
-  if (left) {
-    return "left";
-  }
-  return "";
-};
-
-const parseMarkdownTableRaw = (rawText) => {
-  const lines = String(rawText || "")
-    .split("\n")
-    .map((line) => String(line || "").trim())
-    .filter(Boolean);
-  if (lines.length < 2) {
-    return null;
-  }
-  if (!isPipeWrappedTableLine(lines[0]) || !isPipeWrappedTableLine(lines[1])) {
-    return null;
-  }
-
-  const headers = splitTableCells(lines[0]);
-  const delimiter = splitTableCells(lines[1]);
-  if (!headers.length || delimiter.length < headers.length) {
-    return null;
-  }
-
-  const alignments = headers.map((_, index) => tableCellAlign(delimiter[index]));
-  for (let index = 0; index < headers.length; index += 1) {
-    if (!isTableDelimiterCell(delimiter[index])) {
-      return null;
-    }
-  }
-
-  const rows = [];
-  for (const line of lines.slice(2)) {
-    if (!isPipeWrappedTableLine(line)) {
-      break;
-    }
-    const cells = splitTableCells(line);
-    if (cells.length !== headers.length) {
-      break;
-    }
-    rows.push(headers.map((_, index) => String(cells[index] || "").trim()));
-  }
-
-  return {
-    headers: headers.map((cell) => String(cell || "")),
-    rows,
-    alignments
-  };
-};
-
-const tableIndentOfRaw = (rawText) => {
-  const lines = String(rawText || "").split("\n");
-  for (const line of lines) {
-    const text = String(line || "");
-    if (!text.trim()) {
-      continue;
-    }
-    return text.match(/^\s*/u)?.[0] || "";
-  }
-  return "";
-};
-
-const parseMarkdownTableModel = (rawText) => {
-  const parsed = parseMarkdownTableRaw(rawText);
-  if (!parsed) {
-    return null;
-  }
-
-  const columnCount = Math.max(1, Number(parsed.headers?.length || 0));
-  const headers = Array.from({ length: columnCount }, (_, index) => String(parsed.headers[index] || ""));
-  const alignments = Array.from({ length: columnCount }, (_, index) => String(parsed.alignments[index] || ""));
-  const rows = (Array.isArray(parsed.rows) ? parsed.rows : []).map((row) =>
-    Array.from({ length: columnCount }, (_, index) => String(row?.[index] || ""))
-  );
-
-  return {
-    headers,
-    alignments,
-    rows,
-    indent: tableIndentOfRaw(rawText)
-  };
-};
-
-const normalizeTableCellText = (value) =>
-  String(value ?? "")
-    .replace(/\r?\n/g, " ")
-    .trim();
 
 const TABLE_INLINE_ALLOWED_TAGS = new Set([
   "STRONG",
@@ -568,37 +419,6 @@ const renderTableCellInlineHtml = (cellTextInput) => {
   }
 
   return `<span class="cm-table-widget-cell-content">${escapeHtml(source)}</span>`;
-};
-
-const tableDelimiterCellFromAlign = (alignInput) => {
-  const align = String(alignInput || "").trim().toLowerCase();
-  if (align === "center") {
-    return ":---:";
-  }
-  if (align === "right") {
-    return "---:";
-  }
-  if (align === "left") {
-    return ":---";
-  }
-  return "---";
-};
-
-const serializeMarkdownTableModel = (modelInput) => {
-  const headersSource = Array.isArray(modelInput?.headers) ? modelInput.headers : [];
-  const columnCount = Math.max(1, Number(headersSource.length || 0));
-  const headers = Array.from({ length: columnCount }, (_, index) => normalizeTableCellText(headersSource[index]));
-  const alignmentsSource = Array.isArray(modelInput?.alignments) ? modelInput.alignments : [];
-  const delimiterCells = Array.from({ length: columnCount }, (_, index) =>
-    tableDelimiterCellFromAlign(alignmentsSource[index])
-  );
-  const rowsSource = Array.isArray(modelInput?.rows) ? modelInput.rows : [];
-  const rows = rowsSource.map((row) =>
-    Array.from({ length: columnCount }, (_, index) => normalizeTableCellText(row?.[index]))
-  );
-  const indent = String(modelInput?.indent || "");
-  const lineOf = (cells) => `${indent}| ${cells.join(" | ")} |`;
-  return [lineOf(headers), lineOf(delimiterCells), ...rows.map((row) => lineOf(row))].join("\n");
 };
 
 const clampIndex = (valueInput, minInput, maxInput) => {
@@ -2477,32 +2297,110 @@ const addMathSourceSyntaxDecorationsWithoutBlocks = (decorations, doc, docLength
   }
 };
 
-export const setPresentationDataEffect = StateEffect.define();
-
-// Toggle hidden-source preview for image/math blocks.
+// Toggle preview-mode decorations on/off and hidden-source preview for image/math blocks.
+export const presentationEnabledFacet = Facet.define({
+  combine: (values) => (values.length ? Boolean(values[0]) : true)
+});
+export const setPresentationEnabledEffect = StateEffect.define();
 export const toggleImageExpandEffect = StateEffect.define();
 export const toggleMathExpandEffect = StateEffect.define();
 export const setImageWidthEffect = StateEffect.define();
-export const setContextHighlightBlockEffect = StateEffect.define();
 
-const presentationDataField = StateField.define({
-  create: () => normalizePresentationData(),
+const presentationEnabledField = StateField.define({
+  create: (state) => Boolean(state.facet(presentationEnabledFacet)),
   update: (value, transaction) => {
     let next = value;
     for (const effect of transaction.effects) {
-      if (effect.is(setPresentationDataEffect)) {
-        next = normalizePresentationData(effect.value);
+      if (effect.is(setPresentationEnabledEffect)) {
+        next = Boolean(effect.value);
       }
     }
     return next;
   }
 });
 
+const previewDocumentField = StateField.define({
+  create: (state) => {
+    try {
+      return parseMarkdownToPreviewDocument(state.doc.toString());
+    } catch {
+      return null;
+    }
+  },
+  update: (value, transaction) => {
+    if (!transaction.docChanged) {
+      return value;
+    }
+    try {
+      return parseMarkdownToPreviewDocument(transaction.newDoc.toString());
+    } catch {
+      return null;
+    }
+  }
+});
+
+const previewNodesOf = (previewDocument) =>
+  Array.isArray(previewDocument?.nodes) ? previewDocument.nodes : [];
+
+const previewDocumentFromTransaction = (transaction) => {
+  if (!transaction?.docChanged) {
+    return null;
+  }
+  try {
+    return parseMarkdownToPreviewDocument(transaction.newDoc.toString());
+  } catch {
+    return null;
+  }
+};
+
+const previewNodeStateKeysByType = (previewDocument, type, keyOf) =>
+  new Set(
+    previewNodesOf(previewDocument)
+      .filter((node) => String(node?.type || "") === String(type || ""))
+      .map((node) => keyOf(node))
+      .filter(Boolean)
+  );
+
+const hydratedImageWidthMapOf = (previewDocument, currentMapInput = new Map()) => {
+  const currentMap = currentMapInput instanceof Map ? currentMapInput : new Map();
+  const hydrated = new Map();
+  for (const node of previewNodesOf(previewDocument)) {
+    if (String(node?.type || "") !== "image") {
+      continue;
+    }
+    const imageId = imageExpandKeyOf(node);
+    if (!imageId) {
+      continue;
+    }
+    const widthFromState = normalizeImageWidth(currentMap.get(imageId), Number.NaN);
+    if (Number.isFinite(widthFromState)) {
+      hydrated.set(imageId, widthFromState);
+      continue;
+    }
+    const widthFromSource = normalizeImageWidth(node?.attrs?.width, Number.NaN);
+    if (Number.isFinite(widthFromSource)) {
+      hydrated.set(imageId, widthFromSource);
+    }
+  }
+  return hydrated;
+};
+
+const initialImageWidthMapOfState = (state) => {
+  try {
+    return hydratedImageWidthMapOf(parseMarkdownToPreviewDocument(state.doc.toString()));
+  } catch {
+    return new Map();
+  }
+};
+
 // Expanded image block keys.
 const imageExpandField = StateField.define({
   create: () => new Set(),
   update: (value, transaction) => {
-    let next = new Set(value);
+    const previewDocument = previewDocumentFromTransaction(transaction);
+    let next = transaction.docChanged
+      ? new Set(Array.from(value, (id) => remapSpecialBlockStateKey(id, transaction.changes)).filter(Boolean))
+      : new Set(value);
     for (const effect of transaction.effects) {
       if (effect.is(toggleImageExpandEffect)) {
         const imageId = String(effect.value || "");
@@ -2513,47 +2411,30 @@ const imageExpandField = StateField.define({
         }
         continue;
       }
-      if (effect.is(setPresentationDataEffect)) {
-        const blocks = Array.isArray(effect.value?.blocks) ? effect.value.blocks : [];
-        const validImageIds = new Set(
-          blocks
-            .map((block) => imageExpandKeyOf(block))
-            .filter(Boolean)
-        );
-        next = validImageIds.size
-          ? new Set([...next].filter((id) => validImageIds.has(id)))
-          : new Set();
-      }
     }
-    return next;
-  }
-});
-
-const contextHighlightField = StateField.define({
-  create: () => "",
-  update: (value, transaction) => {
-    let next = String(value || "");
-    for (const effect of transaction.effects) {
-      if (effect.is(setContextHighlightBlockEffect)) {
-        next = String(effect.value || "");
-        continue;
-      }
-      if (effect.is(setPresentationDataEffect)) {
-        const blocks = Array.isArray(effect.value?.blocks) ? effect.value.blocks : [];
-        const validBlockIds = new Set(blocks.map((block) => blockIdentityOf(block)).filter(Boolean));
-        if (!validBlockIds.has(next)) {
-          next = "";
-        }
-      }
+    if (previewDocument) {
+      const validImageIds = previewNodeStateKeysByType(previewDocument, "image", imageExpandKeyOf);
+      next = validImageIds.size ? new Set([...next].filter((id) => validImageIds.has(id))) : new Set();
     }
     return next;
   }
 });
 
 const imageWidthField = StateField.define({
-  create: () => new Map(),
+  create: (state) => initialImageWidthMapOfState(state),
   update: (value, transaction) => {
-    let next = new Map(value);
+    const previewDocument = previewDocumentFromTransaction(transaction);
+    let next = new Map();
+    if (transaction.docChanged) {
+      for (const [blockId, width] of value.entries()) {
+        const remappedId = remapSpecialBlockStateKey(blockId, transaction.changes);
+        if (remappedId) {
+          next.set(remappedId, width);
+        }
+      }
+    } else {
+      next = new Map(value);
+    }
     for (const effect of transaction.effects) {
       if (effect.is(setImageWidthEffect)) {
         const blockId = String(effect.value?.blockId || "");
@@ -2563,21 +2444,9 @@ const imageWidthField = StateField.define({
         }
         continue;
       }
-      if (effect.is(setPresentationDataEffect)) {
-        const blocks = Array.isArray(effect.value?.blocks) ? effect.value.blocks : [];
-        const hydrated = new Map();
-        for (const block of blocks) {
-          const imageId = imageExpandKeyOf(block);
-          if (!imageId) {
-            continue;
-          }
-          const widthFromSource = normalizeImageWidth(block?.attrs?.width, Number.NaN);
-          if (Number.isFinite(widthFromSource)) {
-            hydrated.set(imageId, widthFromSource);
-          }
-        }
-        next = hydrated;
-      }
+    }
+    if (previewDocument) {
+      next = hydratedImageWidthMapOf(previewDocument, next);
     }
     return next;
   }
@@ -2586,7 +2455,10 @@ const imageWidthField = StateField.define({
 const mathExpandField = StateField.define({
   create: () => new Set(),
   update: (value, transaction) => {
-    let next = new Set(value);
+    const previewDocument = previewDocumentFromTransaction(transaction);
+    let next = transaction.docChanged
+      ? new Set(Array.from(value, (id) => remapSpecialBlockStateKey(id, transaction.changes)).filter(Boolean))
+      : new Set(value);
     for (const effect of transaction.effects) {
       if (effect.is(toggleMathExpandEffect)) {
         const mathId = String(effect.value || "");
@@ -2597,17 +2469,10 @@ const mathExpandField = StateField.define({
         }
         continue;
       }
-      if (effect.is(setPresentationDataEffect)) {
-        const blocks = Array.isArray(effect.value?.blocks) ? effect.value.blocks : [];
-        const validMathIds = new Set(
-          blocks
-            .map((block) => mathExpandKeyOf(block))
-            .filter(Boolean)
-        );
-        next = validMathIds.size
-          ? new Set([...next].filter((id) => validMathIds.has(id)))
-          : new Set();
-      }
+    }
+    if (previewDocument) {
+      const validMathIds = previewNodeStateKeysByType(previewDocument, "math_block", mathExpandKeyOf);
+      next = validMathIds.size ? new Set([...next].filter((id) => validMathIds.has(id))) : new Set();
     }
     return next;
   }
@@ -2616,7 +2481,6 @@ const mathExpandField = StateField.define({
 const classesForBlockLine = (
   block,
   currentBlockId,
-  contextHighlightBlockId,
   lineNumber,
   lineRange,
   sourceVisible = false
@@ -2632,11 +2496,8 @@ const classesForBlockLine = (
   if (lineNumber === lineRange.toLine) {
     classes.push("cm-block-end");
   }
-  if (String(block.id) === String(currentBlockId || "")) {
+  if (previewNodeIdentityOf(block) === String(currentBlockId || "")) {
     classes.push("cm-block-current");
-  }
-  if (blockIdentityOf(block) === String(contextHighlightBlockId || "")) {
-    classes.push("cm-block-context-current");
   }
   if (sourceVisible) {
     classes.push("cm-block-source-visible");
@@ -2665,20 +2526,51 @@ const classesForBlockLine = (
   return classes.join(" ");
 };
 
-const buildDecorations = (view, blocks, currentBlockId) => {
+const keepsSourceVisibleForBlock = (view, block, selection, readOnly) => {
+  const editing = block?.editing || {};
+  if (Boolean(editing.sourceVisible)) {
+    return true;
+  }
+  if (readOnly) {
+    return false;
+  }
+  if (Boolean(editing.revealSourceWhenSelected) && selectionIntersectsRange(selection, block?.from, block?.to)) {
+    return true;
+  }
+
+  if (!Boolean(editing.revealSourceWhenExpanded)) {
+    return false;
+  }
+
+  const blockType = String(block?.type || "");
+  if (blockType === "image") {
+    return view.state.field(imageExpandField).has(imageExpandKeyOf(block));
+  }
+  if (blockType === "math_block") {
+    return view.state.field(mathExpandField).has(mathExpandKeyOf(block));
+  }
+  return false;
+};
+
+const buildDecorations = (view) => {
+  if (!view.state.field(presentationEnabledField)) {
+    return Decoration.none;
+  }
   const decorations = [];
   const doc = view.state.doc;
   const docLength = Number(doc.length || 0);
   const readOnly = isEditorReadOnly(view);
+  const previewDocument = view.state.field(previewDocumentField);
+  const liveBlocks = previewNodesOf(previewDocument);
   const selection = selectionSnapshotOf(view.state);
+  const currentBlockId = readOnly ? "" : resolveCurrentPreviewNodeId(previewDocument, selection.head);
   const activeInlineToken = readOnly
     ? null
-    : pickActiveInlineSyntaxToken(blocks, selection, docLength);
-  const contextHighlightBlockId = view.state.field(contextHighlightField) || "";
+    : pickActiveInlineSyntaxToken(liveBlocks, selection, docLength);
   const imageExpandSet = view.state.field(imageExpandField) || new Set();
   const imageWidthMap = view.state.field(imageWidthField) || new Map();
   const mathExpandSet = view.state.field(mathExpandField) || new Set();
-  for (const block of blocks) {
+  for (const block of liveBlocks) {
     try {
       const blockFrom = clampPos(block?.from, docLength);
       const blockTo = clampPos(block?.to, docLength);
@@ -2688,15 +2580,11 @@ const buildDecorations = (view, blocks, currentBlockId) => {
       const tableBlockId = tableExpandKeyOf({ type: blockType, from: blockFrom });
       const isImageExpanded = imageExpandSet.has(imageExpandKey);
       const isMathExpanded = mathExpandSet.has(mathExpandKey);
-      const blockSelectionVisible = selectionIntersectsRange(selection, blockFrom, blockTo);
-      // Keep source visible for focused source-first block types or expanded media/math blocks.
-      const blockKeepsSourceVisible = !readOnly && ((
-        (SOURCE_VISIBLE_BLOCK_TYPES.has(blockType) || AUTO_SOURCE_REVEAL_BLOCK_TYPES.has(blockType))
-        && blockSelectionVisible
-      ) || isImageExpanded || isMathExpanded);
-      const hideImageSourceLines = blockType === "image" && !blockKeepsSourceVisible;
-      const hideMathSourceLines = blockType === "math_block" && !blockKeepsSourceVisible;
-      const hideTableSourceLines = blockType === "table" && !blockKeepsSourceVisible;
+      const sourceVisible = keepsSourceVisibleForBlock(view, block, selection, readOnly);
+      const hideSourceLines = Boolean(block?.editing?.hideSourceLines) && !sourceVisible;
+      const hideImageSourceLines = blockType === "image" && hideSourceLines;
+      const hideMathSourceLines = blockType === "math_block" && hideSourceLines;
+      const hideTableSourceLines = blockType === "table" && hideSourceLines;
       const hideHeadingSubtitleMetaLines = isHeadingSubtitleMetaBlock(block, doc);
 
       const lineRange = resolveLineRange(doc, block);
@@ -2705,10 +2593,9 @@ const buildDecorations = (view, blocks, currentBlockId) => {
         const baseClass = classesForBlockLine(
           block,
           currentBlockId,
-          contextHighlightBlockId,
           lineNumber,
           lineRange,
-          blockKeepsSourceVisible
+          sourceVisible
         );
         const isImageSourceHiddenLine = hideImageSourceLines;
         const isMathSourceHiddenLine = hideMathSourceLines;
@@ -2731,7 +2618,7 @@ const buildDecorations = (view, blocks, currentBlockId) => {
         );
       }
 
-      if (!blockKeepsSourceVisible) {
+      if (!sourceVisible) {
         if (blockType === "heading") {
           const headingPrefixRange = headingPrefixRangeForBlock(block, docLength);
           if (headingPrefixRange) {
@@ -2754,7 +2641,7 @@ const buildDecorations = (view, blocks, currentBlockId) => {
         }
       }
 
-      if (blockKeepsSourceVisible) {
+      if (sourceVisible) {
         if (blockType === "image") {
           addImageSourceSyntaxDecorationsForBlock(decorations, doc, blockFrom, blockTo, docLength);
         } else if (blockType === "math_block") {
@@ -2869,7 +2756,7 @@ const buildDecorations = (view, blocks, currentBlockId) => {
 
       const syntaxTokens = collectInlineSyntaxTokens(block?.inlineTokens, docLength);
       for (const token of syntaxTokens) {
-        if (blockKeepsSourceVisible) {
+        if (sourceVisible) {
           continue;
         }
         if (isTokenRelatedToActiveToken(token, activeInlineToken)) {
@@ -2893,9 +2780,7 @@ const buildDecorations = (view, blocks, currentBlockId) => {
       console.error("[yc-editor] block presentation error", error, block);
     }
   }
-  if (!Array.isArray(blocks) || blocks.length === 0) {
-    addMathSourceSyntaxDecorationsWithoutBlocks(decorations, doc, docLength);
-  }
+
   try {
     return Decoration.set(decorations, true);
   } catch (error) {
@@ -2912,151 +2797,44 @@ const updateHasEffect = (update, effectType) =>
 
 class BlockPresentationPlugin {
   constructor(view) {
-    const data = view.state.field(presentationDataField);
-    this.blocks = data.blocks;
-    this.currentBlockId = data.currentBlockId;
-    this.decorations = buildDecorations(view, this.blocks, this.currentBlockId);
+    this.decorations = buildDecorations(view);
   }
 
   update(update) {
-    const nextData = update.state.field(presentationDataField);
-    const nextBlocks = nextData.blocks;
-    const nextCurrentBlockId = nextData.currentBlockId;
-    const blocksChanged = nextBlocks !== this.blocks;
-    const currentChanged = nextCurrentBlockId !== this.currentBlockId;
     const selectionChanged = update.selectionSet;
     const readOnlyChanged = isEditorStateReadOnly(update.startState) !== isEditorStateReadOnly(update.state);
-    const contextHighlightChanged = updateHasEffect(update, setContextHighlightBlockEffect);
     const imageExpandChanged = updateHasEffect(update, toggleImageExpandEffect);
     const imageWidthChanged = updateHasEffect(update, setImageWidthEffect);
     const mathExpandChanged = updateHasEffect(update, toggleMathExpandEffect);
-    if (!blocksChanged && !currentChanged) {
-      if (update.docChanged) {
-        // Keep existing block styling mapped through document edits until the next semantic snapshot arrives.
-        // This avoids transient flicker on block backgrounds such as code block shells while typing.
-        this.decorations = this.decorations.map(update.changes);
-      } else if (
-        selectionChanged
-        || readOnlyChanged
-        || contextHighlightChanged
-        || imageExpandChanged
-        || imageWidthChanged
-        || mathExpandChanged
-      ) {
-        this.decorations = buildDecorations(update.view, this.blocks, this.currentBlockId);
-      }
-      return;
+    if (
+      update.docChanged
+      || selectionChanged
+      || readOnlyChanged
+      || imageExpandChanged
+      || imageWidthChanged
+      || mathExpandChanged
+    ) {
+      this.decorations = buildDecorations(update.view);
     }
-
-    this.blocks = nextBlocks;
-    this.currentBlockId = nextCurrentBlockId;
-    this.decorations = buildDecorations(update.view, this.blocks, this.currentBlockId);
   }
 }
 
-const resolveContextBlockIdentityFromWidget = (target, blocks, docLength) => {
-  const imageBlockKey = String(target.closest("[data-image-block-id]")?.getAttribute("data-image-block-id") || "");
-  if (imageBlockKey) {
-    for (const block of blocks) {
-      const from = clampPos(block?.from, docLength);
-      if (imageExpandKeyOf({ type: block?.type, from }) === imageBlockKey) {
-        return blockIdentityOf(block);
-      }
-    }
-  }
+const presentationContextMenuHandler = () => false;
 
-  const mathBlockKey = String(target.closest("[data-math-block-id]")?.getAttribute("data-math-block-id") || "");
-  if (mathBlockKey) {
-    for (const block of blocks) {
-      const from = clampPos(block?.from, docLength);
-      if (mathExpandKeyOf({ type: block?.type, from }) === mathBlockKey) {
-        return blockIdentityOf(block);
-      }
-    }
-  }
+const previewDocumentOf = (view) => view.state.field(previewDocumentField);
 
-  const tableBlockKey = String(target.closest("[data-table-block-id]")?.getAttribute("data-table-block-id") || "");
-  if (tableBlockKey) {
-    for (const block of blocks) {
-      const from = clampPos(block?.from, docLength);
-      if (tableExpandKeyOf({ type: block?.type, from }) === tableBlockKey) {
-        return blockIdentityOf(block);
-      }
-    }
-  }
-
-  return "";
-};
-
-const presentationContextMenuHandler = (event, view) => {
-  if (view.state.field(contextHighlightField)) {
-    view.dispatch({
-      effects: setContextHighlightBlockEffect.of("")
-    });
-  }
-  return false;
-};
+const specialBlocksOf = (view) => specialPreviewNodesOf(previewDocumentOf(view));
 
 const resolveImageBlockRangeById = (view, blockId) => {
-  const targetBlockId = String(blockId || "");
-  if (!targetBlockId) {
-    return null;
-  }
-
-  const data = view.state.field(presentationDataField);
-  const blocks = Array.isArray(data?.blocks) ? data.blocks : [];
-  const docLength = Number(view.state.doc.length || 0);
-  for (const block of blocks) {
-    const from = clampPos(block?.from, docLength);
-    const to = Math.max(from, clampPos(block?.to, docLength));
-    if (imageExpandKeyOf({ type: block?.type, from }) === targetBlockId) {
-      return { from, to };
-    }
-  }
-  return null;
+  return resolvePreviewBlockRangeById(previewDocumentOf(view), blockId, "image");
 };
 
 const resolveCodeBlockRangeById = (view, blockId) => {
-  const targetBlockId = String(blockId || "");
-  if (!targetBlockId) {
-    return null;
-  }
-
-  const data = view.state.field(presentationDataField);
-  const blocks = Array.isArray(data?.blocks) ? data.blocks : [];
-  const doc = view.state.doc;
-  const docLength = Number(doc.length || 0);
-  for (const block of blocks) {
-    const from = clampPos(block?.from, docLength);
-    const to = Math.max(from, clampPos(block?.to, docLength));
-    if (codeBlockCopyKeyOf({ type: block?.type, from }) === targetBlockId) {
-      return {
-        from,
-        to,
-        rawText: doc.sliceString(from, to)
-      };
-    }
-  }
-  return null;
+  return resolvePreviewCodeBlockRangeById(previewDocumentOf(view), blockId);
 };
 
 const resolveMathBlockRangeById = (view, blockId) => {
-  const targetBlockId = String(blockId || "");
-  if (!targetBlockId) {
-    return null;
-  }
-
-  const data = view.state.field(presentationDataField);
-  const blocks = Array.isArray(data?.blocks) ? data.blocks : [];
-  const docLength = Number(view.state.doc.length || 0);
-  for (const block of blocks) {
-    const from = clampPos(block?.from, docLength);
-    const to = Math.max(from, clampPos(block?.to, docLength));
-    if (mathExpandKeyOf({ type: block?.type, from }) === targetBlockId) {
-      return { from, to };
-    }
-  }
-  return null;
+  return resolvePreviewBlockRangeById(previewDocumentOf(view), blockId, "math_block");
 };
 
 const cursorOutsideRange = (docLengthInput, fromInput, toInput, direction = -1) => {
@@ -3129,69 +2907,7 @@ const resolveNearestVisibleCursorPos = (view, posInput, direction = 1) => {
 };
 
 const resolveTableBlockRangeById = (view, blockId) => {
-  const targetBlockId = String(blockId || "");
-  if (!targetBlockId) {
-    return null;
-  }
-
-  const doc = view.state.doc;
-  const docLength = Number(doc.length || 0);
-  const match = targetBlockId.match(/^table:(\d+)$/);
-  if (!match) {
-    return null;
-  }
-
-  const blockStart = clampPos(Number(match[1]), docLength);
-  let lineNumber = doc.lineAt(blockStart).number;
-  let headerLineNumber = 0;
-  const isHeaderAt = (candidateLineNumber) => {
-    if (candidateLineNumber < 1 || candidateLineNumber >= doc.lines) {
-      return false;
-    }
-    const headerLine = doc.line(candidateLineNumber);
-    const delimiterLine = doc.line(candidateLineNumber + 1);
-    return isPipeWrappedTableLine(headerLine.text)
-      && isPipeWrappedTableLine(delimiterLine.text)
-      && parseMarkdownTableRaw(`${headerLine.text}\n${delimiterLine.text}`) !== null;
-  };
-
-  if (!isHeaderAt(lineNumber)) {
-    for (let offset = -2; offset <= 2; offset += 1) {
-      const candidate = lineNumber + offset;
-      if (isHeaderAt(candidate)) {
-        headerLineNumber = candidate;
-        break;
-      }
-    }
-  } else {
-    headerLineNumber = lineNumber;
-  }
-
-  if (!headerLineNumber) {
-    return null;
-  }
-
-  const headerCells = splitTableCells(doc.line(headerLineNumber).text);
-  const expectedColumnCount = headerCells.length;
-  let endLine = headerLineNumber + 1;
-  while (endLine < doc.lines) {
-    const nextLineText = doc.line(endLine + 1).text;
-    if (!isPipeWrappedTableLine(nextLineText)) {
-      break;
-    }
-    if (splitTableCells(nextLineText).length !== expectedColumnCount) {
-      break;
-    }
-    endLine += 1;
-  }
-
-  const from = doc.line(headerLineNumber).from;
-  const to = doc.line(endLine).to;
-  return {
-    from,
-    to,
-    rawText: doc.sliceString(from, to)
-  };
+  return resolvePreviewBlockRangeById(previewDocumentOf(view), blockId, "table");
 };
 
 const persistTableByBlockId = (view, blockId, transformTableModel) => {
@@ -3832,8 +3548,9 @@ const moveCursorIntoSpecialBlockSource = (view, block, direction = 1) => {
 };
 
 const resolveKeyboardNavigableSpecialBlock = (view, direction = 1) => {
-  const data = view.state.field(presentationDataField);
-  const blocks = Array.isArray(data?.blocks) ? data.blocks : [];
+  const blocks = specialBlocksOf(view).filter((block) =>
+    Boolean(block?.editing?.keyboardNavigable)
+  );
   if (!blocks.length) {
     return null;
   }
@@ -3849,10 +3566,10 @@ const resolveKeyboardNavigableSpecialBlock = (view, direction = 1) => {
   let adjacentMatch = null;
 
   for (const block of blocks) {
-    const blockType = String(block?.type || "");
-    if (!KEYBOARD_NAVIGABLE_SPECIAL_BLOCK_TYPES.has(blockType) || blockExpandedForKeyboardNavigation(view, block)) {
+    if (!block?.editing?.keyboardNavigable || blockExpandedForKeyboardNavigation(view, block)) {
       continue;
     }
+    const blockType = String(block?.type || "");
 
     const blockFrom = clampPos(block?.from, docLength);
     const blockTo = clampPos(block?.to, docLength);
@@ -3880,6 +3597,9 @@ const resolveKeyboardNavigableSpecialBlock = (view, direction = 1) => {
 };
 
 const runSpecialBlockVerticalNavigation = (view, direction = 1) => {
+  if (!view.state.field(presentationEnabledField)) {
+    return false;
+  }
   if (isEditorReadOnly(view)) {
     return false;
   }
@@ -3924,6 +3644,9 @@ const specialBlockNavigationKeymap = Prec.highest(
 );
 
 const presentationMouseDownHandler = (event, view) => {
+  if (!view.state.field(presentationEnabledField)) {
+    return false;
+  }
   const target = event.target;
   if (!(target instanceof Element)) {
     return false;
@@ -4022,11 +3745,6 @@ const presentationMouseDownHandler = (event, view) => {
     if (Number(event.button) === 0) {
       clearTableHandleSelection(view);
     }
-    if (Number(event.button) === 0 && view.state.field(contextHighlightField)) {
-      view.dispatch({
-        effects: setContextHighlightBlockEffect.of("")
-      });
-    }
     return false;
   }
 
@@ -4074,6 +3792,9 @@ const presentationMouseDownHandler = (event, view) => {
 };
 
 const presentationKeyDownHandler = (event, view) => {
+  if (!view.state.field(presentationEnabledField)) {
+    return false;
+  }
   const target = event.target;
   if (target instanceof Element && view?.contentDOM instanceof Element && !view.contentDOM.contains(target)) {
     return false;
@@ -4107,6 +3828,9 @@ const presentationKeyDownHandler = (event, view) => {
 };
 
 const presentationFocusOutHandler = (event, view) => {
+  if (!view.state.field(presentationEnabledField)) {
+    return false;
+  }
   const target = event.target;
   if (!(target instanceof Element)) {
     return false;
@@ -4134,6 +3858,9 @@ const presentationFocusOutHandler = (event, view) => {
 };
 
 const presentationClickHandler = (event, view) => {
+  if (!view.state.field(presentationEnabledField)) {
+    return false;
+  }
   const target = event.target;
   if (!(target instanceof Element)) {
     return false;
@@ -4153,7 +3880,9 @@ const presentationClickHandler = (event, view) => {
     event.stopPropagation();
     const blockId = String(codeCopyButton.getAttribute("data-code-block-id") || "");
     const blockRange = resolveCodeBlockRangeById(view, blockId);
-    const codeText = extractCodeBlockContent(String(blockRange?.rawText || ""));
+    const codeText = blockRange
+      ? view.state.doc.sliceString(blockRange.contentFrom, blockRange.contentTo)
+      : "";
     void copyText(codeText).then((ok) => {
       showCodeBlockCopyFeedback(codeCopyButton, ok && Boolean(codeText));
     });
@@ -4302,8 +4031,8 @@ const presentationClickHandler = (event, view) => {
 };
 
 export const presentationExtensions = [
-  presentationDataField,
-  contextHighlightField,
+  presentationEnabledField,
+  previewDocumentField,
   imageExpandField,
   imageWidthField,
   mathExpandField,

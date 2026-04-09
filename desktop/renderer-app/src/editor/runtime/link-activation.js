@@ -1,4 +1,4 @@
-import { parseMarkdownToBlocks } from "../parser/parse-blocks.js";
+import { parseMarkdownToPreviewDocument } from "../parser/parse-preview-document.js";
 import { resolveWikiLink } from "../../utils/wiki-link.js";
 
 const ACTIVATABLE_LINK_TYPES = new Set(["wikilink", "link"]);
@@ -113,8 +113,8 @@ export const resolveEditorLinkActivation = ({
     return null;
   }
 
-  const blocks = parseMarkdownToBlocks(docText);
-  const token = pickActiveLinkToken(blocks, selection, docText.length);
+  const previewDocument = parseMarkdownToPreviewDocument(docText);
+  const token = pickActiveLinkToken(previewDocument?.nodes, selection, docText.length);
   if (!token) {
     return null;
   }

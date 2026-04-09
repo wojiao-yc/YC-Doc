@@ -18,15 +18,11 @@ const props = defineProps({
     type: Boolean,
     default: false
   },
+  presentationEnabled: {
+    type: Boolean,
+    default: true
+  },
   modelValue: {
-    type: String,
-    default: ""
-  },
-  presentationBlocks: {
-    type: Array,
-    default: () => []
-  },
-  currentBlockId: {
     type: String,
     default: ""
   },
@@ -57,7 +53,6 @@ const shellRef = ref(null);
 const editorHostRef = ref(null);
 const dropCaretStyle = ref(null);
 let editorApi = null;
-let latestPresentationBlocks = Array.isArray(props.presentationBlocks) ? props.presentationBlocks : [];
 
 const focus = () => {
   editorApi?.focus();
@@ -119,13 +114,6 @@ defineExpose({
   clearPointPreview
 });
 
-const syncPresentationData = () => {
-  editorApi?.setPresentationData({
-    blocks: latestPresentationBlocks,
-    currentBlockId: props.currentBlockId
-  });
-};
-
 onMounted(() => {
   const host = editorHostRef.value;
   if (!host) {
@@ -137,6 +125,7 @@ onMounted(() => {
     doc: props.modelValue,
     dark: props.dark,
     readOnly: props.readOnly,
+    presentationEnabled: props.presentationEnabled,
     onSelectionChange: (selection) => {
       emit("selection-change", selection);
     },
@@ -164,7 +153,6 @@ onMounted(() => {
       return props.wikiLinkSuggestions(context);
     }
   });
-  syncPresentationData();
 });
 
 watch(
@@ -174,12 +162,7 @@ watch(
     if (!editorApi || editorApi.getDoc() === nextDoc) {
       return;
     }
-    editorApi.setDoc(nextDoc, {
-      presentationData: {
-        blocks: latestPresentationBlocks,
-        currentBlockId: props.currentBlockId
-      }
-    });
+    editorApi.setDoc(nextDoc);
   }
 );
 
@@ -201,17 +184,12 @@ watch(
 );
 
 watch(
-  () => props.presentationBlocks,
-  (nextBlocks) => {
-    latestPresentationBlocks = Array.isArray(nextBlocks) ? nextBlocks : [];
-    syncPresentationData();
-  }
-);
-
-watch(
-  () => props.currentBlockId,
-  () => {
-    syncPresentationData();
+  () => props.presentationEnabled,
+  (nextEnabled) => {
+    editorApi?.setPresentationEnabled?.(nextEnabled);
+    if (!nextEnabled) {
+      dropCaretStyle.value = null;
+    }
   }
 );
 

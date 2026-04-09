@@ -1,7 +1,9 @@
 import { h, render } from "vue";
 import { EditorView, ViewPlugin } from "@codemirror/view";
 import AppIcon from "../../components/AppIcon.vue";
-import { parseMarkdownToBlocks } from "../parser/parse-blocks.js";
+import { parseMarkdownToPreviewDocument } from "../parser/parse-preview-document.js";
+import { resolvePreviewBlockRangeAtPos, resolvePreviewBlockRangeById } from "../runtime/preview-document.js";
+import { parseMarkdownTableModel, serializeMarkdownTableModel } from "../runtime/table-model.js";
 import { resolveInlineFormattingPlaceholder } from "../utils/inline-formatting.js";
 
 const MENU_GAP = 8;
@@ -52,6 +54,18 @@ const normalizeRange = (rangeInput, docLengthInput) => {
   };
 };
 
+const previewDocumentOfView = (view) => {
+  const doc = view?.state?.doc;
+  if (!doc) {
+    return null;
+  }
+  try {
+    return parseMarkdownToPreviewDocument(doc.toString());
+  } catch {
+    return null;
+  }
+};
+
 const resolveBlockRangeAtPos = (view, posInput) => {
   const doc = view?.state?.doc;
   if (!doc) {
@@ -66,34 +80,9 @@ const resolveBlockRangeAtPos = (view, posInput) => {
     to: fallbackLine.to
   };
 
-  let blocks = [];
-  try {
-    blocks = parseMarkdownToBlocks(doc.toString());
-  } catch {
-    blocks = [];
-  }
-  if (!Array.isArray(blocks) || !blocks.length) {
-    return fallbackRange;
-  }
-
-  let pickedRange = null;
-  let pickedSpan = Number.POSITIVE_INFINITY;
-  for (const block of blocks) {
-    const range = normalizeRange({
-      from: block?.from,
-      to: block?.to
-    }, docLength);
-    if (pos < range.from || pos > range.to) {
-      continue;
-    }
-    const span = Math.max(0, range.to - range.from);
-    if (span <= pickedSpan) {
-      pickedSpan = span;
-      pickedRange = range;
-    }
-  }
-
-  return pickedRange || fallbackRange;
+  const previewDocument = previewDocumentOfView(view);
+  const range = resolvePreviewBlockRangeAtPos(previewDocument, pos, fallbackRange);
+  return normalizeRange(range || fallbackRange, docLength);
 };
 
 const selectionRangeOf = (view) => {
@@ -130,201 +119,19 @@ const moveArrayItem = (itemsInput, fromIndexInput, toIndexInput) => {
   return items;
 };
 
-const tableBlockStartFromId = (blockIdInput) => {
-  const match = String(blockIdInput || "").match(/^table:(\d+)$/);
-  if (!match) {
-    return Number.NaN;
-  }
-  return Number(match[1]);
-};
-
-const isMarkdownPipeWrappedTableLine = (lineTextInput) => /^\s*\|.*\|\s*$/.test(String(lineTextInput || ""));
-
-const splitTableCells = (lineTextInput) =>
-  String(lineTextInput || "")
-    .trim()
-    .replace(/^\|/, "")
-    .replace(/\|$/, "")
-    .split("|")
-    .map((cell) => String(cell || "").trim());
-
-const markdownTableColumnCountOf = (lineTextInput) =>
-  isMarkdownPipeWrappedTableLine(lineTextInput)
-    ? splitTableCells(lineTextInput).length
-    : 0;
-
-const isMarkdownTableDelimiterLine = (lineTextInput) => {
-  if (!isMarkdownPipeWrappedTableLine(lineTextInput)) {
-    return false;
-  }
-  const cells = splitTableCells(lineTextInput);
-  return cells.length > 0 && cells.every((cell) => /^:?-{3,}:?$/.test(String(cell || "").trim()));
-};
-
-const isMarkdownTableHeaderLine = (lineTextInput) => {
-  if (!isMarkdownPipeWrappedTableLine(lineTextInput)) {
-    return false;
-  }
-  const cells = splitTableCells(lineTextInput);
-  return cells.length >= 2 && cells.some((cell) => String(cell || "").trim().length > 0);
-};
-
-const isMarkdownTableBodyLine = (lineTextInput, expectedColumnCount = 0) => {
-  if (!isMarkdownPipeWrappedTableLine(lineTextInput)) {
-    return false;
-  }
-  const cells = splitTableCells(lineTextInput);
-  if (!cells.length) {
-    return false;
-  }
-  return expectedColumnCount > 0 ? cells.length === expectedColumnCount : true;
-};
-
 const resolveTableRangeByBlockId = (view, blockIdInput) => {
-  const blockStart = tableBlockStartFromId(blockIdInput);
-  if (!Number.isFinite(blockStart)) {
-    return null;
-  }
-
   const doc = view?.state?.doc;
   if (!doc) {
     return null;
   }
 
   const docLength = Number(doc.length || 0);
-  const safeStart = Math.max(0, Math.min(docLength, blockStart));
-  let lineNumber = doc.lineAt(safeStart).number;
-  let headerLineNumber = 0;
-  const isHeaderAt = (candidateLineNumber) => {
-    if (candidateLineNumber < 1 || candidateLineNumber >= doc.lines) {
-      return false;
-    }
-    const headerLine = doc.line(candidateLineNumber);
-    const delimiterLine = doc.line(candidateLineNumber + 1);
-    return isMarkdownTableHeaderLine(headerLine.text) && isMarkdownTableDelimiterLine(delimiterLine.text);
-  };
-
-  if (!isHeaderAt(lineNumber)) {
-    for (let offset = -2; offset <= 2; offset += 1) {
-      const candidate = lineNumber + offset;
-      if (isHeaderAt(candidate)) {
-        headerLineNumber = candidate;
-        break;
-      }
-    }
-    if (!headerLineNumber) {
-      return null;
-    }
-  } else {
-    headerLineNumber = lineNumber;
-  }
-
-  const expectedColumnCount = markdownTableColumnCountOf(doc.line(headerLineNumber).text);
-  let endLine = headerLineNumber + 1;
-  while (
-    endLine < doc.lines
-    && isMarkdownTableBodyLine(doc.line(endLine + 1).text, expectedColumnCount)
-  ) {
-    endLine += 1;
-  }
-
-  return {
-    from: doc.line(headerLineNumber).from,
-    to: doc.line(endLine).to
-  };
-};
-
-const isTableDelimiterCell = (cellTextInput) => /^:?-{3,}:?$/.test(String(cellTextInput || "").trim());
-
-const alignFromDelimiterCell = (cellTextInput) => {
-  const cell = String(cellTextInput || "").trim();
-  if (!isTableDelimiterCell(cell)) {
-    return "";
-  }
-  const left = cell.startsWith(":");
-  const right = cell.endsWith(":");
-  if (left && right) {
-    return "center";
-  }
-  if (right) {
-    return "right";
-  }
-  if (left) {
-    return "left";
-  }
-  return "";
-};
-
-const delimiterCellFromAlign = (alignInput) => {
-  const align = String(alignInput || "").trim().toLowerCase();
-  if (align === "center") {
-    return ":---:";
-  }
-  if (align === "right") {
-    return "---:";
-  }
-  if (align === "left") {
-    return ":---";
-  }
-  return "---";
-};
-
-const parseMarkdownTableModel = (rawTextInput) => {
-  const lines = String(rawTextInput || "")
-    .split("\n")
-    .map((line) => String(line || ""))
-    .filter((line) => line.trim().length > 0);
-  if (lines.length < 2) {
+  const previewDocument = previewDocumentOfView(view);
+  const range = resolvePreviewBlockRangeById(previewDocument, blockIdInput, "table");
+  if (!range) {
     return null;
   }
-  if (!isMarkdownPipeWrappedTableLine(lines[0]) || !isMarkdownPipeWrappedTableLine(lines[1])) {
-    return null;
-  }
-
-  const headers = splitTableCells(lines[0]);
-  const delimiterCells = splitTableCells(lines[1]);
-  if (!headers.length || delimiterCells.length < headers.length) {
-    return null;
-  }
-  for (let index = 0; index < headers.length; index += 1) {
-    if (!isTableDelimiterCell(delimiterCells[index])) {
-      return null;
-    }
-  }
-
-  const columnCount = headers.length;
-  const alignments = Array.from({ length: columnCount }, (_, index) => alignFromDelimiterCell(delimiterCells[index]));
-  const rows = [];
-  for (const line of lines.slice(2)) {
-    if (!isMarkdownTableBodyLine(line, columnCount)) {
-      break;
-    }
-    const cells = splitTableCells(line);
-    rows.push(Array.from({ length: columnCount }, (_, index) => String(cells[index] || "").trim()));
-  }
-  const indent = lines.find((line) => line.trim().length > 0)?.match(/^\s*/u)?.[0] || "";
-
-  return {
-    headers: Array.from({ length: columnCount }, (_, index) => String(headers[index] || "").trim()),
-    alignments,
-    rows,
-    indent
-  };
-};
-
-const serializeMarkdownTableModel = (modelInput) => {
-  const headersSource = Array.isArray(modelInput?.headers) ? modelInput.headers : [];
-  const columnCount = Math.max(1, Number(headersSource.length || 0));
-  const headers = Array.from({ length: columnCount }, (_, index) => String(headersSource[index] || "").trim());
-  const alignmentsSource = Array.isArray(modelInput?.alignments) ? modelInput.alignments : [];
-  const delimiter = Array.from({ length: columnCount }, (_, index) => delimiterCellFromAlign(alignmentsSource[index]));
-  const rowsSource = Array.isArray(modelInput?.rows) ? modelInput.rows : [];
-  const rows = rowsSource.map((row) =>
-    Array.from({ length: columnCount }, (_, index) => String(row?.[index] || "").trim())
-  );
-  const indent = String(modelInput?.indent || "");
-  const lineOf = (cells) => `${indent}| ${cells.join(" | ")} |`;
-  return [lineOf(headers), lineOf(delimiter), ...rows.map((row) => lineOf(row))].join("\n");
+  return normalizeRange(range, docLength);
 };
 
 const persistTableByBlockId = (view, blockIdInput, transform) => {

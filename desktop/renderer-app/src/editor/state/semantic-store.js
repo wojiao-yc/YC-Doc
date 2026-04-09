@@ -73,8 +73,11 @@ export const useSemanticStore = ({
   return {
     snapshot,
     parsing,
+    previewDocument: computed(() => snapshot.value.previewDocument || null),
     blocks: computed(() => snapshot.value.blocks || []),
+    nodes: computed(() => snapshot.value.nodes || []),
     outline: computed(() => snapshot.value.outline || []),
+    specialBlocks: computed(() => snapshot.value.specialBlocks || []),
     currentBlock,
     refreshSemanticSnapshot: parseNow
   };
