@@ -6,10 +6,21 @@ const AUTOCOMPLETE_PANEL_GAP = 6;
 const AUTOCOMPLETE_MAX_HEIGHT = 720;
 const AUTOCOMPLETE_MIN_LIST_HEIGHT = 96;
 const AUTOCOMPLETE_VIEWPORT_MARGIN = 12;
+
+let wikilinkLocaleText = (zh, en) => zh;
+
+export const setWikilinkLocaleText = (fn) => {
+  if (typeof fn === "function") {
+    wikilinkLocaleText = fn;
+  }
+};
+
+const i18n = (zhText, enText) => wikilinkLocaleText(zhText, enText);
+
 const WIKI_LINK_MENU_HINTS = [
-  { token: "#", text: "可以链接到标题" },
-  { token: "^", text: "链接文本块" },
-  { token: "|", text: "指定显示的文本" }
+  { token: "#", text: i18n("可以链接到标题", "Can link to headings") },
+  { token: "^", text: i18n("链接文本块", "Link to text block") },
+  { token: "|", text: i18n("指定显示的文本", "Specify display text") }
 ];
 
 const escapeHtml = (valueInput = "") =>

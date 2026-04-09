@@ -9,8 +9,10 @@ import { codeBlockHighlightExtensions } from "../extensions/code-block-highlight
 import { presentationExtensions, setPresentationDataEffect } from "../extensions/presentation.js";
 import { contextMenuExtensions } from "../extensions/context-menu.js";
 import { createWikiLinkEventExtensions } from "../extensions/wikilink-events.js";
-import { createWikiLinkAutocompleteExtension } from "../extensions/wikilink-autocomplete.js";
+import { createWikiLinkAutocompleteExtension, setWikilinkLocaleText } from "../extensions/wikilink-autocomplete.js";
 import { createEditorThemeExtension } from "../extensions/theme.js";
+
+export { setWikilinkLocaleText };
 
 export const createMarkdownEditor = ({
   parent,

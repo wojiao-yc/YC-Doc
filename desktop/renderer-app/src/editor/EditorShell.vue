@@ -7,7 +7,7 @@
 
 <script setup>
 import { onBeforeUnmount, onMounted, ref, watch } from "vue";
-import { createMarkdownEditor } from "./core/create-editor";
+import { createMarkdownEditor, setWikilinkLocaleText } from "./core/create-editor";
 
 const props = defineProps({
   dark: {
@@ -45,6 +45,10 @@ const props = defineProps({
   wikiLinkSuggestionSelect: {
     type: Function,
     default: null
+  },
+  localeText: {
+    type: Function,
+    default: (zh, en) => zh
   }
 });
 
@@ -127,6 +131,7 @@ onMounted(() => {
   if (!host) {
     return;
   }
+  setWikilinkLocaleText(props.localeText);
   editorApi = createMarkdownEditor({
     parent: host,
     doc: props.modelValue,

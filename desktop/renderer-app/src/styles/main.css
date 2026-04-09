@@ -155,6 +155,9 @@ body {
   top: calc(100% + 8px);
   transform: translateX(-50%) translateY(-2px);
   white-space: nowrap;
+  max-width: 300px;
+  overflow: hidden;
+  text-overflow: ellipsis;
   padding: 5px 9px;
   border-radius: 999px;
   border: 1px solid var(--yc-tooltip-border);
@@ -166,7 +169,7 @@ body {
   pointer-events: none;
   transition: opacity 0.12s ease, transform 0.12s ease;
   box-shadow: var(--yc-tooltip-shadow);
-  z-index: 80;
+  z-index: 9999;
 }
 
 .editor-tab-tip-btn[data-tip=""]::before {
@@ -3429,6 +3432,9 @@ body {
   top: calc(100% + 8px);
   transform: translateX(-50%) translateY(-2px);
   white-space: nowrap;
+  max-width: 300px;
+  overflow: hidden;
+  text-overflow: ellipsis;
   padding: 5px 9px;
   border-radius: 999px;
   border: 1px solid var(--yc-tooltip-border);
@@ -3440,7 +3446,7 @@ body {
   pointer-events: none;
   transition: opacity 0.12s ease, transform 0.12s ease;
   box-shadow: var(--yc-tooltip-shadow);
-  z-index: 80;
+  z-index: 9999;
 }
 
 .term-tip-btn:hover::after {

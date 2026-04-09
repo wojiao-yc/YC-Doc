@@ -530,6 +530,7 @@
                       :wiki-link-files="workspaceMarkdownFiles"
                       :wiki-link-suggestions="getWikiLinkSuggestions"
                       :wiki-link-suggestion-select="handleWikiLinkSuggestionSelect"
+                      :locale-text="localeText"
                       @wiki-link-activate="handleEditorWikiLinkActivate"
                       @external-link-activate="handleEditorExternalLinkActivate"
                     />
@@ -607,6 +608,7 @@
                         :wiki-link-files="workspaceMarkdownFiles"
                         :wiki-link-suggestions="getWikiLinkSuggestions"
                         :wiki-link-suggestion-select="handleWikiLinkSuggestionSelect"
+                        :locale-text="localeText"
                         @selection-change="handleEditorSelectionChange"
                         @update:model-value="updateMarkdown"
                         @wiki-link-activate="handleEditorWikiLinkActivate"
@@ -623,6 +625,7 @@
                         :wiki-link-files="workspaceMarkdownFiles"
                         :wiki-link-suggestions="getWikiLinkSuggestions"
                         :wiki-link-suggestion-select="handleWikiLinkSuggestionSelect"
+                        :locale-text="localeText"
                         @selection-change="handleEditorSelectionChange"
                         @update:model-value="updateMarkdown"
                         @wiki-link-activate="handleEditorWikiLinkActivate"
@@ -1550,7 +1553,7 @@ import AppIcon from "./components/AppIcon.vue";
 import ToastMessage from "./components/ToastMessage.vue";
 import WorkspaceLinkGraph from "./components/WorkspaceLinkGraph.vue";
 import EditorShell from "./editor";
-import { setContextMenuRuntimeOptions } from "./editor/extensions/context-menu.js";
+import { setContextMenuRuntimeOptions, setContextMenuLocaleText } from "./editor/extensions/context-menu.js";
 import { serializeImageLine } from "./editor/parser/parse-image.js";
 import { setPresentationRuntimeOptions } from "./editor/extensions/presentation.js";
 import { useSemanticStore } from "./editor/state/semantic-store";
@@ -1933,16 +1936,17 @@ const FILE_SIDEBAR_COLLAPSE_SNAP = FILE_SIDEBAR_COLLAPSED_WIDTH + 30;
 const FILE_TREE_INDENT_STEP = 18;
 const FILE_TREE_GUIDE_OFFSET = 7;
 const STORAGE_SORT_DEFAULT_MODE = "name-asc";
-const STORAGE_SORT_OPTIONS = Object.freeze([
-  { value: "name-asc", label: "文件名 (A-Z)" },
-  { value: "name-desc", label: "文件名 (Z-A)" },
-  { value: "updated-desc", label: "编辑时间（从新到旧）", dividerBefore: true },
-  { value: "updated-asc", label: "编辑时间（从旧到新）" },
-  { value: "created-desc", label: "创建时间（从新到旧）", dividerBefore: true },
-  { value: "created-asc", label: "创建时间（从旧到新）" }
+const STORAGE_SORT_OPTIONS = computed(() => [
+  { value: "name-asc", label: localeText("文件名 (A-Z)", "Name (A-Z)") },
+  { value: "name-desc", label: localeText("文件名 (Z-A)", "Name (Z-A)") },
+  { value: "updated-desc", label: localeText("编辑时间（从新到旧）", "Modified (Newest First)"), dividerBefore: true },
+  { value: "updated-asc", label: localeText("编辑时间（从旧到新）", "Modified (Oldest First)") },
+  { value: "created-desc", label: localeText("创建时间（从新到旧）", "Created (Newest First)"), dividerBefore: true },
+  { value: "created-asc", label: localeText("创建时间（从旧到新）", "Created (Oldest First)") }
 ]);
-const STORAGE_SORT_OPTION_MAP = Object.freeze(
-  Object.fromEntries(STORAGE_SORT_OPTIONS.map((option) => [option.value, option]))
+
+const STORAGE_SORT_OPTION_MAP = computed(() =>
+  Object.fromEntries(STORAGE_SORT_OPTIONS.value.map((option) => [option.value, option]))
 );
 const desktopPrimaryTerminalRef = ref(null);
 const desktopSecondaryTerminalRef = ref(null);
@@ -3454,11 +3458,12 @@ const prev = async () => {
   await focusStepInEditMode(previousIndex);
 };
 
-const normalizeStorageSortMode = (mode) => (
-  STORAGE_SORT_OPTION_MAP[String(mode || "").trim()]
+const normalizeStorageSortMode = (mode) => {
+  const optionMap = STORAGE_SORT_OPTION_MAP.value;
+  return optionMap[String(mode || "").trim()]
     ? String(mode || "").trim()
-    : STORAGE_SORT_DEFAULT_MODE
-);
+    : STORAGE_SORT_DEFAULT_MODE;
+};
 
 const ensureCustomThemeStyleElement = () => {
   if (typeof document === "undefined") {
@@ -4156,16 +4161,18 @@ const storageStats = computed(() => {
   return `${Math.max(0, folderCount - 1)} 文件夹 / ${fileCount} 文件`;
 });
 
-const storageSortLabel = computed(() =>
-  STORAGE_SORT_OPTION_MAP[normalizeStorageSortMode(storageSortMode.value)]?.label
-    || STORAGE_SORT_OPTION_MAP[STORAGE_SORT_DEFAULT_MODE].label
-);
+const storageSortLabel = computed(() => {
+  const options = STORAGE_SORT_OPTIONS.value;
+  const optionMap = Object.fromEntries(options.map((option) => [option.value, option]));
+  return optionMap[normalizeStorageSortMode(storageSortMode.value)]?.label
+    || optionMap[STORAGE_SORT_DEFAULT_MODE].label;
+});
 
 const storageSortIconName = computed(() =>
   normalizeStorageSortMode(storageSortMode.value).endsWith("-desc") ? "sort-desc" : "sort-asc"
 );
 
-const storageSortTooltip = computed(() => "\u6392\u5e8f\uff1a" + storageSortLabel.value);
+const storageSortTooltip = computed(() => localeText("排序：", "Sort: ") + storageSortLabel.value);
 
 const workspaceDisplayName = computed(() => {
   if (isDesktopStorage) {
@@ -5449,7 +5456,10 @@ const applyStorageSortMode = (mode) => {
   storageSortMode.value = nextMode;
   closeStorageSortMenu();
   if (changed) {
-    showToast("\u6587\u4ef6\u6811\u5df2\u6309" + STORAGE_SORT_OPTION_MAP[nextMode].label + "\u6392\u5e8f");
+    const options = STORAGE_SORT_OPTIONS.value;
+    const optionMap = Object.fromEntries(options.map((option) => [option.value, option]));
+    const label = optionMap[nextMode]?.label || "";
+    showToast(localeText(`文件树已按 ${label} 排序`, `File tree sorted by: ${label}`));
   }
 };
 
@@ -7907,7 +7917,7 @@ const createDesktopTerminal = async () => {
   }
   desktopSessions.value.push({
     id: sid,
-    label: `终端 ${desktopSessionSeq.value}`,
+    label: localeText(`终端 ${desktopSessionSeq.value}`, `Terminal ${desktopSessionSeq.value}`),
     shell
   });
   desktopSessionSeq.value += 1;
@@ -8940,6 +8950,8 @@ const handleExportCurrentDocumentPdf = async () => {
 setContextMenuRuntimeOptions({
   requestImageMarkdown: requestEditorContextImageMarkdown
 });
+
+setContextMenuLocaleText(localeText);
 
 setPresentationRuntimeOptions({
   getCurrentRelPath: () => activeMarkdownRelPath.value,

@@ -10,24 +10,21 @@ const SUBMENU_OPEN_DELAY_MS = 140;
 const SUBMENU_CLOSE_DELAY_MS = 640;
 const DEFAULT_LINK_URL = "https://";
 let contextMenuRuntimeOptions = {};
-const TABLE_CELL_FORMAT_COMMAND_IDS = new Set([
-  "add-link",
-  "add-external-link",
-  "format-bold",
-  "format-italic",
-  "format-strike",
-  "format-highlight",
-  "format-code",
-  "format-math",
-  "format-comment",
-  "format-clear"
-]);
+let contextMenuLocaleText = (zh, en) => zh; // 默认返回中文
+
+export const setContextMenuLocaleText = (fn) => {
+  if (typeof fn === "function") {
+    contextMenuLocaleText = fn;
+  }
+};
 
 export const setContextMenuRuntimeOptions = (nextOptions = {}) => {
   contextMenuRuntimeOptions = nextOptions && typeof nextOptions === "object"
     ? nextOptions
     : {};
 };
+
+const i18n = (zhText, enText) => contextMenuLocaleText(zhText, enText);
 
 const safeNumber = (value, fallback = 0) => {
   const numeric = Number(value);
@@ -1283,86 +1280,86 @@ const executeCommand = async (view, commandId, menuContext = {}) => {
 };
 
 const MENU_DEFINITION = [
-  { id: "add-link", icon: "+", label: "新增链接" },
-  { id: "add-external-link", icon: "->", label: "新增外部链接" },
+  { id: "add-link", icon: "+", label: i18n("新增链接", "Add Wiki Link") },
+  { id: "add-external-link", icon: "->", label: i18n("新增外部链接", "Add External Link") },
   { type: "separator" },
   {
     id: "format",
     icon: "Aa",
-    label: "文本格式",
+    label: i18n("文本格式", "Text Format"),
     children: [
-      { id: "format-bold", icon: "B", label: "粗体" },
-      { id: "format-italic", icon: "I", label: "斜体" },
-      { id: "format-strike", icon: "S", label: "删除线" },
-      { id: "format-highlight", icon: "H", label: "高亮" },
+      { id: "format-bold", icon: "B", label: i18n("粗体", "Bold") },
+      { id: "format-italic", icon: "I", label: i18n("斜体", "Italic") },
+      { id: "format-strike", icon: "S", label: i18n("删除线", "Strikethrough") },
+      { id: "format-highlight", icon: "H", label: i18n("高亮", "Highlight") },
       { type: "separator" },
-      { id: "format-code", icon: "</>", label: "代码" },
-      { id: "format-math", icon: "M", label: "数学" },
-      { id: "format-comment", icon: "%", label: "注释" },
+      { id: "format-code", icon: "</>", label: i18n("代码", "Code") },
+      { id: "format-math", icon: "M", label: i18n("数学", "Math") },
+      { id: "format-comment", icon: "%", label: i18n("注释", "Comment") },
       { type: "separator" },
-      { id: "format-clear", icon: "X", label: "清除格式" }
+      { id: "format-clear", icon: "X", label: i18n("清除格式", "Clear Format") }
     ]
   },
   {
     id: "paragraph",
     icon: "P",
-    label: "段落设置",
+    label: i18n("段落设置", "Paragraph"),
     children: [
-      { id: "paragraph-bullet", icon: "*", label: "无序列表" },
-      { id: "paragraph-ordered", icon: "1.", label: "有序列表" },
-      { id: "paragraph-task", icon: "[]", label: "任务列表" },
+      { id: "paragraph-bullet", icon: "*", label: i18n("无序列表", "Bullet List") },
+      { id: "paragraph-ordered", icon: "1.", label: i18n("有序列表", "Ordered List") },
+      { id: "paragraph-task", icon: "[]", label: i18n("任务列表", "Task List") },
       { type: "separator" },
-      { id: "paragraph-h1", icon: "H1", label: "标题 1" },
-      { id: "paragraph-h2", icon: "H2", label: "标题 2" },
-      { id: "paragraph-h3", icon: "H3", label: "标题 3" },
-      { id: "paragraph-h4", icon: "H4", label: "标题 4" },
-      { id: "paragraph-h5", icon: "H5", label: "标题 5" },
-      { id: "paragraph-h6", icon: "H6", label: "标题 6" },
-      { id: "paragraph-text", icon: "T", label: "正文" },
+      { id: "paragraph-h1", icon: "H1", label: i18n("标题 1", "Heading 1") },
+      { id: "paragraph-h2", icon: "H2", label: i18n("标题 2", "Heading 2") },
+      { id: "paragraph-h3", icon: "H3", label: i18n("标题 3", "Heading 3") },
+      { id: "paragraph-h4", icon: "H4", label: i18n("标题 4", "Heading 4") },
+      { id: "paragraph-h5", icon: "H5", label: i18n("标题 5", "Heading 5") },
+      { id: "paragraph-h6", icon: "H6", label: i18n("标题 6", "Heading 6") },
+      { id: "paragraph-text", icon: "T", label: i18n("正文", "Paragraph") },
       { type: "separator" },
-      { id: "paragraph-quote", icon: ">", label: "引用" }
+      { id: "paragraph-quote", icon: ">", label: i18n("引用", "Quote") }
     ]
   },
   {
     id: "insert",
     icon: "+",
-    label: "插入",
+    label: i18n("插入", "Insert"),
     children: [
-      { id: "insert-footnote", icon: "fn", label: "脚注" },
-      { id: "insert-table", icon: "tbl", label: "表格" },
-      { id: "insert-callout", icon: "!", label: "标注" },
-      { id: "insert-divider", icon: "-", label: "分隔线" },
+      { id: "insert-footnote", icon: "fn", label: i18n("脚注", "Footnote") },
+      { id: "insert-table", icon: "tbl", label: i18n("表格", "Table") },
+      { id: "insert-callout", icon: "!", label: i18n("标注", "Callout") },
+      { id: "insert-divider", icon: "-", label: i18n("分隔线", "Divider") },
       { type: "separator" },
-      { id: "insert-code-block", icon: "{}", label: "代码块" },
-      { id: "insert-math-block", icon: "M", label: "数学块" }
+      { id: "insert-code-block", icon: "{}", label: i18n("代码块", "Code Block") },
+      { id: "insert-math-block", icon: "M", label: i18n("数学块", "Math Block") }
     ]
   },
   { type: "separator" },
-  { id: "clipboard-cut", icon: "cut", label: "剪切" },
-  { id: "clipboard-copy", icon: "cpy", label: "复制" },
-  { id: "clipboard-paste", icon: "pst", label: "粘贴" },
-  { id: "clipboard-paste-plain", icon: "T", label: "以纯文本形式粘贴" },
+  { id: "clipboard-cut", icon: "cut", label: i18n("剪切", "Cut") },
+  { id: "clipboard-copy", icon: "cpy", label: i18n("复制", "Copy") },
+  { id: "clipboard-paste", icon: "pst", label: i18n("粘贴", "Paste") },
+  { id: "clipboard-paste-plain", icon: "T", label: i18n("以纯文本形式粘贴", "Paste as Plain Text") },
   { type: "separator" },
-  { id: "select-block", icon: "[]", label: "选中块" },
-  { id: "select-all", icon: "*", label: "全选" }
+  { id: "select-block", icon: "[]", label: i18n("选中块", "Select Block") },
+  { id: "select-all", icon: "*", label: i18n("全选", "Select All") }
 ];
 
 const EDITOR_INSERT_IMAGE_ITEM = Object.freeze({
   id: "insert-image",
   icon: "img",
-  label: "图片"
+  label: i18n("图片", "Image")
 });
 
 const EDITOR_SETTINGS_MENU_ITEM = Object.freeze({
   id: "editor-settings",
   icon: "cfg",
-  label: "设置",
+  label: i18n("设置", "Settings"),
   children: [
-    { id: "editor-width-narrower", icon: "<-", label: "收窄编辑区" },
-    { id: "editor-width-wider", icon: "->", label: "放宽编辑区" },
-    { id: "editor-width-reset", icon: "[]", label: "重置编辑区宽度" },
+    { id: "editor-width-narrower", icon: "<-", label: i18n("收窄编辑区", "Narrow Editor") },
+    { id: "editor-width-wider", icon: "->", label: i18n("放宽编辑区", "Widen Editor") },
+    { id: "editor-width-reset", icon: "[]", label: i18n("重置编辑区宽度", "Reset Editor Width") },
     { type: "separator" },
-    { id: "editor-debug-toggle", icon: "dbg", label: "切换调试面板" }
+    { id: "editor-debug-toggle", icon: "dbg", label: i18n("切换调试面板", "Toggle Debug Panel") }
   ]
 });
 
@@ -1389,47 +1386,47 @@ const withEditorMenuExtras = (itemsInput = []) => {
 };
 
 const TABLE_ROW_ACTIONS = [
-  { id: "table-row-insert-above", icon: "^", label: "在上方新增行" },
-  { id: "table-row-insert-below", icon: "v", label: "在下方新增行" },
+  { id: "table-row-insert-above", icon: "^", label: i18n("在上方新增行", "Insert Row Above") },
+  { id: "table-row-insert-below", icon: "v", label: i18n("在下方新增行", "Insert Row Below") },
   { type: "separator" },
-  { id: "table-row-move-up", icon: "up", label: "向上移动行" },
-  { id: "table-row-move-down", icon: "dn", label: "向下移动行" },
+  { id: "table-row-move-up", icon: "up", label: i18n("向上移动行", "Move Row Up") },
+  { id: "table-row-move-down", icon: "dn", label: i18n("向下移动行", "Move Row Down") },
   { type: "separator" },
-  { id: "table-row-copy", icon: "cpy", label: "复制行" },
-  { id: "table-row-delete", icon: "del", label: "删除行" }
+  { id: "table-row-copy", icon: "cpy", label: i18n("复制行", "Copy Row") },
+  { id: "table-row-delete", icon: "del", label: i18n("删除行", "Delete Row") }
 ];
 
 const TABLE_COLUMN_ACTIONS = [
-  { id: "table-col-insert-left", icon: "<", label: "在左侧新增列" },
-  { id: "table-col-insert-right", icon: ">", label: "在右侧新增列" },
+  { id: "table-col-insert-left", icon: "<", label: i18n("在左侧新增列", "Insert Column Left") },
+  { id: "table-col-insert-right", icon: ">", label: i18n("在右侧新增列", "Insert Column Right") },
   { type: "separator" },
-  { id: "table-col-move-left", icon: "<-", label: "向左移动列" },
-  { id: "table-col-move-right", icon: "->", label: "向右移动列" },
+  { id: "table-col-move-left", icon: "<-", label: i18n("向左移动列", "Move Column Left") },
+  { id: "table-col-move-right", icon: "->", label: i18n("向右移动列", "Move Column Right") },
   { type: "separator" },
-  { id: "table-col-align-left", icon: "L", label: "左对齐" },
-  { id: "table-col-align-center", icon: "C", label: "居中对齐" },
-  { id: "table-col-align-right", icon: "R", label: "右对齐" },
+  { id: "table-col-align-left", icon: "L", label: i18n("左对齐", "Align Left") },
+  { id: "table-col-align-center", icon: "C", label: i18n("居中对齐", "Align Center") },
+  { id: "table-col-align-right", icon: "R", label: i18n("右对齐", "Align Right") },
   { type: "separator" },
-  { id: "table-col-copy", icon: "cpy", label: "复制列" },
-  { id: "table-col-delete", icon: "del", label: "删除列" }
+  { id: "table-col-copy", icon: "cpy", label: i18n("复制列", "Copy Column") },
+  { id: "table-col-delete", icon: "del", label: i18n("删除列", "Delete Column") }
 ];
 
 const TABLE_SORT_ACTIONS = [
-  { id: "table-sort-asc", icon: "A^", label: "按列升序 (A-Z)" },
-  { id: "table-sort-desc", icon: "Zv", label: "按列降序 (Z-A)" }
+  { id: "table-sort-asc", icon: "A^", label: i18n("按列升序 (A-Z)", "Sort Ascending (A-Z)") },
+  { id: "table-sort-desc", icon: "Zv", label: i18n("按列降序 (Z-A)", "Sort Descending (Z-A)") }
 ];
 
 const TABLE_MENU_DEFINITION = [
   {
     id: "table-row",
     icon: "row",
-    label: "行",
+    label: i18n("行", "Row"),
     children: TABLE_ROW_ACTIONS
   },
   {
     id: "table-col",
     icon: "col",
-    label: "列",
+    label: i18n("列", "Column"),
     children: TABLE_COLUMN_ACTIONS
   },
   { type: "separator" },
