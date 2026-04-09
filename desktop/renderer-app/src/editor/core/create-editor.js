@@ -15,6 +15,7 @@ import { contextMenuExtensions } from "../extensions/context-menu.js";
 import { createWikiLinkEventExtensions } from "../extensions/wikilink-events.js";
 import { createWikiLinkAutocompleteExtension, setWikilinkLocaleText } from "../extensions/wikilink-autocomplete.js";
 import { createEditorThemeExtension } from "../extensions/theme.js";
+import { normalizeMarkdownDocument } from "../../utils/markdown-normalize.js";
 
 export { setWikilinkLocaleText };
 
@@ -33,6 +34,7 @@ export const createMarkdownEditor = ({
   getWikiLinkMarkdownFiles = () => [],
   getWikiLinkSuggestions = () => []
 }) => {
+  const normalizedDoc = normalizeMarkdownDocument(doc);
   const themeCompartment = new Compartment();
   const editableCompartment = new Compartment();
   const wikiLinkEventConfig = createWikiLinkEventExtensions({
@@ -60,7 +62,7 @@ export const createMarkdownEditor = ({
   });
 
   const state = createEditorState({
-    doc,
+    doc: normalizedDoc,
     extensions: [
       ...coreExtensions,
       ...markdownExtensions,
@@ -91,7 +93,7 @@ export const createMarkdownEditor = ({
   const getDoc = () => view.state.doc.toString();
 
   const setDoc = (nextDoc) => {
-    const next = String(nextDoc ?? "");
+    const next = normalizeMarkdownDocument(nextDoc);
     if (next === getDoc()) {
       return;
     }

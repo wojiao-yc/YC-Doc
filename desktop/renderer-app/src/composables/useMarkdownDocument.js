@@ -1,5 +1,6 @@
 import { ref, watch, nextTick, onBeforeUnmount } from "vue";
 import { serializeImageLine } from "../editor/parser/parse-image.js";
+import { normalizeMarkdownDocument, normalizeMarkdownText } from "../utils/markdown-normalize.js";
 
 const MARKDOWN_SAVE_DELAY_MS = 500;
 const MAX_MARKDOWN_FILE_BYTES = 20 * 1024 * 1024;
@@ -9,7 +10,6 @@ const HEADING_SUBTITLE_META_PATTERN = /^\s*<!--\s*yc-heading-subtitle\s*:\s*(.*?
 const OPEN_FENCE_PATTERN = /^\s{0,3}(`{3,}|~{3,})(.*)$/;
 
 const clamp = (value, min, max) => Math.min(max, Math.max(min, value));
-const normalizeMarkdownText = (value) => String(value || "").replace(/\r\n/g, "\n");
 const trimOuterBlankLines = (value) => String(value || "").replace(/^\n+/, "").replace(/\n+$/, "");
 const trimClosingHeadingHashes = (text) => String(text || "").replace(/[ \t]+#+[ \t]*$/, "").trim();
 const normalizeHeadingSubtitle = (value) => String(value || "")
@@ -397,7 +397,7 @@ export const useMarkdownDocument = ({
     if (!relPath) {
       return;
     }
-    lastSavedMarkdownByPath.set(relPath, normalizeMarkdownText(content));
+    lastSavedMarkdownByPath.set(relPath, normalizeMarkdownDocument(content));
   };
 
   const syncStepsFromDocumentMarkdown = (rawMarkdown, preserveIndex = currentStepIndex.value) => {
@@ -408,7 +408,7 @@ export const useMarkdownDocument = ({
   };
 
   const loadMarkdown = (text, { markAsSaved = false, relPath = activeMarkdownRelPath.value } = {}) => {
-    const normalized = normalizeMarkdownText(text);
+    const normalized = normalizeMarkdownDocument(text);
     documentMarkdown.value = normalized;
     syncStepsFromDocumentMarkdown(normalized, 0);
     if (markAsSaved) {
@@ -421,7 +421,7 @@ export const useMarkdownDocument = ({
   };
 
   const updateMarkdown = (text) => {
-    const normalized = normalizeMarkdownText(text);
+    const normalized = normalizeMarkdownDocument(text);
     if (documentMarkdown.value === normalized) {
       return normalized;
     }
@@ -438,7 +438,7 @@ export const useMarkdownDocument = ({
     if (snapshot === null) {
       return true;
     }
-    return snapshot !== normalizeMarkdownText(content);
+    return snapshot !== normalizeMarkdownDocument(content);
   };
 
   const writeActiveMarkdownNow = async (
@@ -451,7 +451,7 @@ export const useMarkdownDocument = ({
       return false;
     }
     try {
-      const content = normalizeMarkdownText(sourceMarkdown);
+      const content = normalizeMarkdownDocument(sourceMarkdown);
       if (!force && !isMarkdownDirty(relPath, content)) {
         return false;
       }
@@ -727,7 +727,7 @@ export const useMarkdownDocument = ({
         showToast(`Markdown file too large, skipped: ${targetRelPath}`);
         return false;
       }
-      const rawMarkdown = normalizeMarkdownText(result.content || "");
+      const rawMarkdown = normalizeMarkdownDocument(result.content || "");
       loadMarkdown(rawMarkdown, { markAsSaved: true, relPath: targetRelPath });
       activeMarkdownRelPath.value = targetRelPath;
       if (showSuccessToast) {

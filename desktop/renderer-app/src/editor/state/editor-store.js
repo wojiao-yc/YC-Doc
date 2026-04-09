@@ -1,11 +1,11 @@
-const normalizeMarkdown = (value) => String(value ?? "").replace(/\r\n/g, "\n");
+import { normalizeMarkdownDocument } from "../../utils/markdown-normalize.js";
 
 export const createEditorStore = ({
   initialMarkdown = "",
   onSave = async () => {},
   debounceMs = 500
 } = {}) => {
-  let markdown = normalizeMarkdown(initialMarkdown);
+  let markdown = normalizeMarkdownDocument(initialMarkdown);
   let lastSavedMarkdown = markdown;
   let saving = false;
   let saveTimer = null;
@@ -22,13 +22,13 @@ export const createEditorStore = ({
 
   const loadMarkdown = (text) => {
     clearSaveTimer();
-    markdown = normalizeMarkdown(text);
+    markdown = normalizeMarkdownDocument(text);
     lastSavedMarkdown = markdown;
     return markdown;
   };
 
   const updateMarkdown = (text) => {
-    markdown = normalizeMarkdown(text);
+    markdown = normalizeMarkdownDocument(text);
     return markdown;
   };
 
