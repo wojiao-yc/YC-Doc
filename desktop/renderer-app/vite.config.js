@@ -20,7 +20,7 @@ export default defineConfig({
       manifest: {
         name: "MarkVein",
         short_name: "MarkVein",
-        description: "MarkVein Markdown 工作区",
+        description: "MarkVein Markdown Workspace",
         theme_color: "#f97316",
         background_color: "#0f172a",
         display: "standalone",

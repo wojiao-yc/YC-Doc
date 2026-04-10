@@ -1,0 +1,22 @@
+/*
+ * Muya local override entry.
+ * This file is loaded after `@muyajs/core/lib/core.css`.
+ * Keep all Muya custom style overrides here.
+ */
+
+.yc-editor-host.mu-editor {
+  /*
+   * Muya exposes theme variables on the editor root.
+   * You can tune these variables without touching node_modules.
+   */
+  --theme-color: var(--yc-accent);
+  --selection-color: var(--yc-editor-selection-native, var(--yc-editor-selection));
+  --editor-bg-color: transparent;
+  --editor-color: var(--yc-text-secondary);
+}
+
+.yc-editor-shell.is-dark .yc-editor-host.mu-editor {
+  --editor-color: var(--yc-text-secondary);
+  --float-bg-color: color-mix(in srgb, var(--yc-bg-elevated) 92%, transparent);
+  --float-border-color: color-mix(in srgb, var(--yc-border-strong) 80%, transparent);
+}

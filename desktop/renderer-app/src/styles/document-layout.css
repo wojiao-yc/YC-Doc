@@ -29,6 +29,31 @@
   min-height: inherit;
 }
 
+.yc-editor-source {
+  width: 100%;
+  min-height: inherit;
+  border: 0;
+  outline: none;
+  resize: none;
+  background: transparent;
+  color: var(--yc-text-secondary);
+  font-family: var(--yc-font-code);
+  font-size: 14px;
+  line-height: 1.7;
+  padding: var(--yc-doc-top-padding) var(--yc-doc-side-padding) var(--yc-doc-bottom-padding);
+  white-space: pre;
+  overflow: auto;
+  tab-size: 2;
+}
+
+.yc-editor-source::selection {
+  background: var(--yc-editor-selection-native, var(--yc-editor-selection));
+}
+
+.yc-editor-source.is-dark {
+  color: var(--yc-text-secondary);
+}
+
 .yc-editor-shell.is-readonly .yc-editor-host,
 .yc-editor-shell.is-readonly .yc-editor-host * {
   user-select: none;
@@ -61,4 +86,36 @@
 .yc-editor-host .cm-scroller {
   min-height: inherit;
   padding: var(--yc-doc-top-padding) var(--yc-doc-side-padding) var(--yc-doc-bottom-padding);
+}
+
+.yc-editor-host.mu-editor {
+  min-height: inherit;
+  padding: var(--yc-doc-top-padding) var(--yc-doc-side-padding) var(--yc-doc-bottom-padding);
+  background: transparent !important;
+  color: var(--yc-text-secondary);
+  font-family: var(--yc-font-body);
+  line-height: var(--yc-preview-line-height, 1.8);
+  --theme-color: var(--yc-accent);
+  --highlight-color: color-mix(in srgb, var(--yc-accent) 28%, transparent);
+  --selection-color: var(--yc-editor-selection-native, var(--yc-editor-selection));
+  --editor-color: var(--yc-text-secondary);
+  --editor-color-80: color-mix(in srgb, var(--yc-text-secondary) 80%, transparent);
+  --editor-color-50: color-mix(in srgb, var(--yc-text-secondary) 50%, transparent);
+  --editor-color-30: color-mix(in srgb, var(--yc-text-secondary) 30%, transparent);
+  --editor-color-10: color-mix(in srgb, var(--yc-text-secondary) 12%, transparent);
+  --editor-color-04: color-mix(in srgb, var(--yc-text-secondary) 4%, transparent);
+  --editor-bg-color: transparent;
+  --table-border-color: var(--yc-preview-table-cell-border);
+  --code-block-bg-color: var(--yc-preview-code-inline-bg);
+}
+
+.yc-editor-host.mu-editor.yc-muya-readonly {
+  caret-color: transparent;
+}
+
+.yc-editor-shell.is-dark .yc-editor-host.mu-editor {
+  color: var(--yc-text-secondary);
+  --button-bg-color: color-mix(in srgb, var(--yc-bg-elevated) 90%, transparent);
+  --float-bg-color: color-mix(in srgb, var(--yc-bg-elevated) 92%, transparent);
+  --float-border-color: color-mix(in srgb, var(--yc-border-strong) 80%, transparent);
 }
