@@ -1550,9 +1550,7 @@ import AppIcon from "./components/AppIcon.vue";
 import ToastMessage from "./components/ToastMessage.vue";
 import WorkspaceLinkGraph from "./components/WorkspaceLinkGraph.vue";
 import EditorShell from "./editor";
-import { setContextMenuRuntimeOptions, setContextMenuLocaleText } from "./editor/extensions/context-menu.js";
 import { serializeImageLine } from "./editor/parser/parse-image.js";
-import { setPresentationRuntimeOptions } from "./editor/extensions/presentation.js";
 import { useSemanticStore } from "./editor/state/semantic-store";
 import { useMarkdownDocument } from "./composables/useMarkdownDocument";
 import { useResizable } from "./composables/useResizable";
@@ -2945,8 +2943,10 @@ const focusMarkdownPosition = (posInput = 0) => {
   const targetPos = clamp(Number(posInput || 0), 0, markdown.length);
   const editorApi = getActiveMarkdownEditorApi();
   if (typeof editorApi?.focusPosition === "function") {
-    editorApi.focusPosition(targetPos);
-    return true;
+    const focused = editorApi.focusPosition(targetPos);
+    if (focused !== false) {
+      return true;
+    }
   }
   if (typeof editorApi?.focus === "function") {
     editorApi.focus();
@@ -3256,6 +3256,17 @@ const handleOutlineSelection = async (heading) => {
   const stepIndex = findStepIndexForRawPos(markdown, rawPos);
   currentId.value = steps.value?.[stepIndex]?.id ?? currentId.value;
   await nextTick();
+  const editorApi = getActiveMarkdownEditorApi();
+  if (!isSourceMode.value && typeof editorApi?.focusHeading === "function") {
+    const focusedByHeading = editorApi.focusHeading({
+      title: String(heading?.title || ""),
+      level: Number(heading?.depth || heading?.level || 0),
+      pos: rawPos
+    });
+    if (focusedByHeading !== false) {
+      return;
+    }
+  }
   focusMarkdownPosition(rawPos);
 };
 
@@ -6546,6 +6557,16 @@ const jumpWithinCurrentDocument = async ({ rawPos = null, anchor = "" } = {}) =>
   await nextTick();
 
   if (isEditMode.value) {
+    const editorApi = getActiveMarkdownEditorApi();
+    if (!isSourceMode.value && anchor && typeof editorApi?.focusHeading === "function") {
+      const focusedByHeading = editorApi.focusHeading({
+        title: String(anchor || ""),
+        pos: targetPos
+      });
+      if (focusedByHeading !== false) {
+        return true;
+      }
+    }
     focusMarkdownPosition(targetPos);
     return true;
   }
@@ -8790,30 +8811,6 @@ const toggleMode = async () => {
   await setWorkspaceMode(mode.value === "view" ? "preview" : "view");
 };
 
-const requestEditorContextImageMarkdown = async () => {
-  if (!(isDesktopPty.value && desktopWindowBridge?.pickImage)) {
-    showToast("当前环境不支持直接插入图片");
-    return "";
-  }
-  try {
-    const picked = await desktopWindowBridge.pickImage();
-    if (!picked || picked.canceled) {
-      return "";
-    }
-    if (picked.ok && picked.markdownUrl) {
-      showToast("已插入图片");
-      return serializeImageLine({
-        alt: "image",
-        src: picked.markdownUrl
-      });
-    }
-    showToast(`插入失败: ${picked?.error || "unknown_error"}`);
-  } catch (error) {
-    showToast(`插入失败: ${error?.message || "unknown_error"}`);
-  }
-  return "";
-};
-
 const handleEditorContextSettingCommand = async (commandIdInput = "") => {
   const commandId = String(commandIdInput || "");
   if (commandId === "editor-width-narrower") {
@@ -8972,17 +8969,6 @@ const handleExportCurrentDocumentPdf = async () => {
     showToast(`导出 PDF 失败: ${String(error?.message || error || "unknown_error")}`);
   }
 };
-
-setContextMenuRuntimeOptions({
-  requestImageMarkdown: requestEditorContextImageMarkdown
-});
-
-setContextMenuLocaleText(localeText);
-
-setPresentationRuntimeOptions({
-  getCurrentRelPath: () => activeMarkdownRelPath.value,
-  getWorkspaceRootPath: () => storageRootPath.value
-});
 
 const openTerminalPanel = (tab = terminalTab.value) => {
   if (isDesktopPty.value && tab === "runner") {
@@ -9227,8 +9213,6 @@ onMounted(() => {
 
 onBeforeUnmount(() => {
   persistStorageState();
-  setContextMenuRuntimeOptions({});
-  setPresentationRuntimeOptions({});
   if (typeof document !== "undefined") {
     document.getElementById(CUSTOM_THEME_STYLE_ID)?.remove();
   }
